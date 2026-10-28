@@ -482,7 +482,9 @@ repository has one lockfile. One command-line entry point, `esper`
 
 **Tooling**, set in M0:
 
-- **pnpm 10**, pinned in `packageManager`; Node 24 or later in `engines`, and `.nvmrc` set to 24.
+- **pnpm 10**, pinned in `packageManager`; Node 24 or later in `engines`, and `.nvmrc` set to 24. No
+  dependency runs an install script, and a version published less than a day ago is not installed
+  (`minimumReleaseAge`).
 - **TypeScript** with `strict`, `noEmit`, `erasableSyntaxOnly`, `verbatimModuleSyntax`,
   `module: nodenext` and `allowImportingTsExtensions`, so that imports name the `.ts` file Node runs
   ([D4](#d4--typescript-on-node-24-and-later)).

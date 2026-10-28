@@ -7,7 +7,8 @@ served to hunting agents over MCP and explorable in a web interface.
 > Named after the Esper machine in *Blade Runner*, which Deckard uses to explore a photograph, zoom in
 > and bring out what nobody had seen.
 
-**Status: design stage.** The documentation describes the target design; there is no code yet.
+**Status: early development.** The documentation describes the target design; the code is at
+[M0](docs/src/content/docs/roadmap.md#m0--the-workspace), the workspace.
 
 ## Documentation
 
@@ -18,8 +19,19 @@ served to hunting agents over MCP and explorable in a web interface.
   milestone done.
 - [Sources](docs/src/content/docs/sources.md): the tools and research Esper builds on or departs from.
 
-To read it locally:
+## Development
+
+Node 24 or later and pnpm 10. No dependency runs an install script, and nothing is built: Node runs
+the TypeScript sources directly.
 
 ```sh
-cd docs && pnpm install && pnpm dev    # documentation on http://localhost:4321
+pnpm install
+pnpm check            # type-check and lint
+pnpm test             # tests, with Node's own runner
+pnpm esper --help     # the command line, from the sources
+pnpm docs             # documentation on http://localhost:4321
 ```
+
+## Licence
+
+[Apache-2.0](LICENSE).

@@ -1,0 +1,21 @@
+{
+  "name": "esper",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "check": "tsc --noEmit -p tsconfig.json && biome check .",
+    "format": "biome check --write .",
+    "test": "node --test \"packages/*/test/**/*.test.ts\"",
+    "esper": "node packages/cli/src/main.ts",
+    "docs": "pnpm --filter @esper/docs dev"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.3",
+    "@types/node": "24.19.2",
+    "typescript": "7.0.2"
+  }
+}

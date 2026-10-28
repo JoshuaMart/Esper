@@ -1,0 +1,15 @@
+packages:
+  - packages/*
+  - apps/*
+  - docs
+
+# No dependency runs an install script: the tree-sitter grammars ship their .wasm file, and the
+# native builds below are optional for what Esper and its docs use.
+ignoredBuiltDependencies:
+  - esbuild
+  - sharp
+  - tree-sitter-go
+
+# A version published less than a day ago is not installed: it may still be withdrawn, or not yet
+# served by the registry.
+minimumReleaseAge: 1440

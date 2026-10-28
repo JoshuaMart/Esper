@@ -1,0 +1,23 @@
+{
+  "name": "esper-cli",
+  "version": "0.0.0",
+  "description": "An attack-surface graph of a codebase, for white-box vulnerability research",
+  "type": "module",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JoshuaMart/Esper.git",
+    "directory": "packages/cli"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "bin": {
+    "esper": "./src/main.ts"
+  },
+  "dependencies": {
+    "@esper/core": "workspace:*",
+    "@esper/mcp": "workspace:*",
+    "@esper/server": "workspace:*"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "name": "@esper/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "tree-sitter-go": "0.25.0",
+    "web-tree-sitter": "0.27.1"
+  }
+}

@@ -3,3 +3,5 @@ node_modules/
 .DS_Store
 docs/dist/
 docs/.astro/
+*.tsbuildinfo
+packages/cli/dist/
