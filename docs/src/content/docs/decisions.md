@@ -377,7 +377,9 @@ tree-sitter reads syntax: it sees that `svc.update(id)` is called, not which `up
    before the next language starts: for Go, MCP comes first so that the index can be used, then
    scip-go ([roadmap](/roadmap/)). Measured on chi 5.3.2 with an earlier tree-sitter prototype of
    the call graph: 486 edges, of which 262 are guessed. More than half of the paths an agent follows
-   would rest on a guess, which is too much to wait for. M1 measures it again with Esper's own index.
+   would rest on a guess, which is too much to wait for. Esper's own index, which types what the
+   syntax states, guesses 27 of 537 ([graph schema](/reference/graph/#go)); SCIP is still what
+   resolves the rest, and the calls left without an edge.
 2. **Dataflow comes later, on demand**: run for a question (this read, this sink), not for every
    index, and through Joern or CodeQL depending on the language.
 

@@ -11,7 +11,7 @@ counted by hand, with none missing and none invented.
 | # | Milestone | Done when | Status |
 |---|---|---|---|
 | [M0](#m0--the-workspace) | The workspace | the workspace type-checks, lints and tests in CI | done |
-| [M1](#m1--the-core-on-go-and-chi) | The core, on Go and chi | chi and Wakapi pass their hand count | not started |
+| [M1](#m1--the-core-on-go-and-chi) | The core, on Go and chi | chi and Wakapi pass their hand count | in progress |
 | [M2](#m2--mcp-and-notes) | MCP and notes | an agent hunts chi over MCP and its notes survive a reindex | not started |
 | [M3](#m3--scip-for-go) | SCIP for Go | the first analyzer runs through the contract; guessed edges drop | not started |
 | [M4](#m4--typescript-and-hono) | TypeScript and Hono | Hono and Kaneo pass their hand count | not started |

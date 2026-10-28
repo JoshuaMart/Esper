@@ -18,6 +18,7 @@ export default defineConfig({
 					label: 'Overview',
 					items: ['how-it-works', 'decisions', 'roadmap', 'sources'],
 				},
+				{ label: 'Reference', items: ['reference/graph'] },
 			],
 		}),
 	],

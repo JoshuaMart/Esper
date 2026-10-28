@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises'
-import { Language, Parser, type Tree } from 'web-tree-sitter'
+import { Language, Parser, Query, type Tree } from 'web-tree-sitter'
 
 export type LanguageName = 'go'
 
@@ -11,7 +11,7 @@ const grammars: Record<LanguageName, string> = {
 let ready: Promise<void> | undefined
 const languages = new Map<LanguageName, Promise<Language>>()
 
-async function loadLanguage(name: LanguageName): Promise<Language> {
+export async function loadLanguage(name: LanguageName): Promise<Language> {
   ready ??= Parser.init()
   await ready
   let language = languages.get(name)
@@ -34,4 +34,20 @@ export async function parse(name: LanguageName, source: string): Promise<Tree> {
   } finally {
     parser.delete()
   }
+}
+
+const queries = new Map<string, Promise<Query>>()
+
+// Loads one of a language's extraction queries, from `queries/<language>/<name>.scm` (D10).
+export function loadQuery(name: LanguageName, query: string): Promise<Query> {
+  const key = `${name}/${query}`
+  let loaded = queries.get(key)
+  if (!loaded) {
+    const url = new URL(`../queries/${key}.scm`, import.meta.url)
+    loaded = Promise.all([loadLanguage(name), readFile(url, 'utf8')]).then(
+      ([language, source]) => new Query(language, source),
+    )
+    queries.set(key, loaded)
+  }
+  return loaded
 }

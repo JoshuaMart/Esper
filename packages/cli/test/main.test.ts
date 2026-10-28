@@ -16,3 +16,7 @@ test('esper --version runs from the sources', async () => {
 test('esper refuses an unknown command', async () => {
   await assert.rejects(run(process.execPath, [main, 'nope']), { code: 2 })
 })
+
+test('esper refuses an unknown option', async () => {
+  await assert.rejects(run(process.execPath, [main, '--readonly']), { code: 2 })
+})
