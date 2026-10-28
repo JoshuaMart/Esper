@@ -5,3 +5,4 @@ docs/dist/
 docs/.astro/
 *.tsbuildinfo
 packages/cli/dist/
+apps/web/dist/

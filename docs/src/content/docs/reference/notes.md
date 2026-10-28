@@ -4,8 +4,8 @@ description: What a note holds, how it is revised and deleted, and where its anc
 ---
 
 Notes are what an audit produces ([D8](/decisions/#d8--notes)): leads, coverage, findings and
-context, written by agents over MCP ([MCP tools](/reference/mcp/)) and, from M5, by people in the
-web interface. They live in the project's database, apart from the snapshots
+context, written by agents over MCP ([MCP tools](/reference/mcp/)) and by people in the
+[web interface](/reference/interface/#notes). They live in the project's database, apart from the snapshots
 ([graph schema](/reference/graph/#tables)), so that no reindex and no deleted snapshot takes one
 with it. The source of truth is `packages/core/src/notes.ts`.
 

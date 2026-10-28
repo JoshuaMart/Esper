@@ -14,6 +14,7 @@ lists those that exist. From the repository, `pnpm esper <command>` runs them fr
 | `esper index <project>` | indexes a snapshot. Without options, it reads the folder as it is. With `--ref <tag, branch or commit>`, it reads that ref from git and leaves the checkout alone. `--precise` also runs the analyzer that resolves the language's call edges, in Docker ([analyzers](/reference/analyzers/)). A clean commit already indexed with the same profiles and analyzers is not indexed again; `--force` does it anyway |
 | `esper list` | the projects, and the snapshots of each |
 | `esper mcp <project>` | serves the project over MCP on stdio, for one agent ([MCP tools](/reference/mcp/)). `--read-only` exposes no tool that writes |
+| `esper serve` | starts the server on `127.0.0.1` for every project: the [web interface](/reference/interface/), its [API](/reference/api/), and MCP over HTTP at `/mcp/<project>`. `--port` sets its port, 7300 by default, 0 for any free one. It prints its address and the token, kept in `$ESPER_HOME/token` |
 
 An unknown option is refused, as is an option of another command. A refusal exits with code 1 and
 says why; a mistake in the command line exits with code 2.
@@ -42,6 +43,7 @@ anchor state.
 In `$ESPER_HOME`, or `~/.esper` by default:
 
 ```text
+token                          the token of esper serve
 projects/<name>/project.json   the project: its name, its source, its kind if forced
 projects/<name>/esper.db       its snapshots
 projects/<name>/checkout/      its clone, for a project added by URL

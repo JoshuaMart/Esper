@@ -5,7 +5,7 @@ description: The tools an agent reaches through esper mcp, with their inputs, ou
 
 An agent reaches one project through the MCP server
 ([D13](/decisions/#d13--the-mcp-surface), [D18](/decisions/#d18--running-esper-one-home-many-projects)),
-over stdio:
+over stdio or HTTP:
 
 ```sh
 esper mcp chi              # every tool
@@ -17,6 +17,25 @@ For Claude Code, in an MCP configuration file:
 ```json
 { "mcpServers": { "esper": { "command": "esper", "args": ["mcp", "chi", "--read-only"] } } }
 ```
+
+or over Streamable HTTP, from [`esper serve`](/reference/api/), at `/mcp/<project>` with the
+server's token:
+
+```json
+{
+  "mcpServers": {
+    "esper": {
+      "type": "http",
+      "url": "http://127.0.0.1:7300/mcp/chi",
+      "headers": { "Authorization": "Bearer <token from esper serve>" }
+    }
+  }
+}
+```
+
+The HTTP endpoint serves every tool; an agent that must not write connects over stdio with
+`--read-only`. Notes written either way show in the [web interface](/reference/interface/) as they
+are written.
 
 The server is built on `@modelcontextprotocol/server` 2.4.0, the v2 SDK, which implements the
 2026-07-28 revision of the specification. The tool sections below are written from the tools'

@@ -36,6 +36,8 @@ says why. Versions and behaviours cited here were checked on 2026-10-28.
 | [D25](#d25--hono-middleware-in-the-order-it-is-registered) | Hono: middleware in the order it is registered; a framework's own types named by its package | settled |
 | [D26](#d26--scip-typescript-with-the-dependencies-the-lockfile-pins) | scip-typescript, with the dependencies the target's lockfile pins, installed without scripts | settled |
 | [D27](#d27--a-guarding-chain-member-is-known-by-the-code-that-refuses) | A guarding chain member is known by the code that refuses, not by how it is written | settled |
+| [D28](#d28--the-server-a-token-kept-in-the-home-events-from-the-database) | The server: a token kept in the home, one connection per project, events found in the database | settled |
+| [D29](#d29--the-map-a-groups-shared-code-drawn-bounded) | The map: the code a group of entry points shares, drawn and bounded | settled |
 
 ## D1 — What Esper is and is not
 
@@ -1089,3 +1091,67 @@ same check. Compared by the code that refuses, 10 are, each lacking a check its 
 billing webhook, GitHub's application information, imports that take their project from the body.
 
 **Rules out.** Two guards told apart by how they are written or which factory builds them.
+
+## D28 — The server: a token kept in the home, events from the database
+
+This settles how [D14](#d14--one-server-for-the-api-mcp-and-the-web-interface)'s server is reached
+and how it stays current.
+
+**Decision.**
+
+- **A token kept in the home.** `esper serve` makes a random token once and keeps it in
+  `$ESPER_HOME/token`, readable by its owner only. Agents send it as a bearer token to
+  `/mcp/<project>`. The interface is opened at an address that carries it, and trades it for an
+  `HttpOnly`, `SameSite=Strict` session cookie.
+- **This machine only.** The server listens on `127.0.0.1`, and refuses a request whose `Host`
+  names another host or whose `Origin` is not its own, port included, and a body not sent as
+  JSON. The interface's page loads nothing from elsewhere; its fonts are bundled.
+- **One connection per project.** The JSON API and the MCP endpoint of a project share one store
+  and one cache of loaded snapshots. The API runs the MCP tools for everything they answer, so
+  that both surfaces have the same bounds and refusals.
+- **Events found in the database.** While someone listens, the server looks every half second, and
+  at once after it writes, at each open project's newest snapshot and count of note revisions, and
+  sends what is new as server-sent events. An index runs as a job whose progress and result are
+  events too.
+- **The MCP endpoint** is the SDK's `createMcpHandler`, one per project, serving the 2026-07-28
+  revision and, statelessly, earlier clients.
+
+**Why.**
+- **A token that survives a restart.** An agent's MCP configuration names the token; one made at
+  each start would break every configuration at each restart. A file readable by its owner only is
+  as safe as the databases next to it.
+- **A cookie, not a token in each request.** `EventSource` sends no header, and a token kept in the
+  page's storage is readable by any script on it. An `HttpOnly`, `SameSite=Strict` cookie is sent
+  only by the interface's own pages.
+- **Host and Origin.** Listening on localhost does not stop a page elsewhere from reaching the
+  server: DNS rebinding makes another name resolve to `127.0.0.1`. Checking `Host` and `Origin`
+  closes that, as the MCP SDK advises for a local endpoint. The port counts too: a page another
+  server on this machine serves is the same site for the browser, which sends it the cookie; its
+  `Origin` names its own port, and a body it could send without a preflight is not JSON.
+- **The database, not the process.** An agent on `esper mcp` writes from another process
+  ([D18](#d18--running-esper-one-home-many-projects)); only the database sees every writer. Two
+  counts per project, every half second, cost nothing measurable, and need no change to how notes
+  are written.
+
+**Rules out.** A token on the command line or in a URL left in the history; a server reachable from
+another machine; events that only the server's own writes produce.
+
+## D29 — The map: a group's shared code, drawn bounded
+
+This adds a view to [D14](#d14--one-server-for-the-api-mcp-and-the-web-interface), whose overviews
+were tables only.
+
+**Decision.** Beside the tables, the entry points can be shown as a map: one group of them (a chain
+group, a signal, a read, at most 100 entry points) around the edge, and in the middle the
+declarations that at least a few of them call directly from their handlers, each sized by how many
+do. A library symbol is drawn only when a sink fact names it as its callee, unless asked. The map
+holds at most 40 shared nodes and says what it left out.
+
+**Why.** The auditor asked for a view of bubbles linked to each other. A table says which routes
+share a chain; it does not say which code many routes reach, which is where one flaw reaches many
+routes. Bounded by a group and by what its handlers call directly, the map stays readable, unlike
+the whole call graph D14 rules out. A sink fact names its callee, so the map marks the redirect and
+not the `Sprintf` on the same line.
+
+**Rules out.** A map of the whole graph; a library symbol drawn as a sink because it is called on a
+sink's line.

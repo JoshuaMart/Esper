@@ -29,7 +29,7 @@ export {
   normalisePattern,
   type Route,
 } from './entries.ts'
-export { EsperError } from './errors.ts'
+export { EsperError, NotFound } from './errors.ts'
 export {
   defaultPackageName,
   extractGo,

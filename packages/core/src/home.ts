@@ -12,7 +12,7 @@ import {
 } from './analyzer.ts'
 import { detectProfile } from './detect.ts'
 import { type AnalyzerRunner, dockerAvailable, dockerRunner } from './docker.ts'
-import { EsperError } from './errors.ts'
+import { EsperError, NotFound } from './errors.ts'
 import type { IndexStats } from './language.ts'
 import { languageNamed } from './languages.ts'
 import { type AnchorState, Notes } from './notes.ts'
@@ -84,7 +84,7 @@ export class Home {
     const text = await readFile(join(this.projectDir(name), 'project.json'), 'utf8').catch(
       () => undefined,
     )
-    if (!text) throw new EsperError(`no project named ${name}; \`esper list\` shows the projects`)
+    if (!text) throw new NotFound(`no project named ${name}; \`esper list\` shows the projects`)
     return JSON.parse(text) as Project
   }
 
@@ -96,9 +96,12 @@ export class Home {
   }
 
   async add(
-    source: string,
+    typed: string,
     options: { name?: string; kind?: 'application' | 'framework' } = {},
   ): Promise<Project> {
+    // A folder named from the home directory, as the shell would expand it: the web interface
+    // sends the path as it was typed.
+    const source = typed === '~' || typed.startsWith('~/') ? join(homedir(), typed.slice(1)) : typed
     const url = /^(https?:\/\/|git@|ssh:\/\/)/.test(source)
     const name = (
       options.name ??

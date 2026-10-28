@@ -1,5 +1,5 @@
 import type { StatementSync } from 'node:sqlite'
-import { EsperError } from './errors.ts'
+import { EsperError, NotFound } from './errors.ts'
 import type { NodeKind } from './graph.ts'
 import { type Store, textLines } from './store.ts'
 
@@ -308,7 +308,7 @@ export class Notes {
 
   private live(id: number): Note {
     const note = this.get(id)
-    if (!note) throw new EsperError(`no note ${id}`)
+    if (!note) throw new NotFound(`no note ${id}`)
     if (note.deleted) throw new EsperError(`note ${id} was deleted on ${note.deleted.at}`)
     return note
   }
@@ -319,7 +319,7 @@ export class Notes {
     if (unique.length > noteLimits.anchors) {
       throw new EsperError(`a note has at most ${noteLimits.anchors} anchors`)
     }
-    if (!this.store.snapshot(snapshotId)) throw new EsperError(`no snapshot ${snapshotId}`)
+    if (!this.store.snapshot(snapshotId)) throw new NotFound(`no snapshot ${snapshotId}`)
     const node = this.sql(`SELECT kind, fingerprint FROM nodes WHERE snapshot_id = ? AND ref = ?`)
     return unique.map((ref) => {
       const row = node.get(snapshotId, ref)

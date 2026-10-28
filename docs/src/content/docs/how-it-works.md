@@ -91,8 +91,10 @@ flowchart LR
     FX -- "no" --> U["unlinked<br/>a model may propose one, as a claim"]
 ```
 
-Every fact is stored with its citation (`file:line`) and its source. A reindex parses only the files
-whose hash changed, and the same code with the same profiles gives the same snapshot.
+Every fact is stored with its citation (`file:line`) and its source. A reindex reads the whole
+target, and a commit already indexed with the same profiles is not indexed again
+([D20](/decisions/#d20--a-reindex-reads-the-whole-target)); the same code with the same profiles
+gives the same snapshot.
 
 ## 2 · Analyzers
 
@@ -185,12 +187,15 @@ flowchart TB
   read or signal, follow callers, callees and paths, read a node with its code, facts and notes,
   ask for its claims apart, and write notes. Every answer is bounded and says when it was cut; a
   read-only connection writes nothing ([D13](/decisions/#d13--the-mcp-surface)).
-- **The auditor** uses the web interface: routes grouped by chain, read or signal; a bounded
-  subgraph from an entry point to what it reaches, with the code beside it; claims marked as such;
-  notes where they sit ([D14](/decisions/#d14--one-server-for-the-api-mcp-and-the-web-interface)).
-- **Everything goes through one process** for a project's database, in write-ahead logging mode, so
-  an agent's note shows in the interface as soon as it is written
-  ([D9](/decisions/#d9--storage-one-sqlite-database-per-project-outside-the-target)).
+- **The auditor** uses the [web interface](/reference/interface/): routes grouped by chain, read or
+  signal; a map of the code a group of routes shares; a bounded subgraph from an entry point to
+  what it reaches, with the code beside it; claims marked as such; notes where they sit
+  ([D14](/decisions/#d14--one-server-for-the-api-mcp-and-the-web-interface)).
+- **Every writer shares a project's database**, in write-ahead logging mode
+  ([D9](/decisions/#d9--storage-one-sqlite-database-per-project-outside-the-target)). The server
+  watches it, so an agent's note shows in the interface as soon as it is written, through the
+  server or `esper mcp` in another process
+  ([D28](/decisions/#d28--the-server-a-token-kept-in-the-home-events-from-the-database)).
 
 ## Notes across versions
 

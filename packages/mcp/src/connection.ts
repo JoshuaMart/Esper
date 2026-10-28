@@ -3,6 +3,7 @@ import {
   type Home,
   type Note,
   Notes,
+  NotFound,
   noteState,
   type PlacedAnchor,
   type SnapshotInfo,
@@ -37,7 +38,7 @@ export class Connection {
   snapshot(id?: number): SnapshotInfo {
     const info = id === undefined ? this.store.latest() : this.store.snapshot(id)
     if (info) return info
-    if (id !== undefined) throw new EsperError(`no snapshot ${id}; esper_snapshots lists them`)
+    if (id !== undefined) throw new NotFound(`no snapshot ${id}; esper_snapshots lists them`)
     throw new EsperError(`${this.project} has no snapshot yet; esper_index indexes one`)
   }
 

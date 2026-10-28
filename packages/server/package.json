@@ -9,6 +9,12 @@
   },
   "dependencies": {
     "@esper/core": "workspace:*",
-    "@esper/mcp": "workspace:*"
+    "@esper/mcp": "workspace:*",
+    "@hono/node-server": "2.1.5",
+    "@modelcontextprotocol/server": "2.4.0",
+    "hono": "4.13.14"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/client": "2.4.0"
   }
 }

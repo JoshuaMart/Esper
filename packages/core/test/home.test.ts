@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { execFile } from 'node:child_process'
-import { cp, mkdtemp, readdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { cp, mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -354,5 +354,26 @@ test("a commit's tree is written out in batches, never read whole", async () => 
   } finally {
     await rm(dir, { recursive: true })
     await rm(into, { recursive: true })
+  }
+})
+
+test('a folder named from the home directory is read there, as the shell would expand ~', async () => {
+  const fake = await mkdtemp(join(tmpdir(), 'esper-user-'))
+  const home = new Home(await mkdtemp(join(tmpdir(), 'esper-home-')))
+  const before = process.env.HOME
+  try {
+    await mkdir(join(fake, 'code', 'budget'), { recursive: true })
+    process.env.HOME = fake
+    const project = await home.add('~/code/budget')
+    assert.equal(project.name, 'budget')
+    assert.deepEqual(project.source, { path: join(fake, 'code', 'budget') })
+    await assert.rejects(
+      home.add('~/nothing'),
+      new RegExp(`${join(fake, 'nothing')} is not a folder`),
+    )
+  } finally {
+    process.env.HOME = before
+    await rm(fake, { recursive: true })
+    await rm(home.dir, { recursive: true })
   }
 })

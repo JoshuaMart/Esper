@@ -41,3 +41,48 @@ test('esper index takes --precise', async () => {
     await rm(home, { recursive: true })
   }
 })
+
+test('esper serve prints its address and token, and refuses a bad port', async () => {
+  const { spawn } = await import('node:child_process')
+  const { mkdtemp, rm, readFile } = await import('node:fs/promises')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const home = await mkdtemp(join(tmpdir(), 'esper-cli-home-'))
+  try {
+    await assert.rejects(
+      run(process.execPath, [main, 'serve', '--port', 'eighty'], {
+        env: { ...process.env, ESPER_HOME: home },
+      }),
+      { code: 2 },
+    )
+    await assert.rejects(run(process.execPath, [main, 'serve', 'chi']), { code: 2 })
+    const child = spawn(process.execPath, [main, 'serve', '--port', '0'], {
+      env: { ...process.env, ESPER_HOME: home },
+    })
+    try {
+      let out = ''
+      await new Promise<void>((done, fail) => {
+        child.stdout.on('data', (chunk: Buffer) => {
+          out += chunk
+          if (out.includes('token')) done()
+        })
+        child.once('exit', () => fail(new Error(`esper serve exited: ${out}`)))
+      })
+      const url = out.match(/esper serve on (http:\/\/127\.0\.0\.1:\d+)/)?.[1]
+      assert.ok(url)
+      const token = (await readFile(join(home, 'token'), 'utf8')).trim()
+      assert.match(out, new RegExp(token))
+      const projects = await fetch(`${url}/api/projects`, {
+        headers: { authorization: `Bearer ${token}` },
+      })
+      assert.deepEqual(await projects.json(), { projects: [] })
+    } finally {
+      if (child.exitCode === null) {
+        child.kill('SIGTERM')
+        await new Promise((done) => child.once('exit', done))
+      }
+    }
+  } finally {
+    await rm(home, { recursive: true })
+  }
+})

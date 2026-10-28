@@ -5,6 +5,7 @@ import {
   type Fact,
   type GraphNode,
   type NoteRevision,
+  NotFound,
   noteKinds,
   type SnapshotInfo,
   textLines,
@@ -880,7 +881,7 @@ export const tools: ToolSpec[] = [
       const info = c.snapshot(input.snapshot)
       const text = c.store.content(info.id, input.file)
       if (text === undefined) {
-        throw new EsperError(
+        throw new NotFound(
           `snapshot ${info.id} has no file ${input.file}; esper_search with kinds [file] lists its files`,
         )
       }
@@ -945,7 +946,7 @@ export const tools: ToolSpec[] = [
       const info = c.snapshot(input.snapshot)
       if (input.id !== undefined) {
         const note = c.notes.get(input.id)
-        if (!note) throw new EsperError(`no note ${input.id}`)
+        if (!note) throw new NotFound(`no note ${input.id}`)
         const placed = c.placed(info.id, [note])[0] as Placed
         return {
           snapshot: snap(info),

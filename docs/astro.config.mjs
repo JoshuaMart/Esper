@@ -23,6 +23,8 @@ export default defineConfig({
 						'reference/graph',
 						'reference/profiles',
 						'reference/mcp',
+						'reference/api',
+						'reference/interface',
 						'reference/notes',
 						'reference/analyzers',
 					], },

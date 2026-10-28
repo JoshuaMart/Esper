@@ -15,7 +15,7 @@ counted by hand, with none missing and none invented.
 | [M2](#m2--mcp-and-notes) | MCP and notes | an agent hunts chi over MCP and its notes survive a reindex | done |
 | [M3](#m3--scip-for-go) | SCIP for Go | the first analyzer runs through the contract; guessed edges drop | done |
 | [M4](#m4--typescript-and-hono) | TypeScript and Hono | Hono and Kaneo pass their hand count | done |
-| [M5](#m5--the-server-and-the-web-interface) | The server and the web interface | an audit can be followed and annotated in the browser | not started |
+| [M5](#m5--the-server-and-the-web-interface) | The server and the web interface | an audit can be followed and annotated in the browser | done |
 | [M6](#m6--enrichment-and-past-advisories) | Enrichment and past advisories | claims and advisory links measured on chi and Hono | not started |
 | [M7](#m7--dataflow-on-demand) | Dataflow, on demand | a `flows` question answered by Joern, every step cited | not started |
 | [Next](#after-that) | More frameworks | SvelteKit, Next.js, FastAPI, each a pair of profiles | |
@@ -168,6 +168,26 @@ The Hono server with the JSON API, MCP over Streamable HTTP and the static inter
 **Done when** an auditor can add a project, index it, follow an entry point to what it reaches and
 write a note, all from the browser, and a note written by an agent shows in the interface without a
 reload.
+
+It is done:
+
+- **Designed first**, in Claude Design, on Wakapi and chi as indexed, with notes written over MCP:
+  projects and snapshots, entry points grouped by chain, read and signal, a subgraph beside its
+  code, notes and their anchor states, adding and indexing a project, writing a note, and a map of
+  the code a group of entry points shares, which the auditor asked for while reviewing the design
+  ([D29](/decisions/#d29--the-map-a-groups-shared-code-drawn-bounded)).
+- **Checked in a browser** on `esper serve`: Hono added from its folder and indexed at v4.13.14 from
+  the interface, with its 108 entry points; on Wakapi, `GET /oidc/{provider}/callback` followed to
+  its handler and what it calls, a line of its code cited in a lead written from the interface; a
+  lead written by an agent over `/mcp/wakapi` shown with its author while the page stayed open; on
+  chi, the two notes stale since v5.2.1 reviewed against the code as it is now.
+- **Tested**: `packages/server/test/server.test.ts` adds, indexes, follows and annotates a project
+  through the API, checks the token, `Host` and `Origin`, and hears on the event stream a note
+  written over MCP and one written from another process; `graph.test.ts` checks both drawings;
+  `packages/cli/test/main.test.ts` starts `esper serve`.
+
+The server is [D28](/decisions/#d28--the-server-a-token-kept-in-the-home-events-from-the-database),
+with the [API](/reference/api/) and [interface](/reference/interface/) references.
 
 ## M6 — Enrichment and past advisories
 

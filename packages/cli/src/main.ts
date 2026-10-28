@@ -14,6 +14,8 @@ Commands:
   list                    the projects and their snapshots
   mcp <project>           serve the project over MCP on stdio; --read-only exposes no tool
                           that writes
+  serve                   the web interface, its API and MCP over HTTP at /mcp/<project>, on
+                          localhost; --port <port>, 7300 by default, 0 for any free one
 
 Options:
   --version  print the version
@@ -30,6 +32,7 @@ const options = {
   force: { type: 'boolean' },
   precise: { type: 'boolean' },
   'read-only': { type: 'boolean' },
+  port: { type: 'string' },
   version: { type: 'boolean' },
   help: { type: 'boolean' },
 } as const
@@ -38,6 +41,7 @@ const commands: Record<string, (keyof typeof options)[]> = {
   index: ['ref', 'force', 'precise'],
   list: [],
   mcp: ['read-only'],
+  serve: ['port'],
 }
 
 function fail(message: string, code = 2): never {
@@ -153,6 +157,30 @@ async function main() {
     // Loaded here: the other commands do not need the MCP SDK.
     const { serve } = await import('@esper/mcp')
     await serve(home, name, { readOnly: values['read-only'] ?? false })
+    return
+  }
+
+  if (command === 'serve') {
+    if (rest.length > 0) fail('serve takes no project: it serves them all')
+    const port = values.port === undefined ? undefined : Number(values.port)
+    if (port !== undefined && !(Number.isInteger(port) && port >= 0 && port < 65536)) {
+      fail(`--port is a port number, not ${values.port}`)
+    }
+    const { serve } = await import('@esper/server')
+    const server = await serve(home, port === undefined ? {} : { port }).catch((error: unknown) => {
+      const code = (error as { code?: string }).code
+      if (code === 'EADDRINUSE') fail(`port ${port ?? 7300} is in use; --port picks another`, 1)
+      throw error
+    })
+    console.log(`esper serve on ${server.url}`)
+    console.log(
+      `  interface    ${server.web ? `${server.url}/?token=${server.token}` : 'not built: pnpm --filter @esper/web build'}`,
+    )
+    console.log(`  MCP          ${server.url}/mcp/<project>, with Authorization: Bearer <token>`)
+    console.log(`  token        ${server.token}  (kept in ${home.dir}/token)`)
+    const stop = () => void server.close().then(() => process.exit(0))
+    process.once('SIGINT', stop)
+    process.once('SIGTERM', stop)
     return
   }
 

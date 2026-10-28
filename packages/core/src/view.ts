@@ -1,4 +1,4 @@
-import { EsperError } from './errors.ts'
+import { EsperError, NotFound } from './errors.ts'
 import type { Citation, EdgeKind, Fact, Graph, GraphEdge, GraphNode, NodeKind } from './graph.ts'
 import type { SnapshotInfo, Store } from './store.ts'
 
@@ -96,7 +96,7 @@ export class SnapshotView {
 
   static load(store: Store, id: number): SnapshotView {
     const info = store.snapshot(id)
-    if (!info) throw new EsperError(`no snapshot ${id}; esper_snapshots lists them`)
+    if (!info) throw new NotFound(`no snapshot ${id}; esper_snapshots lists them`)
     return new SnapshotView(info, store.graph(id))
   }
 
@@ -114,7 +114,7 @@ export class SnapshotView {
         `${name} names ${refs.length} nodes; give one reference: ${refs.slice(0, 10).join(', ')}${refs.length > 10 ? ', …' : ''}`,
       )
     }
-    throw new EsperError(
+    throw new NotFound(
       `snapshot ${this.info.id} has no node ${name}; esper_search finds nodes by part of their name`,
     )
   }
