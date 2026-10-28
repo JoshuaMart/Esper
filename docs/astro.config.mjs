@@ -18,7 +18,7 @@ export default defineConfig({
 					label: 'Overview',
 					items: ['how-it-works', 'decisions', 'roadmap', 'sources'],
 				},
-				{ label: 'Reference', items: ['reference/graph', 'reference/profiles'] },
+				{ label: 'Reference', items: ['reference/command-line', 'reference/graph', 'reference/profiles'] },
 			],
 		}),
 	],

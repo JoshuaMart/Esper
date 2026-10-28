@@ -8,7 +8,8 @@ served to hunting agents over MCP and explorable in a web interface.
 > and bring out what nobody had seen.
 
 **Status: early development.** The documentation describes the target design; the code is at
-[M0](docs/src/content/docs/roadmap.md#m0--the-workspace), the workspace.
+[M1](docs/src/content/docs/roadmap.md#m1--the-core-on-go-and-chi): Go applications on chi or
+`net/http`, and chi itself, can be indexed from the command line.
 
 ## Documentation
 
@@ -28,7 +29,7 @@ the TypeScript sources directly.
 pnpm install
 pnpm check            # type-check and lint
 pnpm test             # tests, with Node's own runner
-pnpm esper --help     # the command line, from the sources
+pnpm esper --help     # the command line, from the sources: add, index, list
 pnpm docs             # documentation on http://localhost:4321
 ```
 
