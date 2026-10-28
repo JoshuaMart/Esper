@@ -72,13 +72,15 @@ that tree-sitter gives cheaply.
 
 **Decision.** `web-tree-sitter` 0.27.1, with the WebAssembly grammars that the official grammar
 packages ship: `tree-sitter-go` 0.25.0, `tree-sitter-typescript` 0.23.2 (TypeScript and TSX),
-`tree-sitter-javascript` 0.25.0, `tree-sitter-python` 0.25.0, `tree-sitter-php` 0.24.2. Versions are
-pinned exactly. Go is parsed by tree-sitter too, not by `go/parser`.
+`tree-sitter-javascript` 0.25.0, `tree-sitter-python` 0.25.0. Versions are pinned exactly, and a
+grammar joins the dependencies when its language's first framework starts
+([D5](#d5--two-kinds-of-target-applications-and-the-frameworks-themselves)): Go in M1, TypeScript and
+JavaScript in M4, Python after that. Go is parsed by tree-sitter too, not by `go/parser`.
 
 **Why.**
 
-- **Checked.** `web-tree-sitter` 0.27.1 loads each of these grammars (ABI 14 and 15) and parses a
-  handler in each language without error.
+- **Checked.** `web-tree-sitter` 0.27.1 loads each of these grammars and parses a handler in each
+  language without error.
 - **Nothing to compile.** The grammar packages carry a native-addon install script, but the
   `.wasm` file is already in the package. pnpm 10 does not run dependency install scripts unless
   allowed, so no compiler is needed and no package script runs on install.
@@ -95,15 +97,19 @@ per language.
 
 **Decision.** Esper is written in TypeScript and runs on Node 24 or later. Both are LTS lines: 24
 until April 2028, and 26, which becomes LTS on 2026-10-28, until April 2029. Node runs the
-TypeScript sources directly by stripping types, so the server has no build step; TypeScript 7.0.2
-type-checks.
+TypeScript sources directly by stripping types, so working on Esper has no build step; TypeScript
+7.0.2 type-checks (`tsc --noEmit`). The code uses only syntax that can be stripped: no `enum`, no
+`namespace`, no parameter properties (`erasableSyntaxOnly`). Two things are built: the web interface,
+by Vite, and the published `esper-cli` package, compiled to JavaScript by `tsc`, because Node does
+not strip types in files under `node_modules`.
 
 **Why.** The MCP SDK, tree-sitter's WebAssembly runtime, the HTTP server and the web interface are
 all TypeScript, so one language covers the whole tool, and a contributor reads one codebase. A
 compiled language (Rust, Go) would parse faster, but an audit indexes one target of a few thousand
 files, where parsing takes seconds, and the web interface would stay in TypeScript anyway.
 
-**Rules out.** A bundler for the server; Bun or Deno as the reference runtime.
+**Rules out.** A bundler for the server; Bun or Deno as the reference runtime; TypeScript syntax that
+Node cannot strip.
 
 ## D5 — Two kinds of target: applications, and the frameworks themselves
 
@@ -120,7 +126,9 @@ both:
 
 Order of support:
 
-1. **Go**: `net/http` and **chi**.
+1. **Go**: **chi**, and `net/http` on its own. Plain `net/http` gets an application profile only, for
+   applications routed by `http.ServeMux`; the standard library itself is not a target, and chi's
+   framework profile covers the `net/http` types chi reads.
 2. **TypeScript**: **Hono**, then **SvelteKit**, then **Next.js**.
 3. **Python**: **FastAPI**, with router prefixes and `Depends`.
 4. Then Express, Nuxt and the others, as targets ask for them.
@@ -144,31 +152,74 @@ measured against a real target ([D16](#d16--measured-against-hand-counted-target
 |---|---|
 | `file` | a source file that was read |
 | `decl` | a declaration: function, method, class, or a property holding a function (`actions.create`) |
-| `external` | a library callee, named by its import path, so that two importers share one node |
-| `entry` | an entry point: a route of an application, or an exported symbol of a library that reads the request |
+| `external` | a library symbol the target calls or imports, named by its import path, so that two importers share one node |
+| `entry` | an entry point: a route of an application; for a framework, an exported symbol or an internal handler that reads the incoming request ([D5](#d5--two-kinds-of-target-applications-and-the-frameworks-themselves)) |
 | `advisory` | a published vulnerability of the target (GHSA, CVE, GO…), imported from OSV ([D19](#d19--past-vulnerabilities-advisories-linked-to-the-code-they-touched)) |
 
 | Edge | From → to | Carries |
 |---|---|---|
 | `contains` | file → decl | |
-| `imports` | file → file or module | the resolved path, through the target's aliases |
+| `imports` | file → file or external | the resolved path, through the target's aliases |
 | `calls` | decl → decl or external | `resolved` or `guessed`, and the reason when guessed |
 | `handles` | entry → decl | the handler |
 | `chain` | entry → decl | the middleware in front of the handler, with its position |
-| `affects` | advisory → decl or file | the precision of the link, the fix commit, and whether the node changed since the fix ([D19](#d19--past-vulnerabilities-advisories-linked-to-the-code-they-touched)) |
-| `flows` | read or decl → sink | that a value flows from one to the other, with each step cited; filled by a dataflow analyzer ([D12](#d12--precision-scip-right-after-the-first-index-dataflow-later)) |
+| `affects` | advisory → decl or file | the precision of the link, the fix commit, whether this snapshot's version is `affected` or `fixed`, and whether the node changed since the fix ([D19](#d19--past-vulnerabilities-advisories-linked-to-the-code-they-touched)) |
+| `flows` | entry or decl → decl | that a value flows from a read of the entry, or from a decl, to a decl that carries a sink, with the read and each step cited; filled by a dataflow analyzer ([D12](#d12--precision-scip-right-after-the-first-index-dataflow-later)) |
 
-Facts sit on nodes: an entry's method and path, its **reads** (`header`, `query`, `path`, `body`,
-`cookie`, `form`, `host`, `remoteaddr`, `method`, `context`), its **signals**, and whether a node is a
-**sink**. Signals are a closed vocabulary, versioned with the schema: `live-state`,
-`retained-mutation`, `short-circuit`, `data-write`, `data-read`, `request-key`, `mass-assignment`,
-`divergent-guard`, `callback-passed`, `sink-reachable`, `fix-downstream`.
+**Facts** sit on nodes:
+
+- on an entry: its method and path, its **reads**, its **guards** and its **signals**;
+- on a decl: whether it is a **guard** or a **sink**, the reads it makes, and its signals.
+
+**Reads** are what the code takes from the request, named `<kind>` or `<kind>.<name>` when the name is
+known (`header.X-Forwarded-For`, `path.id`, `query.page`, `body`):
+
+| Read | What it is |
+|---|---|
+| `header` | a request header |
+| `query` | a query-string parameter |
+| `path` | a parameter of the route pattern |
+| `body` | the request body, whole or decoded (`body.email` for a decoded field) |
+| `cookie` | a cookie |
+| `form` | a field of a form or multipart body |
+| `host` | the `Host` the request names |
+| `remoteaddr` | the client address as the server sees it (`r.RemoteAddr`); a forwarding header is a `header` read |
+| `method` | the request method |
+| `context` | a request-scoped value set by earlier middleware (`r.Context().Value`, Hono's `c.get`) |
+
+A **guard** is a check that can refuse a request: a chain member, or a call in the handler that
+returns an error response before the handler's work. Each guard has a kind, `authn`, `authz-role`,
+`authz-owner`, `csrf`, `rate-limit` or `validation`, and comes from a profile
+([D10](#d10--frameworks-as-profiles)). A model can claim that a custom function is a guard
+([D17](#d17--model-enrichment-claims-beside-the-facts)), but a claimed guard is shown as such and
+counts for no signal.
+
+**Signals** are a closed vocabulary, versioned with the schema. Each is computed by a rule from
+facts, never from a claim:
+
+| Signal | Set when |
+|---|---|
+| `live-state` | the code reads or writes state that outlives the request: a package-level or module-level variable, a shared map or cache |
+| `retained-mutation` | the code modifies request state (path, headers, parameters, context) that later middleware, the handler or the framework reads again |
+| `short-circuit` | a chain member can answer or return without calling the next one, so that what follows it is skipped for some requests |
+| `data-write` | the code writes persisted data: a database, a file, a store the profile names |
+| `data-read` | the code reads persisted data |
+| `request-key` | a value from the request selects which record or object key is used (`WHERE id = path.id`, `obj[query.key]`) |
+| `mass-assignment` | a decoded body is spread or bound into a stored object without a field list |
+| `divergent-guard` | the entry lacks a guard kind that most of its sibling routes, under the same prefix or group, have |
+| `callback-passed` | request state is handed to a function supplied by the caller (a hook, a callback, a user option) that can read or write it |
+| `sink-reachable` | a decl that carries a sink is reachable through `calls` edges; reachability only, a `flows` edge says more |
+| `fix-downstream` | the entry reaches a node that a past advisory affects ([D19](#d19--past-vulnerabilities-advisories-linked-to-the-code-they-touched)) |
+
+A **sink** is a call that interprets, opens or starts something: a query built from strings, a file
+path, a process, a URL fetched by the server, a template rendered unescaped. Sinks are listed per
+language in the extraction queries and per framework in the profiles.
 
 **Every fact cites its evidence** as `file:line`: a read, a guard, a signal, an edge. A fact
 without a citation is not stored. **Every fact names its source**: `tree-sitter` with the profile
-that produced it, or the analyzer that imported it (`scip-go`, `joern`…). The `flows` edge and the
-source field are in the schema from the first version, empty until an analyzer fills them, so that
-adding an analyzer adds rows, never a migration.
+that produced it, the analyzer that imported it (`scip-go`, `joern`…), or `osv` and `git` for
+advisories. The `flows` edge and the source field are in the schema from the first version, empty
+until an analyzer fills them, so that adding an analyzer adds rows, never a migration.
 
 **Why.** The citation is what lets an agent or an auditor check a fact in the code instead of
 trusting it. The closed vocabulary is what makes a signal comparable across routes and across
@@ -181,12 +232,24 @@ targets. The snapshot is what makes notes and diffs between versions possible.
 **Decision.** Each node has a **reference** and a **fingerprint**.
 
 - The reference is readable and stable: `src/auth.ts#requireUser`, `src/users.ts#Service.update`,
-  `src/routes/+page.server.ts#actions.create`. A route is referenced by its method and path:
-  `route:POST /api/projects/[id]/members`. A name that occurs twice in a file takes an ordinal
-  (`#init~2`); an anonymous function is named by its parent and its rank (`#handler/fn1`). Lines are
-  never part of a reference, since an edit above would change it.
-- The fingerprint is a hash of the node's code with whitespace and comments removed. An entry's
-  fingerprint also covers its chain and its handler.
+  `src/routes/+page.server.ts#actions.create`. File paths are relative to the target's root, with
+  `/` as the separator. A name that occurs twice in a file takes an ordinal (`#init~2`); an
+  anonymous function is named by its parent and its rank (`#handler/fn1`). Lines are never part of
+  a reference, since an edit above would change it.
+- **Other nodes:**
+  - **A route**, in an application, is referenced by its method and its normalised path:
+    `route:POST /api/projects/{id}/members`. Parameters are written `{name}` and catch-alls
+    `{name...}`, whatever the framework's own syntax (`[id]` in SvelteKit, `:id` in Hono); the
+    original pattern is kept as a fact.
+  - **An entry of a framework** is its declaration's reference prefixed with `entry:`
+    (`entry:middleware/realip.go#RealIP`).
+  - **An external** is its import path and symbol: `ext:database/sql#DB.Exec`.
+  - **An advisory** is its OSV identifier: `osv:GO-2026-4316`.
+  - **A read** is named by the node that makes it and the read: `route:GET /users/{id}@path.id`.
+    This is how a dataflow question names its start
+    ([D12](#d12--precision-scip-right-after-the-first-index-dataflow-later)).
+- The fingerprint is the SHA-256 of the node's tree-sitter tokens, comments and whitespace left out.
+  An entry's fingerprint also covers its chain and its handler.
 
 **Why.** Findings, coverage and notes cite nodes, and must survive a reindex. The reference answers
 "is it the same node?", and the fingerprint answers "has its code changed?". Keeping both apart is
@@ -200,17 +263,18 @@ what lets a note move with a renamed function, or be flagged when the code under
 
 - a **kind**: `lead` (a hypothesis), `coverage` (this was examined from this angle, and what came
   out), `finding` (a confirmed issue), or `context` (anything else worth knowing);
-- a **status** fitting its kind: `open`, `ruled-out` or `confirmed` for a lead;
+- a **status** fitting its kind: `open`, `ruled-out` or `confirmed` for a lead; `open`,
+  `reported` or `fixed` for a finding; none for coverage and context;
 - a Markdown **body**, its **citations** (`file:line`), its **author** (an agent's name or a human)
   and its dates;
 - the **fingerprint** of each node when the note was written;
 - its **revisions**: an edit adds a revision rather than overwriting, and a deletion is recorded.
 
-On reindex, each anchor is checked:
+On reindex, each anchor is checked, and gets an **anchor state**, kept apart from the note's status:
 
 | Anchor after reindex | The note |
 |---|---|
-| same reference, same fingerprint | stays attached |
+| same reference, same fingerprint | stays `attached` |
 | same reference, new fingerprint | is marked `stale`: shown, and flagged for review |
 | reference gone, same fingerprint elsewhere | follows the code, and is marked `moved` |
 | nothing matches | is marked `orphaned`, and kept |
@@ -309,9 +373,11 @@ tree-sitter reads syntax: it sees that `svc.update(id)` is called, not which `up
 
 **Decision.** In this order:
 
-1. **SCIP comes right after the first index of each language**, as the second step of its support.
-   Measured on chi 5.3.2 with a tree-sitter call graph: 486 edges, of which 262 are guessed. More
-   than half of the paths an agent follows would rest on a guess, which is too much to wait for.
+1. **SCIP comes right after the first index of each language**, as the second step of its support,
+   before the next language starts: for Go, MCP comes first so that the index can be used, then
+   scip-go ([roadmap](/roadmap/)). Measured on chi 5.3.2 with an earlier tree-sitter prototype of
+   the call graph: 486 edges, of which 262 are guessed. More than half of the paths an agent follows
+   would rest on a guess, which is too much to wait for. M1 measures it again with Esper's own index.
 2. **Dataflow comes later, on demand**: run for a question (this read, this sink), not for every
    index, and through Joern or CodeQL depending on the language.
 
@@ -321,7 +387,7 @@ any later engine (CodeQL, a language server):
 | Part | What it is |
 |---|---|
 | **Manifest** | name, version, languages, what it provides (`edges.resolve`, `flows`), its container image, whether it answers per snapshot or per question |
-| **Input** | the snapshot's source, mounted read-only, and for a per-question analyzer the question: a read and a sink, given by their references |
+| **Input** | the snapshot's source, mounted read-only, and for a per-question analyzer the question: a read and a sink, given by their references ([D7](#d7--stable-references-and-fingerprints)) |
 | **Output** | one JSON Lines file in Esper's import format: edges to resolve, `flows` edges with their steps, each with its citations |
 | **Import** | Esper validates every line against the schema, checks the citations against the snapshot, tags each fact with the analyzer's name and version, and rejects the file whole if any line fails |
 
@@ -348,24 +414,29 @@ dependencies with scripts enabled.
 implements the 2026-07-28 revision of the specification), over stdio for a local agent and
 Streamable HTTP for the rest. Tools:
 
-| Tool | Answers |
-|---|---|
-| `esper_index` | index or reindex a target; returns counts, skips and refusals |
-| `esper_entrypoints` | entry points, filtered by method, path, chain member, read or signal |
-| `esper_node` | one node: its facts, its code excerpt, its notes, its past advisories |
-| `esper_advisories` | the target's advisories, filtered by severity or precision, with the nodes each one affects ([D19](#d19--past-vulnerabilities-advisories-linked-to-the-code-they-touched)) |
-| `esper_callers`, `esper_callees` | one hop or more, up to a depth |
-| `esper_paths` | the paths from one node to another, up to a depth and a count |
-| `esper_search` | find a node by name, reference or `file:line` |
-| `esper_read` | a range of lines from a file of the snapshot, and nothing outside it |
-| `esper_notes` | list notes by node, kind, status or author |
-| `esper_note_create`, `esper_note_update`, `esper_note_delete` | write notes |
-| `esper_claims` | the model claims on a node, apart from its facts ([D17](#d17--model-enrichment-claims-beside-the-facts)) |
-| `esper_enrich_next`, `esper_claim_submit` | hand out an enrichment question, and take its answer |
-| `esper_flows`, `esper_flow_request` | the `flows` edges of a node, and a dataflow question for an analyzer ([D12](#d12--precision-scip-right-after-the-first-index-dataflow-later)) |
+| Tool | Answers | Writes |
+|---|---|---|
+| `esper_snapshots` | the project's snapshots: ref, commit, date, counts | |
+| `esper_diff` | between two snapshots: entry points added, removed or changed, and notes whose anchor state changed | |
+| `esper_index` | index a git ref of the connection's project, or reindex it; returns counts, skips and refusals | yes |
+| `esper_entrypoints` | entry points, filtered by method, path, chain member, guard, read or signal | |
+| `esper_node` | one node: its facts, its code excerpt, its notes, its past advisories, and how many claims it has | |
+| `esper_advisories` | the target's advisories, filtered by severity, precision or link status, with the nodes each one affects ([D19](#d19--past-vulnerabilities-advisories-linked-to-the-code-they-touched)) | |
+| `esper_callers`, `esper_callees` | one hop or more, up to a depth | |
+| `esper_paths` | the paths from one node to another, up to a depth and a count | |
+| `esper_search` | find a node by name, reference or `file:line` | |
+| `esper_read` | a range of lines from a file of the snapshot, and nothing outside it | |
+| `esper_notes` | list notes by node, kind, status, anchor state or author | |
+| `esper_note_create`, `esper_note_update`, `esper_note_delete` | write notes | yes |
+| `esper_claims` | the model claims on a node, apart from its facts ([D17](#d17--model-enrichment-claims-beside-the-facts)) | |
+| `esper_enrich_next`, `esper_claim_submit` | hand out an enrichment question, and take its answer | `esper_claim_submit` |
+| `esper_flows`, `esper_flow_request` | the `flows` edges of a node, and a dataflow question for an analyzer ([D12](#d12--precision-scip-right-after-the-first-index-dataflow-later)) | `esper_flow_request` |
 
+Every tool that reads the graph takes an optional `snapshot`, and reads the latest one without it.
 Every answer is bounded and says when it was cut. A node is named by its reference, a `file:line`,
-or its name. A server started **read-only** exposes no write tool.
+or its name. A server started **read-only** exposes none of the tools marked as writing. Each tool's
+input and output schemas, and its default bounds, are written in M2 ([roadmap](/roadmap/#m2--mcp-and-notes))
+and published from the code.
 
 **Why.** Bounded answers are what an agent can afford to ask often. Read-only mode lets a
 workflow decide which agents may write notes, for example a hunter that proposes leads and a
@@ -393,16 +464,31 @@ home screen.
 **Decision.** A pnpm workspace:
 
 ```
-packages/core     # parsing, graph model, references, profiles, storage
-packages/mcp      # MCP tools over core
-packages/server   # HTTP API, MCP endpoint, static files
-apps/web          # the web interface
-profiles/         # framework profiles (YAML)
-docs/             # this documentation
+packages/core          # @esper/core: parsing, graph model, references, profiles, storage
+packages/core/queries  # tree-sitter extraction queries, one folder per language (.scm)
+packages/mcp           # @esper/mcp: MCP tools over core
+packages/server        # @esper/server: HTTP API, MCP endpoint, static files
+packages/cli           # esper-cli on npm: the `esper` command
+apps/web               # @esper/web: the web interface
+profiles/<framework>   # the two profiles, their fixtures and their hand counts
+schemas/               # JSON Schemas: profile, analyzer import, claims
+analyzers/<name>       # an analyzer's manifest and container image
+docs/                  # this documentation
 ```
 
-One command-line entry point, `esper` ([D18](#d18--running-esper-one-home-many-projects)). Licence:
-**Apache-2.0**.
+Every package but `esper-cli` is private to the workspace. `docs/` joins the workspace, so the
+repository has one lockfile. One command-line entry point, `esper`
+([D18](#d18--running-esper-one-home-many-projects)). Licence: **Apache-2.0**.
+
+**Tooling**, set in M0:
+
+- **pnpm 10**, pinned in `packageManager`; Node 24 or later in `engines`, and `.nvmrc` set to 24.
+- **TypeScript** with `strict`, `noEmit`, `erasableSyntaxOnly`, `verbatimModuleSyntax`,
+  `module: nodenext` and `allowImportingTsExtensions`, so that imports name the `.ts` file Node runs
+  ([D4](#d4--typescript-on-node-24-and-later)).
+- **Tests** with Node's own runner (`node --test`), which runs the TypeScript sources as they are.
+- **Lint and format** with Biome 2.
+- **CI** on GitHub Actions: type-check, lint, tests, on Node 24 and 26.
 
 **Why.** The core is used by three surfaces and must not depend on any of them. Apache-2.0 is
 permissive like MIT, and adds an explicit patent grant; it is also the licence of the MCP SDK.
@@ -412,7 +498,9 @@ permissive like MIT, and adds an explicit patent grant; it is also the licence o
 **Decision.** Each profile ships with fixtures, and is measured against at least one real target
 whose entry points were counted by hand. A profile counts as supported when, on that target, no
 entry point is missing and none is invented. Each index also reports its share of `resolved`
-edges.
+edges. Fixtures live in `profiles/<framework>/fixtures/`, and each hand count in
+`profiles/<framework>/counts/<target>@<commit>.yaml`: the target, the commit it was counted at, and
+every entry point with its citation, so that the measure is a test.
 
 **Why.** An index that misses a route hides part of the attack surface, and no one notices an
 absence. Counting by hand once is the only way to know the extractor's recall; the share of
@@ -471,7 +559,8 @@ OpenSSL a median of 9 iterations per function, about $0.13 per iteration, and a 
 iterations, about $10.92 ([article](https://knostic.ai/blog/openant)); 390 functions put that in
 the hundreds of dollars per target, or a large share of a plan's limits. Two tiers spend that only
 where it is needed. The share of questions that reach the exploring tier is measured on the first
-targets: if it is high, the bounded tier is not paying for itself and is dropped.
+targets ([M6](/roadmap/#m6--enrichment-and-past-advisories)): if it is high, the bounded tier is not
+paying for itself and is dropped.
 
 ### The checks
 
@@ -501,9 +590,9 @@ Esper calls a model through a **provider**, and ships two.
    A bounded run answers a batch of nodes, with no tools and no MCP server:
 
    ```sh
-   claude -p --tools "" --disallowedTools "*" --strict-mcp-config \
+   claude -p --tools "" --strict-mcp-config \
      --model opus --effort low --max-turns 1 --no-session-persistence \
-     --output-format json --json-schema claims.schema.json < batch.txt
+     --output-format json --json-schema "$(cat claims.schema.json)" < batch.txt
    ```
 
    An exploring run answers one question, with no built-in tool and only Esper's read-only server:
@@ -512,8 +601,13 @@ Esper calls a model through a **provider**, and ships two.
    claude -p --tools "" --strict-mcp-config --mcp-config esper-readonly.json \
      --allowedTools "mcp__esper__*" --permission-mode dontAsk \
      --model opus --effort medium --max-turns 20 --no-session-persistence \
-     --output-format json --json-schema claims.schema.json < question.txt
+     --output-format json --json-schema "$(cat claims.schema.json)" < question.txt
    ```
+
+   `--json-schema` takes the schema itself, as a JSON string, not a path; Esper passes it inline.
+   `esper-readonly.json` declares one server, `esper mcp <project> --read-only` over stdio, so the
+   run needs no token and reaches no other project. Both commands were checked with Claude Code
+   2.1.312, the exploring one without Esper's server, which does not exist yet.
 
    - **Started from Esper's home, never from the audited repository.** A `claude -p` run loads the
      hooks and MCP servers of its working directory without a trust prompt
@@ -521,7 +615,13 @@ Esper calls a model through a **provider**, and ships two.
    - **Only what the tier needs.** `--tools ""` removes every built-in tool, and
      `--strict-mcp-config` ignores every MCP server but the one Esper passes: none for a bounded
      run, the read-only server scoped to the project for an exploring run. `dontAsk` denies
-     anything else.
+     anything else. Not `--disallowedTools "*"`: it also denies the internal tool that returns
+     structured output, and the run ends without an answer.
+   - **None of the auditor's customisations.** `--tools ""` and `--strict-mcp-config` still let a
+     run load the user's hooks, plugins, skills and `CLAUDE.md` from `~/.claude`. Esper adds
+     `--safe-mode`, which starts without them, if it still honours `--mcp-config`; otherwise
+     `--setting-sources ""`. Which one is settled by a test in
+     [M6](/roadmap/#m6--enrichment-and-past-advisories).
    - **Structured answers.** `--json-schema` returns the claims in Esper's schema; a run without
      valid output is retried once, then its questions are left unanswered.
    - **Bounded spend.** A few runs go in parallel, and Esper stops when the plan's limit is reached
@@ -546,8 +646,8 @@ in Esper knows which one answered, beyond the model name recorded on each claim.
   worst mistake the layer can make, so the measure starts from the most reliable model. Move this
   tier to **Claude Sonnet 5.5** if it matches on that set. With an API key the difference is small:
   for 1,000 nodes at about 3,000 input and 500 output tokens each, before thinking tokens, about
-  $11 for Opus 5.5 and $5.50 for Sonnet 5.5 in batch ($4 and $20, against $2 and $10, per million
-  tokens, as of 2026-10-28). On a plan, the cost is the plan's limits, which Opus uses faster, so the
+  $11 for Opus 5.5 and $5.50 for Sonnet 5.5 in batch (list prices of $4 and $20, against $2 and $10,
+  per million input and output tokens, as of 2026-10-28, halved by the Batches API). On a plan, the cost is the plan's limits, which Opus uses faster, so the
   move is worth more there.
 - **Exploring tier: Claude Opus 5.5 at medium effort**, capped at 20 turns. These are the hard
   questions, and there are few of them.
@@ -572,18 +672,39 @@ or started from the audited repository; exploring every node by default.
 - **Add a project** from the command line or the web interface:
   `esper add ~/code/budget` reads a local folder in place and never writes to it;
   `esper add https://github.com/honojs/hono` clones it into the project's folder (cloning runs none
-  of the target's code). The kind of target, application or framework
-  ([D5](#d5--two-kinds-of-target-applications-and-the-frameworks-themselves)), is detected from the profiles and
-  can be forced with `--kind`.
+  of the target's code). The project is named after the folder or the repository (`budget`,
+  `hono`), or by `--name`.
 - **Index one or more versions.** `esper index hono` indexes the current checkout;
   `esper index hono --ref v4.6.0` reads that tag from git without touching the checkout. A project
-  holds several snapshots, such as the vulnerable and the fixed version of a framework.
+  holds several snapshots, such as the vulnerable and the fixed version of a framework. A checkout
+  with uncommitted changes gives a snapshot of its files as they are, labelled with its `HEAD`
+  commit and marked `dirty`.
 - **Serve.** `esper serve` starts the local server ([D14](#d14--one-server-for-the-api-mcp-and-the-web-interface))
   and prints its address and token: the web interface lists the projects, their snapshots and
   their notes.
-- **Connect an agent to one project.** `esper mcp --project hono` over stdio, with `--read-only` if
-  needed, or the HTTP endpoint `/mcp/hono`. A connection sees a single project: its tools take no
-  project argument, and an agent working on one target cannot read another's notes.
+- **Connect an agent to one project.** `esper mcp hono` over stdio, with `--read-only` if needed, or
+  the HTTP endpoint `/mcp/hono`. A connection sees a single project: its tools take no project
+  argument, and an agent working on one target cannot read another's notes.
+
+Every command that acts on a project takes its name first:
+
+| Command | Does |
+|---|---|
+| `esper add <path or git URL>` | adds a project; `--name`, `--kind application\|framework`, `--package` |
+| `esper index <project>` | indexes a snapshot; `--ref`, `--offline` (no advisory fetch) |
+| `esper advisories <project>` | fetches and links the target's advisories again ([D19](#d19--past-vulnerabilities-advisories-linked-to-the-code-they-touched)) |
+| `esper enrich <project>` | answers the enrichment questions ([D17](#d17--model-enrichment-claims-beside-the-facts)); `--provider claude-code\|anthropic-api`, `--tier` |
+| `esper notes export <project>`, `esper notes import <project>` | notes to and from JSON Lines ([D9](#d9--storage-one-sqlite-database-per-project-outside-the-target)) |
+| `esper mcp <project>` | the MCP server over stdio; `--read-only` |
+| `esper serve` | the local server, for every project |
+| `esper list` | the projects and their snapshots |
+
+The kind of target, application or framework
+([D5](#d5--two-kinds-of-target-applications-and-the-frameworks-themselves)), is detected from the
+profiles: each profile says how it recognises its target, by the manifest's module or package name
+for the framework itself (`github.com/go-chi/chi/v5`, `hono`), and by a dependency on it for an
+application. `--kind` overrides the detection, and a target that matches no profile is refused
+([D11](#d11--indexing-rules)).
 
 **Why.** An auditor works on several targets, and often on several versions of one, so projects and
 snapshots are the unit of everything. Reading a local folder in place keeps the auditor's own
@@ -603,26 +724,29 @@ look first.
 
 - **Import the target's advisories from [OSV](https://osv.dev)**, which gathers the GitHub advisory
   database, the Go vulnerability database, PyPI, npm and others. The target's packages are read from
-  its manifests (`go.mod`, `package.json`, `pyproject.toml`, `composer.json`) and can be set with
+  its manifests (`go.mod`, `package.json`, `pyproject.toml`) and can be set with
   `esper add --package`. Advisories are fetched when a snapshot is indexed and refreshed with
-  `esper advisories <project>`; this is the one network call Esper itself makes, and `--offline`
-  turns it off.
-- **Medium severity or more only.** An advisory is kept when its CVSS base score is 4.0 or more, or,
-  without a vector, when its database rates it `MODERATE` or more. An entry without any rating takes
+  `esper advisories <project>`; this is the one network call Esper itself makes, and
+  `esper index --offline` skips it.
+- **Medium severity or more only.** An advisory is kept when its database rates it `MODERATE` or
+  more, or, without a rating, when its CVSS base score is 4.0 or more. An entry without either takes
   the rating of its aliases: entries of the Go vulnerability database carry none, their GHSA alias
   does. An advisory still unrated after that is kept and marked `unrated`, rather than dropped. The
-  import report counts the low ones it skipped: Hono has 52 advisories on OSV, 4 of them low.
+  import report counts the low ones it skipped: Hono has 52 advisories on OSV, 4 of them rated
+  `LOW`.
 - **Each advisory is an `advisory` node, linked by `affects` edges** to the code it concerns
   ([D6](#d6--the-graph-model)), each with how precise the link is:
 
   | Precision | Where the link comes from |
   |---|---|
-  | `symbol` | the advisory names the function: the Go database lists the affected symbols (chi's `RedirectSlashes`, `RealIP`) |
-  | `fix-diff` | the advisory references its fix commit; the declarations its diff touches, read in the parent commit, are the ones linked |
+  | `symbol` | the advisory names the function: entries of the Go database can list the affected symbols (chi's `RedirectSlashes`, `RealIP`), though not all do |
+  | `fix-diff` | the advisory points to its fix commit, by a reference of type `FIX` or by any reference whose URL is a commit of the target's repository; the declarations its diff touches, read in the parent commit, are the ones linked. 41 of Hono's 52 advisories point to a commit this way, none with the `FIX` type |
   | `file` | only the file is known: the fix touches lines outside any declaration |
-  | `none` | no symbol and no fix reference (most of Hono's advisories): the fix commit is searched in the target's history (`git log --grep` with the advisory's identifiers), and if none is found the advisory stays unlinked |
 
-  A model can propose a link for an unlinked advisory through the exploring tier
+  An advisory with no symbol and no commit has its fix searched in the target's history
+  (`git log --grep` with the advisory's identifiers). If none is found, it gets no `affects` edge
+  and is marked `unlinked`, so that it is listed rather than lost. A model can propose a link for an
+  unlinked advisory through the exploring tier
   ([D17](#d17--model-enrichment-claims-beside-the-facts)); its answer is a claim, never an `affects`
   edge.
 - **The link follows the code across versions.** It is made on the version the fix changed, then
@@ -630,7 +754,8 @@ look first.
   like a note. On each snapshot the edge says whether the version is affected or fixed, from the
   advisory's ranges, and whether the node changed since the fix.
 - **It feeds `fix-downstream`.** The signal is set on an entry point that reaches a node with an
-  advisory, so that `esper_entrypoints` can list them and the auditor sees them first.
+  advisory, so that `esper_entrypoints` can list them and the auditor sees them first. Advisories
+  are therefore linked before signals are computed.
 - **Advisory text is data.** It comes from a third party, like the audited code, and is shown and
   passed on as such.
 

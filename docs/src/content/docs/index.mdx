@@ -68,12 +68,13 @@ A signal is not a defect. It says where to look, and the code answers.
 ## Notes are the audit
 
 What an audit learns belongs on the graph, next to the code it is about. Agents and humans create,
-edit and delete notes on any node: a route, a symbol, an edge.
+edit and delete notes on any node: a route, a symbol, a file.
 
 - **Leads**: a hypothesis on a route, with the `file:line` it cites.
 - **Coverage**: this slice was hunted from this angle, and nothing came out. What has been ruled
   out is written down, so the next agent does not redo it.
 - **Findings**: a confirmed issue attached to the code it lives in, and the path that reaches it.
+- **Context**: anything else worth knowing about that code, such as how a helper is meant to be used.
 
 A note is attached to a stable reference. When the code is reindexed, a note on an unchanged node
 carries over; a note on a changed node is flagged for review rather than silently kept.

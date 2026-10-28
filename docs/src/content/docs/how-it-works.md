@@ -37,7 +37,7 @@ Auditing Hono, from its repository to a first finding:
 esper add https://github.com/honojs/hono   # a project, cloned into Esper's home
 esper index hono --ref v4.6.0              # a snapshot of that version
 esper serve                                # the web interface, the API and MCP
-esper mcp --project hono                   # what a hunting agent connects to
+esper mcp hono                             # what a hunting agent connects to
 ```
 
 Hono is recognised as a framework, so its entry points are its request surface rather than routes
@@ -45,13 +45,13 @@ Hono is recognised as a framework, so its entry points are its request surface r
 for the entry points that read a header and reach a short-circuit, follows the path from one of them
 to the code that decides, writes a `lead` on it, and later a `coverage` note on the slice it has
 ruled out. If a later version fixes what the lead points at, indexing it (`--ref` with its tag) adds a
-second snapshot:
-notes on unchanged nodes carry over, the note on the fixed function is marked `stale`, and the two
-snapshots can be compared.
+second snapshot: notes on unchanged nodes carry over, the note on the fixed function is marked
+`stale`, and `esper_diff` compares the two snapshots.
 
 The index also links Hono's past advisories to the code their fixes touched
-([D19](/decisions/#d19--past-vulnerabilities-advisories-linked-to-the-code-they-touched)): the entry points that reach one carry the `fix-downstream` signal, and the agent can
-start from them, looking for a variant or a bypass of the fix.
+([D19](/decisions/#d19--past-vulnerabilities-advisories-linked-to-the-code-they-touched)): the entry
+points that reach one carry the `fix-downstream` signal, and the agent can start from them, looking
+for a variant or a bypass of the fix.
 
 ## 1 · Index
 
@@ -70,21 +70,22 @@ Parsing only, without a model, without running anything
 4. **Resolve.** Imports are resolved through the target's own aliases. Each call edge is `resolved`
    when one declaration matches, or `guessed`, with its reason, when the index can only name a
    candidate.
-5. **Compute signals.** From the facts, by rules: `data-write`, `request-key`, `divergent-guard`
-   between sibling routes, and the rest of the closed vocabulary
-   ([D6](/decisions/#d6--the-graph-model)).
-6. **Name and fingerprint.** Every node gets its stable reference and a fingerprint of its code
+5. **Name and fingerprint.** Every node gets its stable reference and a fingerprint of its code
    ([D7](/decisions/#d7--stable-references-and-fingerprints)).
-
-7. **Link past advisories.** The target's advisories of medium severity or more are fetched from
+6. **Link past advisories.** The target's advisories of medium severity or more are fetched from
    OSV and linked to the declarations they concern, each link with its precision
-   ([D19](/decisions/#d19--past-vulnerabilities-advisories-linked-to-the-code-they-touched)):
+   ([D19](/decisions/#d19--past-vulnerabilities-advisories-linked-to-the-code-they-touched)).
+7. **Compute signals.** From the facts, by rules: `data-write`, `request-key`, `divergent-guard`
+   between sibling routes, `fix-downstream` from the advisories, and the rest of the closed
+   vocabulary ([D6](/decisions/#d6--the-graph-model)).
+
+How an advisory is linked:
 
 ```mermaid
 flowchart LR
-    A["Advisory<br/>GHSA · CVE · GO"] --> SYSymbols<br/>listed?
+    A["Advisory<br/>GHSA · CVE · GO"] --> SY{"Symbols<br/>listed?"}
     SY -- "yes" --> S["symbol"]
-    SY -- "no" --> FXFix commit<br/>referenced or found<br/>in git log?
+    SY -- "no" --> FX{"Fix commit<br/>referenced or found<br/>in git log?"}
     FX -- "yes" --> D["fix-diff<br/>declarations the diff touches"]
     D -. "outside any declaration" .-> FI["file"]
     FX -- "no" --> U["unlinked<br/>a model may propose one, as a claim"]
@@ -158,7 +159,7 @@ flowchart TB
             MCPH["MCP over HTTP<br/>/mcp/project"]
             UI["Web interface"]
         end
-        STDIO["esper mcp --project<br/>stdio"]
+        STDIO["esper mcp project<br/>stdio"]
         DB[("~/.esper/projects/name/esper.db<br/>snapshots · claims · notes")]
         CC["claude -p<br/>enrichment runs"]
     end
@@ -172,15 +173,15 @@ flowchart TB
     API --> DB
     MCPH --> DB
     STDIO --> DB
-    CC -- "read-only" --> MCPH
+    CC -- "read-only" --> STDIO
     ANZ -. "JSON Lines" .-> esper
 ```
 
 - **Agents** connect over MCP, to one project per connection
-  ([D18](/decisions/#d18--running-esper-one-home-many-projects)). They list entry points by read or
-  signal, follow callers, callees and paths, read a node with its code, facts, claims and notes, and
-  write notes. Every answer is bounded and says when it was cut; a read-only connection writes
-  nothing ([D13](/decisions/#d13--the-mcp-surface)).
+  ([D18](/decisions/#d18--running-esper-one-home-many-projects)). They list entry points by guard,
+  read or signal, follow callers, callees and paths, read a node with its code, facts and notes,
+  ask for its claims apart, and write notes. Every answer is bounded and says when it was cut; a
+  read-only connection writes nothing ([D13](/decisions/#d13--the-mcp-surface)).
 - **The auditor** uses the web interface: routes grouped by chain, read or signal; a bounded
   subgraph from an entry point to what it reaches, with the code beside it; claims marked as such;
   notes where they sit ([D14](/decisions/#d14--one-server-for-the-api-mcp-and-the-web-interface)).
