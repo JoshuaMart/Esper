@@ -1,3 +1,4 @@
+import { appendFileSync } from 'node:fs'
 import type { Home } from '@esper/core'
 import { EsperError } from '@esper/core'
 import { McpServer } from '@modelcontextprotocol/server'
@@ -11,6 +12,8 @@ import { type ToolSpec, tools } from './tools.ts'
 
 export interface ServerOptions {
   readOnly?: boolean
+  // Told of each tool call, before it runs: an exploring enrichment run records what it read.
+  trace?: (tool: string, input: unknown) => void
 }
 
 export const instructions = (project: string, readOnly: boolean) =>
@@ -61,6 +64,7 @@ export function createServer(connection: Connection, options: ServerOptions = {}
                   })
                   .catch(() => undefined)
               }
+        options.trace?.(tool.name, input)
         try {
           const output = (await tool.run(connection, input as never, progress)) as Record<
             string,
@@ -82,10 +86,24 @@ export function createServer(connection: Connection, options: ServerOptions = {}
 }
 
 // Serves one project over stdio until the client closes its end.
-export async function serve(home: Home, project: string, options: ServerOptions = {}) {
+export async function serve(
+  home: Home,
+  project: string,
+  options: Omit<ServerOptions, 'trace'> & { trace?: string } = {},
+) {
   await home.project(project)
   const connection = new Connection(home, project)
-  const handle = serveStdio(() => createServer(connection, options))
+  const file = options.trace
+  // Each call as a JSON line: the tool and its input.
+  const trace = file
+    ? (tool: string, input: unknown) => appendFileSync(file, `${JSON.stringify({ tool, input })}\n`)
+    : undefined
+  const handle = serveStdio(() =>
+    createServer(connection, {
+      ...(options.readOnly ? { readOnly: true } : {}),
+      ...(trace ? { trace } : {}),
+    }),
+  )
   let open = true
   const close = () => {
     if (!open) return

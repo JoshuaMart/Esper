@@ -14,6 +14,7 @@
     "docs": "pnpm --filter @esper/docs dev",
     "fetch-targets": "node scripts/fetch-targets.ts",
     "reference": "node scripts/reference.ts",
+    "measure-claims": "node scripts/measure-claims.ts",
     "web": "pnpm --filter @esper/web build"
   },
   "devDependencies": {

@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/JoshuaMart/Esper/schemas/claims.schema.json",
+  "title": "Esper claims",
+  "description": "The answers a model gives to enrichment questions (D17): checked against the code they cite, kept apart from the facts.",
+  "type": "object",
+  "properties": {
+    "answers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "question": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          },
+          "kind": {
+            "type": ["string", "null"]
+          },
+          "text": {
+            "type": ["string", "null"]
+          },
+          "citations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "file": {
+                  "type": "string"
+                },
+                "line": {
+                  "type": "integer"
+                },
+                "identifier": {
+                  "type": "string"
+                }
+              },
+              "required": ["file", "line", "identifier"],
+              "additionalProperties": false
+            }
+          },
+          "reason": {
+            "type": ["string", "null"]
+          }
+        },
+        "required": ["question", "value", "kind", "text", "citations", "reason"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["answers"],
+  "additionalProperties": false
+}

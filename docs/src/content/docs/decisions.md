@@ -38,6 +38,8 @@ says why. Versions and behaviours cited here were checked on 2026-10-28.
 | [D27](#d27--a-guarding-chain-member-is-known-by-the-code-that-refuses) | A guarding chain member is known by the code that refuses, not by how it is written | settled |
 | [D28](#d28--the-server-a-token-kept-in-the-home-events-from-the-database) | The server: a token kept in the home, one connection per project, events found in the database | settled |
 | [D29](#d29--the-map-a-groups-shared-code-drawn-bounded) | The map: the code a group of entry points shares, drawn and bounded | settled |
+| [D30](#d30--advisories-belong-to-the-project-and-are-placed-on-each-snapshot) | Advisories belong to the project and are placed on each snapshot when it is read; how a fix is read | settled |
+| [D31](#d31--enrichment-as-built-questions-checks-and-two-providers) | Enrichment as built: the questions, the checks, and how each provider runs; `--safe-mode` for bounded runs, `--setting-sources ""` for exploring ones; bounded questions on Sonnet 5.5 at medium effort | settled |
 
 ## D1 — What Esper is and is not
 
@@ -638,8 +640,9 @@ Esper calls a model through a **provider**, and ships two.
    - **None of the auditor's customisations.** `--tools ""` and `--strict-mcp-config` still let a
      run load the user's hooks, plugins, skills and `CLAUDE.md` from `~/.claude`. Esper adds
      `--safe-mode`, which starts without them, if it still honours `--mcp-config`; otherwise
-     `--setting-sources ""`. Which one is settled by a test in
-     [M6](/roadmap/#m6--enrichment-and-past-advisories).
+     `--setting-sources ""`. Settled in M6: `--safe-mode` drops `--mcp-config`, so bounded runs
+     take `--safe-mode` and exploring runs `--setting-sources ""`
+     ([D31](#d31--enrichment-as-built-questions-checks-and-two-providers)).
    - **Structured answers.** `--json-schema` returns the claims in Esper's schema; a run without
      valid output is retried once, then its questions are left unanswered.
    - **Bounded spend.** A few runs go in parallel, and Esper stops when the plan's limit is reached
@@ -667,6 +670,10 @@ in Esper knows which one answered, beyond the model name recorded on each claim.
   $11 for Opus 5.5 and $5.50 for Sonnet 5.5 in batch (list prices of $4 and $20, against $2 and $10,
   per million input and output tokens, as of 2026-10-28, halved by the Batches API). On a plan, the cost is the plan's limits, which Opus uses faster, so the
   move is worth more there.
+  Measured in M6 ([D31](#d31--enrichment-as-built-questions-checks-and-two-providers)): Sonnet 5.5
+  at medium effort answered the 41 hand-answered questions as Opus 5.5 at low effort did, all
+  right, with as many tokens at half the cost; the bounded tier moved to **Sonnet 5.5 at medium
+  effort**. At low effort, 7 of Sonnet's answers failed their citations.
 - **Exploring tier: Claude Opus 5.5 at medium effort**, capped at 20 turns. These are the hard
   questions, and there are few of them.
 - **Profile drafting: Claude Opus 5.5 at high effort.**
@@ -1155,3 +1162,179 @@ not the `Sprintf` on the same line.
 
 **Rules out.** A map of the whole graph; a library symbol drawn as a sink because it is called on a
 sink's line.
+
+## D30 — Advisories belong to the project, and are placed on each snapshot
+
+This settles how [D19](#d19--past-vulnerabilities-advisories-linked-to-the-code-they-touched) is
+stored and how a fix commit is read. D19 asked for advisories linked before signals are computed;
+here they are linked once per project and placed on a snapshot each time it is read. Built in M6.
+
+**Decision.**
+
+- **The project's, not a snapshot's.** Advisories, their links, and their state on each snapshot
+  are tables of the project's database, like notes ([D9](#d9--storage-one-sqlite-database-per-project-outside-the-target)).
+  When a snapshot is read, each advisory becomes an `advisory` node, each link an `affects` edge
+  placed on the snapshot's code, and `fix-downstream` a signal on the entry points that reach one
+  ([D6](#d6--the-graph-model)). Stored snapshots are never rewritten: `esper advisories` refreshes
+  every snapshot at once, and a snapshot indexed `--offline` still gets the advisories already
+  fetched. Schema 5 adds the tables; a database of schema 3 or 4 is brought to 5 in place.
+- **One advisory per alias group.** OSV returns the Go database's entry and GitHub's for one flaw;
+  they are one advisory, known by the entry that says most about the code: one that names
+  functions, then one with a `FIX` reference, then one its database rates. An advisory no entry
+  rates takes the rating of up to five aliases fetched apart, then the base score of a CVSS 3
+  vector, computed as the specification says. A CVSS 4 vector alone leaves it `unrated`.
+- **Which link.** The functions an advisory names (`symbol`), found in each snapshot by name in the
+  package's folder; otherwise each fix commit the repository holds, from a commit URL among the
+  references or a git range (an abbreviated id only from a URL of one of the target's remotes,
+  since another repository's short id could name an unrelated commit of the target); otherwise the commits of every branch and tag whose message names the
+  advisory or an alias, at most five (`git log --all -F -i --grep`).
+- **How a fix is read.** Its diff against its first parent, so that a merge commit is read as the
+  change it brought. Only the source files the index reads count: a fix that touches tests and
+  documentation alone links nothing. Each changed line of the parent is given to the innermost
+  declaration that spans it; a file is the link only when none of its changed lines is in a
+  declaration. Lines added between two declarations link nothing: they are new code, which the
+  parent did not hold. Only the touched files are parsed, at the parent and at the fix: a
+  declaration's reference and fingerprint depend on its own file alone. An advisory whose fix
+  cannot be read is kept `unlinked`, with why, and the others are saved.
+- **States computed once.** An advisory's state on a snapshot is computed when either is new, or
+  when the advisory's entry changed; fetching again an unchanged advisory asks git nothing.
+- **Placed by reference, then fingerprint.** A link keeps the node's reference and its fingerprints
+  before and after the fix. On a snapshot, it goes to the node of that reference, else to a node of
+  the same kind with either fingerprint (`movedFrom`), else nowhere: the advisory says how many
+  links its snapshot does not hold. The edge says whether the node's code is as the fix left it,
+  as it was before the fix, or changed since.
+- **Affected or fixed.** From the advisory's version ranges, when the snapshot has a version: its
+  ref, or a tag that names its commit, read as a semantic version (`folder/v1.2.3` for a module in a
+  folder). Otherwise from the fix commits: `fixed` when the snapshot's commit holds one, `affected`
+  when it holds none. `unaffected` is a version before the flaw came in; `unknown` is neither.
+- **`fix-downstream`** is set on an entry point whose handler or chain reaches, through calls, a
+  declaration an advisory affects, one fact per advisory with the declaration (`via`), the part
+  (`handler`, `chain`) and whether a guessed call was on the way. A link to a file sets nothing: no
+  declaration is known to be reached.
+- **Measured** against hand-checked files in `profiles/<framework>/advisories/`, from OSV's answers
+  as recorded on 2026-10-28, on each target's whole history, which `pnpm fetch-targets` fetches
+  for these targets:
+  - **chi** at v5.3.2: 8 entries, 6 advisories, none low. The four that name `RedirectSlashes` or
+    `RealIP` are linked by symbol; GO-2025-3770 and GHSA-j6qf-3m9c-vwj3 by their fix commits. All 10 links are placed; five
+    of chi's 40 entry points carry `fix-downstream`.
+  - **Hono** at v4.13.14: 52 advisories, 4 rated low, as D19 says; of the 48 kept, 38 point to a
+    commit of Hono (41 of the 52, none with the `FIX` type), 37 linked to declarations and 1 to a
+    file. The 10 others name no commit and no commit names them: `unlinked`. All 48 are fixed at
+    v4.13.14; 95 of their 108 links are placed, and 60 of the 108 entry points carry `fix-downstream`. Fetching
+    and linking takes about 8 seconds.
+
+**Why.**
+
+- **A snapshot that does not change.** D22 refused to edit a stored snapshot with an analyzer's
+  output; the same holds for advisories, which change on OSV long after a snapshot is indexed. Kept
+  apart and placed when read, as notes are, a new advisory reaches every version at once.
+- **The parent, read narrowly.** A declaration the fix changed is where the flaw was; a declaration
+  the fix added is not, and a file a fix only added types to would link every advisory to its
+  file. Measured on Hono: counting added lines linked GHSA-3vhc-576x-3qv4 to `jwa.ts` and
+  `types.ts`, which only gained new types and error classes.
+
+**Rules out.** Advisory rows written into a snapshot's tables; a link made from an added line, or
+from a test file.
+
+## D31 — Enrichment as built: questions, checks, and two providers
+
+This settles what [D17](#d17--model-enrichment-claims-beside-the-facts) left open: which nodes are
+asked about, what an answer is and how it is checked, when a claim is asked again, and how each
+provider runs. Built in M6.
+
+**Decision.**
+
+- **The questions** ([claims](/reference/claims/)): `guard` for each chain member, handler and
+  declaration a handler calls directly; `effects` for each declaration an entry point reaches that
+  calls outside the target with no fact saying what the call does; `intent` for each chain member
+  and handler; and, for an agent, `trust` for each entry point of a framework that reads a header,
+  the host or the client address, and `applications` and `authentication` for an application's
+  repository. Chain members come first. A question is `<kind>:<subject>`, the same on every
+  snapshot.
+- **One answer schema** for both tiers and both providers (`schemas/claims.schema.json`): per
+  question, a value from a closed list or `insufficient-context`, a kind for a guard or a sink, a
+  text where the question takes one, citations as file, line and identifier, and a reason.
+- **The checks.** A value the question does not take, a guard or a sink without its kind, a missing
+  text, no citation, or a citation whose file, line or identifier does not match the snapshot
+  rejects the answer, which is stored as a rejected claim with the first thing that failed:
+  `citation mux.go:5: the line does not hold "http.NewServeMux()"`. An answer to a question its
+  call did not carry is not taken.
+- **Asked again** when a node a claim rests on has another fingerprint (a claim that rests on no
+  node, such as one about the repository answered without reading, rests on every file of its
+  snapshot), when the questions'
+  version (`promptVersion`) changes, or when its claim was rejected. An `insufficient-context`
+  bounded answer makes the question due in the exploring tier; an exploring answer, of any value,
+  settles it until its code changes.
+- **What an exploring claim rests on.** Each tool call of the run: its node, the ends of a path, the
+  file of a range of lines. `claude-code` reads them from the trace of Esper's server
+  (`esper mcp --read-only --trace`), `anthropic-api` from its own tool calls.
+- **Models.** Bounded questions on Claude Sonnet 5.5 at medium effort, exploring ones on Claude
+  Opus 5.5 at medium effort, up to 20 turns; `--model` and `--effort` choose others. What each run
+  used, tokens and cost at list prices, is reported with its claims.
+- **`claude-code` runs**, from `$ESPER_HOME/enrich/<project>/`, three at once, ten questions per
+  bounded call:
+  - a bounded run with `--safe-mode`, no tool and no MCP server, and the instructions as its system
+    prompt (`--system-prompt`);
+  - an exploring run with `--setting-sources ""`, Esper's read-only server by `--mcp-config`, the
+    six read-only tools by name in `--allowedTools`, and `dontAsk`;
+  - a run whose output has no structured answer is retried once; a run that failed and says the
+    plan's limit is reached stops the enrichment, and the questions not asked stay due (a run that
+    answered is never read as a limit, though its answer may speak of a rate limit).
+- **`anthropic-api` runs** through `@anthropic-ai/sdk` 1.3.0: bounded questions in one Message
+  Batch, the instructions cached, the schema as `output_config.format`; exploring questions through
+  the tool runner, with the six tools of `@esper/mcp` called on the project's connection. A rate
+  limit or a refused key stops the run. It is tested against a transport that answers as the API
+  does; no run on the API was made, since no key was at hand.
+- **A package of its own**, `packages/enrich` (`@esper/enrich`), beside those of
+  [D15](#d15--repository-layout-and-licence): the providers need both the core and the MCP tools,
+  and only the command line loads them.
+- **Over MCP**, `esper_enrich_next` hands out a due question with the same text a provider sends,
+  `esper_claim_submit` checks and stores an answer with the agent's model, and `esper_claims` lists
+  claims with whether each holds on the snapshot.
+
+**Why.**
+
+- **`--safe-mode` drops `--mcp-config`.** Measured with Claude Code 2.1.312 and a stub MCP server
+  that logs what it is asked: under `--safe-mode --strict-mcp-config --mcp-config`, the server never
+  starts and the run has no tool but its structured output; under `--setting-sources ""` it starts,
+  lists its tool and is called, and the run lists no skill. A bounded run needs no server, so it
+  takes the stricter `--safe-mode`; an exploring run takes `--setting-sources ""`. Each was one
+  call on Claude Haiku 5.5.
+- **A starting point, not the answer.** A first exploring run on Haiku, given only the question,
+  answered without reading anything. A question about the repository now starts from its entry
+  points and the middleware they share, and the instructions say to read before answering: the
+  next run read four files through Esper's tools, and its claim rests on their fingerprints.
+- **The literals' facts.** A chain member is often a factory whose check is in the function it
+  returns (`RequireUser(strict)` returns the handler that reads `Authorization`): the question
+  carries the facts of the literals a declaration defines, since its code holds them.
+
+- **Measured on 2026-10-28**, through `claude-code` on the auditor's plan (`pnpm measure-claims`),
+  against 41 guard questions answered by hand in `profiles/*/claims/`: 22 on chi v5.3.2, 4 of them
+  guards, and 19 on Hono v4.13.14, 7 of them guards. Ten questions per call, five calls per model;
+  tokens and cost as `claude -p` reports them, the cost at list prices, which on a plan is what its
+  limits are measured against:
+
+  | Model, effort | Right | False guards | Missed guards | Rejected by the checks | Output tokens | Cost |
+  |---|---|---|---|---|---|---|
+  | Claude Opus 5.5, low | 41 of 41 | 0 | 0 | 0 | 5,081 | $0.138 |
+  | Claude Sonnet 5.5, low | 34 of 41 | 0 | 0 | 7 | | |
+  | Claude Sonnet 5.5, medium | 41 of 41 | 0 | 0 | 0 | 4,982 | $0.068 |
+
+  None answered `insufficient-context` or gave a wrong kind. At low effort, Sonnet took no
+  non-guard for a guard and missed none, but 6 of its chi answers (`no` for `CleanPath`,
+  `Compress`, `GetHead`, `Heartbeat`, `ClientIPFromXFF`, `URLParam`) cited no line, and one Hono
+  answer (`compress`) cited a line without the identifier it named: 7 answers rejected, whose
+  questions would be asked again. At medium effort it answered all 41 right, every answer cited,
+  with as many output tokens as Opus at low effort and at half the cost. **The bounded tier runs on
+  Claude Sonnet 5.5 at medium effort.** Each run of 22 or 19 questions took about 8 seconds; the
+  input, the same for every model, was read from the cache.
+- **The share that moves to the exploring tier is none.** Of 245 bounded answers (the 41 questions
+  asked five times, on the three models and efforts above, two of them twice to measure their cost,
+  and the first 40 questions due on Hono, 20 guards and 20 intents, on Opus 5.5: 39 accepted, one
+  rejected for a citation), none was `insufficient-context`. The bounded tier is kept: it answers
+  what it is asked. The questions measured are about chain members and handlers, whose code a call
+  carries whole; the exploring tier is still where `trust`, `applications` and `authentication`
+  go, and where a later measure of `effects` questions may send some.
+
+**Rules out.** An answer stored without its checks; a claim that a changed node still counts; a
+run started in the target, or with any MCP server but Esper's read-only one.

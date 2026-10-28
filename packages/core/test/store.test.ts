@@ -82,7 +82,7 @@ test('a database of another schema is refused before anything is written to it',
   old.exec(`CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
     INSERT INTO meta VALUES ('schema_version', '2')`)
   old.close()
-  assert.throws(() => new Store(path), /has schema 2, and this Esper reads schema 4/)
+  assert.throws(() => new Store(path), /has schema 2, and this Esper reads schema 5/)
   const db = new DatabaseSync(path)
   const tables = db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table'`).all()
   assert.deepEqual(
@@ -93,7 +93,7 @@ test('a database of another schema is refused before anything is written to it',
   await rm(dir, { recursive: true })
 })
 
-test('a database of schema 3 is brought to 4: its snapshots have no analyzer', async () => {
+test('a database of schema 3 is brought to 5: its snapshots have no analyzer', async () => {
   const { mkdtemp, rm } = await import('node:fs/promises')
   const { tmpdir } = await import('node:os')
   const { join } = await import('node:path')
@@ -110,11 +110,36 @@ test('a database of schema 3 is brought to 4: its snapshots have no analyzer', a
   old.close()
   const again = new Store(path)
   assert.deepEqual(again.snapshot(id)?.analyzers, [])
-  assert.equal(again.db.prepare(`SELECT value FROM meta`).get()?.value, '4')
+  assert.equal(again.db.prepare(`SELECT value FROM meta`).get()?.value, '5')
   const next = again.addSnapshot(await shop(), { analyzers: ['scip-go@0.2.9'] })
   assert.deepEqual(again.snapshot(next)?.analyzers, ['scip-go@0.2.9'])
   again.close()
   // Opened again, it is left as it is.
   new Store(path).close()
+  await rm(dir, { recursive: true })
+})
+
+test('a database of schema 4 is brought to 5: it gains the tables of advisories and claims', async () => {
+  const { mkdtemp, rm } = await import('node:fs/promises')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const { DatabaseSync } = await import('node:sqlite')
+  const dir = await mkdtemp(join(tmpdir(), 'esper-store-'))
+  const path = join(dir, 'esper.db')
+  const store = new Store(path)
+  const id = store.addSnapshot(await shop(), { profiles: ['p'] })
+  store.close()
+  // Schema 4, as M5 wrote it: no advisories.
+  const old = new DatabaseSync(path)
+  old.exec(`DROP TABLE advisories; DROP TABLE advisory_states; DROP TABLE advisory_fetches;
+    DROP TABLE claims;
+    UPDATE meta SET value = '4' WHERE key = 'schema_version'`)
+  old.close()
+  const again = new Store(path)
+  assert.equal(again.snapshot(id)?.profiles[0], 'p')
+  assert.equal(again.db.prepare(`SELECT value FROM meta`).get()?.value, '5')
+  assert.equal(again.db.prepare(`SELECT count(*) AS n FROM advisories`).get()?.n, 0)
+  assert.equal(again.db.prepare(`SELECT count(*) AS n FROM claims`).get()?.n, 0)
+  again.close()
   await rm(dir, { recursive: true })
 })

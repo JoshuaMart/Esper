@@ -4,7 +4,14 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { parse } from 'yaml'
-import { dockerAvailable, type Graph, Home, profilesDir, Store } from '../src/index.ts'
+import {
+  dockerAvailable,
+  type Graph,
+  Home,
+  profilesDir,
+  recordedSource,
+  Store,
+} from '../src/index.ts'
 
 // scip-typescript through the analyzer contract, in Docker (D12, D22): on the hand-counted targets,
 // guessed call edges and calls without one give way to resolved edges that name scip-typescript,
@@ -28,7 +35,9 @@ async function both(target: string, count: string) {
   const { commit, dir, entries } = parse(
     await readFile(join(profilesDir, 'hono/counts', count), 'utf8'),
   ) as { commit: string; dir?: string; entries: { ref: string }[] }
-  const home = new Home(await mkdtemp(join(tmpdir(), 'esper-scip-home-')))
+  const home = new Home(await mkdtemp(join(tmpdir(), 'esper-scip-home-')), {
+    advisories: recordedSource(),
+  })
   try {
     await home.add(join(targets as string, target, dir ?? ''), { name: target })
     const plain = await home.index(target, { ref: commit })
@@ -110,7 +119,9 @@ test('a folder that is not a git checkout, and has no lockfile, is analyzed as i
   timeout,
 }, async () => {
   const dir = await mkdtemp(join(tmpdir(), 'esper-scip-folder-'))
-  const home = new Home(await mkdtemp(join(tmpdir(), 'esper-scip-home-')))
+  const home = new Home(await mkdtemp(join(tmpdir(), 'esper-scip-home-')), {
+    advisories: recordedSource(),
+  })
   try {
     await writeFile(
       join(dir, 'package.json'),
@@ -160,7 +171,9 @@ test('an npm workspace installs its packages, and a tsconfig extends one of them
   timeout,
 }, async () => {
   const dir = await mkdtemp(join(tmpdir(), 'esper-scip-npm-'))
-  const home = new Home(await mkdtemp(join(tmpdir(), 'esper-scip-home-')))
+  const home = new Home(await mkdtemp(join(tmpdir(), 'esper-scip-home-')), {
+    advisories: recordedSource(),
+  })
   const files: Record<string, string> = {
     'package.json': JSON.stringify({
       name: 'ws',

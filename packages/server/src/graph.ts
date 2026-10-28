@@ -20,6 +20,10 @@ export interface DrawnNode {
   reads: number
   signals: string[]
   notes: number
+  // The past advisories that affect it (D19).
+  advisories: number
+  // The claims by a model about it that hold on this snapshot (D17).
+  claims: number
 }
 
 export interface DrawnEdge {
@@ -37,6 +41,7 @@ function drawn(
   node: GraphNode,
   depth: number,
   notes: Map<string, number>,
+  claims: Map<string, number> = new Map(),
 ): DrawnNode {
   const facts = view.facts.get(node.ref) ?? []
   return {
@@ -50,6 +55,8 @@ function drawn(
     reads: new Set(facts.filter((f) => f.kind === 'read').map((f) => f.value)).size,
     signals: [...new Set(facts.filter((f) => f.kind === 'signal').map((f) => f.value))].sort(),
     notes: notes.get(node.ref) ?? 0,
+    advisories: (view.in.get(node.ref) ?? []).filter((e) => e.kind === 'affects').length,
+    claims: claims.get(node.ref) ?? 0,
   }
 }
 
@@ -59,9 +66,17 @@ function drawn(
 export function subgraph(
   view: SnapshotView,
   root: GraphNode,
-  options: { depth: number; limit: number; chain: boolean; notes: Map<string, number> },
+  options: {
+    depth: number
+    limit: number
+    chain: boolean
+    notes: Map<string, number>
+    claims?: Map<string, number>
+  },
 ) {
-  const nodes = new Map<string, DrawnNode>([[root.ref, drawn(view, root, 0, options.notes)]])
+  const nodes = new Map<string, DrawnNode>([
+    [root.ref, drawn(view, root, 0, options.notes, options.claims)],
+  ])
   const seen = new Set([root.ref])
   let frontier = [root.ref]
   const members = new Set<string>()
@@ -76,7 +91,7 @@ export function subgraph(
         if (!node) continue
         seen.add(edge.to)
         if (nodes.size >= options.limit) continue
-        const item = drawn(view, node, d, options.notes)
+        const item = drawn(view, node, d, options.notes, options.claims)
         if (edge.kind === 'chain' && from === root.ref) {
           item.chain = Number(edge.data?.position ?? 0)
           members.add(edge.to)

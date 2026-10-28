@@ -550,6 +550,62 @@ a.chip {
   color: var(--orphaned);
 }
 
+/* Advisories (D19): a severity, and whether the snapshot is affected. Each badge says its word. */
+.sev-critical,
+.sev-high,
+.a-affected {
+  background: var(--orphaned-bg);
+  color: var(--orphaned);
+}
+.sev-moderate {
+  background: var(--stale-bg);
+  color: var(--stale);
+}
+.sev-low,
+.sev-unrated,
+.a-unaffected,
+.a-unknown {
+  background: var(--context-bg);
+  color: var(--context);
+}
+.a-fixed {
+  background: var(--coverage-bg);
+  color: var(--coverage);
+}
+
+.advisory {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+}
+
+.advisory + .advisory {
+  border-top: 1px solid var(--border-soft);
+}
+
+.advisory .summary {
+  margin: 0;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.gnode .meta .advisory-count {
+  color: var(--orphaned);
+}
+
+/* Claims by a model (D17): set apart from facts, dashed, and always named as claimed. */
+.claim-badge,
+.chip-claim {
+  background: var(--surface);
+  color: var(--lead);
+  border: 1px dashed var(--lead);
+}
+.gnode .meta .claim-count {
+  color: var(--lead);
+  font-style: italic;
+}
+
 .notice {
   padding: 12px 14px;
   border-radius: 8px;

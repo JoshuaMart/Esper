@@ -1,0 +1,441 @@
+# Hono's advisories on OSV, linked to its code at v4.13.14 (D19). The answers OSV gave on
+# 2026-10-28 are recorded in packages/core/test/fixtures/osv/hono.json: 52 advisories, 4 rated low
+# and left out. Of the 48 kept, 38 point to a commit of Hono's repository among their references,
+# none with the FIX type: 37 are linked to the declarations their fix touched and 1 to a file. The
+# other 10 name no commit, and no commit of the history names them: they are unlinked. Every
+# advisory is fixed at v4.13.14.
+#
+# Checked by hand, each link against its advisory's summary and its fix's diff:
+# - GHSA-9hp6-4448-45g2 (path confusion in URL parsing): 1d79aed changes getPath in src/utils/url.ts.
+# - GHSA-2234-fmw7-43wr (CSRF bypass without Content-Type): aa50e0a changes the check inside csrf.
+# - GHSA-8j4g-w8fx-2239 (ReDoS in CORS via Access-Control-Request-Headers): 93fc250 changes the
+#   handler cors returns.
+# - GHSA-r354-f388-2fhh (IPv4 validation bypass in IP restriction): edbf6ee changes IPV4_REGEX, a
+#   constant of src/utils/ipaddr.ts outside any declaration: linked to the file.
+# - GHSA-xh87-mx6m-69f3 (IP spoofing in AWS Lambda ALB conninfo): 41adbf5 changes getConnInfo.
+# - GHSA-f6gv-hh8j-q8vq (named parameters overridden in TrieRouter): 8e2b6b0 changes Node's
+#   constructor, insert, gHSets and search, in src/ and in the deno_dist/ copy Hono then kept.
+# - GHSA-3vhc-576x-3qv4 (JWT algorithm confusion in the JWK middleware): 190f6e2 changes jwk, the
+#   handler it returns, and verifyWithJwks; the types and error classes it adds to jwa.ts and
+#   types.ts are new code between declarations, which links nothing.
+target: https://github.com/honojs/hono
+commit: bac5c4a8bcd76b165428ce757e1185753c7935bd
+# Placed on the snapshot: the links whose code it holds, and the entry points that reach one.
+placed: 95
+downstream: 60
+recording: hono
+advisories:
+  GHSA-2234-fmw7-43wr:
+    severity: moderate
+    precision: fix-diff
+    state: fixed
+    fix:
+      - aa50e0ab77b5
+    links:
+      - src/middleware/csrf/index.ts#csrf/csrf
+  GHSA-26pp-8wgv-hjvm:
+    severity: moderate
+    precision: fix-diff
+    state: fixed
+    fix:
+      - a586cd72e3f6
+    links:
+      - src/utils/cookie.ts#_serialize
+  GHSA-2gcr-mfcq-wcc3:
+    severity: moderate
+    precision: fix-diff
+    state: fixed
+    fix:
+      - 6cbb025ff87f
+    links:
+      - src/hono-base.ts#Hono.mount/fn3/fn1
+  GHSA-3hrh-pfw6-9m5x:
+    severity: moderate
+    precision: fix-diff
+    state: fixed
+    fix:
+      - 905aedbc2066
+    links:
+      - src/utils/cookie.ts#_serialize
+  GHSA-3mpf-rcc7-5347:
+    severity: moderate
+    precision: fix-diff
+    state: fixed
+    fix:
+      - 92e65fbb6e5e
+    links:
+      - deno_dist/middleware/serve-static/index.ts#serveStatic/fn1
+      - src/middleware/serve-static/index.ts#serveStatic/fn1
+  GHSA-3vhc-576x-3qv4:
+    severity: high
+    precision: fix-diff
+    state: fixed
+    fix:
+      - 190f6e28e2ca
+    links:
+      - src/middleware/jwk/jwk.ts#jwk
+      - src/middleware/jwk/jwk.ts#jwk/jwk
+      - src/utils/jwt/jwt.ts#verifyWithJwks
+  GHSA-458j-xx4x-4375:
+    severity: moderate
+    precision: unlinked
+    state: fixed
+  GHSA-54fx-42gc-7vw4:
+    severity: moderate
+    precision: fix-diff
+    state: fixed
+    fix:
+      - f70e2c316843
+    links:
+      - src/middleware/language/language.ts#normalizeLanguage
+  GHSA-5pq2-9x2x-5p6w:
+    severity: moderate
+    precision: fix-diff
+    state: fixed
+    fix:
+      - 44ae0c8cc4d5
+    links:
+      - src/utils/cookie.ts#_serialize
+  GHSA-5r4p-p66f-jhc7:
+    severity: moderate
+    precision: fix-diff
+    state: fixed
+    fix:
+      - 8b05c774ef15
+    links:
+      - src/middleware/serve-static/index.ts#serveStatic/fn1
+  GHSA-69xw-7hcm-h432:
+    severity: moderate
+    precision: unlinked
+    state: fixed
+  GHSA-6wqw-2p9w-4vw4:
+    severity: moderate
+    precision: fix-diff
+    state: fixed
+    fix:
+      - 12c511745b3f
+    links:
+      - src/middleware/cache/index.ts#shouldSkipCache
+  GHSA-88fw-hqm2-52qc:
+    severity: high
+    precision: unlinked
+    state: fixed
+  GHSA-8j4g-w8fx-2239:
+    severity: moderate
+    precision: fix-diff
+    state: fixed
+    fix:
+      - 93fc250d8b4d
+    links:
+      - src/middleware/cors/index.ts#cors/cors
+  GHSA-92vj-g62v-jqhh:
+    severity: moderate
+    precision: fix-diff
+    state: fixed
+    fix:
+      - 605c70560b52
+    links:
+      - src/middleware/body-limit/index.ts#bodyLimit/bodyLimit
+  GHSA-9hp6-4448-45g2:
+    severity: high
+    precision: fix-diff
+    state: fixed
+    fix:
+      - 1d79aedc3f82
+    links:
+      - src/utils/url.ts#getPath
+  GHSA-9r54-q6cx-xmh5:
+    severity: moderate
+    precision: fix-diff
+    state: fixed
+    fix:
+      - 2cf60046d730
+    links:
+      - src/jsx/components.ts#ErrorBoundary
+      - src/jsx/components.ts#ErrorBoundary/catchCallback
+      - src/jsx/components.ts#ErrorBoundary/fallbackRes
+      - src/jsx/components.ts#ErrorBoundary/fn1
+  GHSA-9vqf-7f2p-gf9v:
+    severity: moderate
+    precision: unlinked
+    state: fixed
+  GHSA-crvj-82cr-hjcx:
+    severity: moderate
+    precision: fix-diff
+    state: fixed
+    fix:
+      - 9c28d724c5a7
+    links:
+      - src/middleware/cache/index.ts#createCacheKey
+      - src/utils/url.ts#_getQueryParam
+      - src/utils/url.ts#getQueryStrings
+  GHSA-f23p-vx2j-j53r:
+    severity: moderate
+    precision: fix-diff
+    state: fixed
+    fix:
+      - 0c45036d6b0d
+    links:
+      - src/jsx/base.ts#memo
+      - src/jsx/base.ts#memo/fn1
+  GHSA-f577-qrjj-4474:
+    severity: moderate
+    precision: fix-diff
+    state: fixed
+    fix:
+      - 5463db273547
+    links:
+      - src/middleware/jwk/jwk.ts#jwk/jwk
+      - src/middleware/jwt/jwt.ts#jwt/jwt
+  GHSA-f67f-6cw9-8mq4:
+    severity: high
+    precision: fix-diff
+    state: fixed
+    fix:
+      - cc0aa7ae327e
+    links:
+      - src/middleware/jwt/jwt.ts#jwt
+      - src/utils/jwt/jwt.ts#verify
+  GHSA-f6gv-hh8j-q8vq:
+    severity: moderate
+    precision: fix-diff
+    state: fixed
+    fix:
+      - 8e2b6b085189
+    links:
+      - deno_dist/router/trie-router/node.ts#Node.constructor
+      - deno_dist/router/trie-router/node.ts#Node.gHSets
+      - deno_dist/router/trie-router/node.ts#Node.insert
+      - deno_dist/router/trie-router/node.ts#Node.search
+      - src/router/trie-router/node.ts#Node.constructor
+      - src/router/trie-router/node.ts#Node.gHSets
+      - src/router/trie-router/node.ts#Node.insert
+      - src/router/trie-router/node.ts#Node.search
+  GHSA-g6gw-c38x-mqfc:
+    severity: moderate
+    precision: fix-diff
+    state: fixed
+    fix:
+      - 531e9c5a3ae0
+    links:
+      - src/utils/body.ts#convertFormDataToBodyData
+      - src/utils/body.ts#convertFormDataToBodyData/fn2
+      - src/utils/body.ts#handleParsingNestedValues
+      - src/utils/body.ts#handleParsingNestedValues/fn1
+  GHSA-gqvv-2mrq-wpjv:
+    severity: moderate
+    precision: fix-diff
+    state: fixed
+    fix:
+      - 3a67f7f3997e
+    links:
+      - src/helper/ssg/ssg.ts#saveContentToFile
+      - src/helper/ssg/utils.ts#ensureWithinOutDir
+      - src/helper/ssg/utils.ts#handleParent
+      - src/helper/ssg/utils.ts#handleSegments
+      - src/helper/ssg/utils.ts#joinPaths
+  GHSA-hvrm-45r6-mjfj:
+    severity: moderate
+    precision: fix-diff
+    state: fixed
+    fix:
+      - fab3b1363933
+    links:
+      - src/jsx/base.ts#JSXFunctionNode.toStringToBuffer
+      - src/jsx/base.ts#JSXFunctionNode.toStringToBuffer/fn1
+      - src/jsx/base.ts#JSXFunctionNode.toStringToBuffer/fn2
+      - src/jsx/base.ts#JSXNode
+      - src/jsx/base.ts#JSXNode.toString
+      - src/jsx/base.ts#JSXNode.toString/fn1
+      - src/jsx/base.ts#JSXNode.toString/fn2
+      - src/jsx/components.ts#ErrorBoundary
+      - src/jsx/components.ts#ErrorBoundary/catchCallback
+      - src/jsx/components.ts#ErrorBoundary/fallbackRes
+      - src/jsx/components.ts#ErrorBoundary/fn1
+      - src/jsx/components.ts#ErrorBoundary/resolveFallbackStr
+      - src/jsx/components.ts#childrenToString
+      - src/jsx/context.ts#createContext/fn1
+      - src/jsx/context.ts#createContext/fn1/fn1
+      - src/jsx/context.ts#useContext
+      - src/jsx/streaming.ts#Suspense
+      - src/jsx/streaming.ts#Suspense/fn2
+      - src/jsx/streaming.ts#Suspense/popNodeStack
+  GHSA-hxh3-vqpv-xpqv:
+    severity: moderate
+    precision: fix-diff
+    state: fixed
+    fix:
+      - 2b8ed402cdab
+    links:
+      - src/jsx/base.ts#resolveFunctionComponentResult/fn1
+      - src/jsx/components.ts#ErrorBoundary/catchCallback
+      - src/jsx/components.ts#ErrorBoundary/fn5/fn1
+      - src/jsx/components.ts#ErrorBoundary/renderFallback/fn1
+      - src/jsx/components.ts#ErrorBoundary/resolveFallbackStr/fn1
+      - src/jsx/components.ts#ErrorBoundary/resolveFallbackStr/fn1/fn1
+      - src/jsx/components.ts#childrenToString
+      - src/jsx/components.ts#childrenToString/fn1
+      - src/jsx/components.ts#resolveChildEarly
+      - src/jsx/context.ts#createContext/fn1
+      - src/jsx/dom/server.ts#renderToReadableStream
+      - src/jsx/dom/server.ts#renderToString
+      - src/jsx/intrinsic-element/components.ts#insertIntoHead/fn1
+      - src/jsx/intrinsic-element/components.ts#returnWithoutSpecialBehavior
+      - src/jsx/streaming.ts#Suspense
+      - src/jsx/streaming.ts#Suspense/fn1
+      - src/jsx/streaming.ts#Suspense/fn4/fn1
+  GHSA-j6c9-x7qj-28xf:
+    severity: moderate
+    precision: unlinked
+    state: fixed
+  GHSA-m732-5p4w-x69g:
+    severity: high
+    precision: fix-diff
+    state: fixed
+    fix:
+      - 45ba3bf9e3df
+    links:
+      - src/utils/jwt/jwt.ts#verify
+  GHSA-p6xx-57qc-3wxr:
+    severity: moderate
+    precision: fix-diff
+    state: fixed
+    fix:
+      - f4123ed9ea3c
+    links:
+      - src/helper/streaming/sse.ts#SSEStreamingApi.writeSSE
+  GHSA-p77w-8qqv-26rm:
+    severity: moderate
+    precision: unlinked
+    state: fixed
+  GHSA-q5qw-h33p-qvwr:
+    severity: high
+    precision: fix-diff
+    state: fixed
+    fix:
+      - 6a0607a929d8
+    links:
+      - src/middleware/serve-static/index.ts#serveStatic/fn1
+      - src/utils/url.ts#tryDecodeURI
+  GHSA-q7jf-gf43-6x6p:
+    severity: moderate
+    precision: fix-diff
+    state: fixed
+    fix:
+      - d9b8b4b73b4f
+    links:
+      - src/middleware/cors/index.ts#cors/cors
+  GHSA-qp7p-654g-cw7p:
+    severity: moderate
+    precision: unlinked
+    state: fixed
+  GHSA-r354-f388-2fhh:
+    severity: moderate
+    precision: file
+    state: fixed
+    fix:
+      - edbf6eea8e6c
+    links:
+      - src/utils/ipaddr.ts
+  GHSA-r5rp-j6wh-rvv4:
+    severity: moderate
+    precision: fix-diff
+    state: fixed
+    fix:
+      - cc067c855924
+    links:
+      - src/utils/cookie.ts#parse
+  GHSA-rv63-4mwf-qqc2:
+    severity: moderate
+    precision: unlinked
+    state: fixed
+  GHSA-v8w9-8mx6-g223:
+    severity: moderate
+    precision: fix-diff
+    state: fixed
+    fix:
+      - ef902257e0be
+    links:
+      - src/utils/body.ts#handleParsingNestedValues
+  GHSA-w332-q679-j88p:
+    severity: moderate
+    precision: fix-diff
+    state: fixed
+    fix:
+      - cf9a78db4d0a
+    links:
+      - src/adapter/cloudflare-workers/utils.ts#getContentFromKVAsset
+  GHSA-w62v-xxxg-mg59:
+    severity: moderate
+    precision: fix-diff
+    state: fixed
+    fix:
+      - cd3f6f7194f0
+    links:
+      - src/helper/css/common.ts#cxCommon
+      - src/helper/css/index.ts#createCssContext/newCssClassNameObject
+  GHSA-wgpf-jwqj-8h8p:
+    severity: moderate
+    precision: unlinked
+    state: fixed
+  GHSA-wmmm-f939-6g9c:
+    severity: moderate
+    precision: fix-diff
+    state: fixed
+    fix:
+      - 9aff14bd727f
+    links:
+      - src/middleware/serve-static/index.ts#serveStatic/fn1
+  GHSA-wwfh-h76j-fc44:
+    severity: moderate
+    precision: unlinked
+    state: fixed
+  GHSA-xf4j-xp2r-rqqx:
+    severity: moderate
+    precision: fix-diff
+    state: fixed
+    fix:
+      - b470278920ff
+    links:
+      - src/helper/ssg/ssg.ts#generateFilePath
+  GHSA-xgm2-5f3f-mvvc:
+    severity: moderate
+    precision: fix-diff
+    state: fixed
+    fix:
+      - aa921770d09b
+    links:
+      - src/adapter/aws-lambda/handler.ts#EventV1Processor.getHeaders
+      - src/adapter/aws-lambda/handler.ts#EventV1Processor.getHeaders/fn1
+      - src/adapter/aws-lambda/handler.ts#LatticeV2Processor.getHeaders
+      - src/adapter/aws-lambda/handler.ts#LatticeV2Processor.getHeaders/fn1
+  GHSA-xh87-mx6m-69f3:
+    severity: high
+    precision: fix-diff
+    state: fixed
+    fix:
+      - 41adbf56e252
+    links:
+      - src/adapter/aws-lambda/conninfo.ts#getConnInfo
+  GHSA-xpcf-pg52-r92g:
+    severity: moderate
+    precision: fix-diff
+    state: fixed
+    fix:
+      - 48fa2233bc09
+    links:
+      - src/middleware/ip-restriction/index.ts#buildMatcher
+      - src/middleware/ip-restriction/index.ts#buildMatcher/fn2
+      - src/utils/ipaddr.ts#convertIPv6BinaryToString
+  GHSA-xrhx-7g5j-rcj5:
+    severity: moderate
+    precision: fix-diff
+    state: fixed
+    fix:
+      - c831020fb1fa
+    links:
+      - src/middleware/ip-restriction/index.ts#buildMatcher
+      - src/middleware/ip-restriction/index.ts#buildMatcher/fn2
+      - src/middleware/ip-restriction/index.ts#ipRestriction/ipRestriction
+      - src/utils/ipaddr.ts#convertIPv4ToBinary
+      - src/utils/ipaddr.ts#convertIPv6ToBinary

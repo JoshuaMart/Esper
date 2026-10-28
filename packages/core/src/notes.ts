@@ -110,17 +110,8 @@ export class Notes {
     this.store = store
   }
 
-  // Statements prepared once: placing every note on a snapshot runs the same few queries many
-  // times.
-  private readonly statements = new Map<string, StatementSync>()
-
   private sql(text: string): StatementSync {
-    let statement = this.statements.get(text)
-    if (!statement) {
-      statement = this.store.db.prepare(text)
-      this.statements.set(text, statement)
-    }
-    return statement
+    return this.store.statement(text)
   }
 
   create(input: NewNote): Note {

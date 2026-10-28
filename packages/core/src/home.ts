@@ -4,6 +4,17 @@ import { homedir, tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
 import pkg from '../package.json' with { type: 'json' }
 import {
+  Advisories,
+  type AdvisoryReport,
+  type AdvisorySource,
+  importAdvisories,
+  linkAdvisory,
+  osvSource,
+  type Package,
+  snapshotVersion,
+  stateOn,
+} from './advisories.ts'
+import {
   type Analysis,
   type Analyzer,
   analyzerSource,
@@ -13,10 +24,10 @@ import {
 import { detectProfile } from './detect.ts'
 import { type AnalyzerRunner, dockerAvailable, dockerRunner } from './docker.ts'
 import { EsperError, NotFound } from './errors.ts'
-import type { IndexStats } from './language.ts'
+import type { IndexStats, Language, Module } from './language.ts'
 import { languageNamed } from './languages.ts'
 import { type AnchorState, Notes } from './notes.ts'
-import { loadProfiles } from './profile.ts'
+import { loadProfiles, type ResolvedProfile } from './profile.ts'
 import { Store } from './store.ts'
 import {
   cloneTarget,
@@ -24,6 +35,7 @@ import {
   materialise,
   readFolder,
   readRef,
+  type TargetFile,
   type TargetSnapshot,
 } from './target.ts'
 
@@ -36,6 +48,8 @@ export interface Project {
   name: string
   source: { path: string } | { url: string }
   kind?: 'application' | 'framework'
+  // Packages whose advisories are the target's, beside those its manifests declare (D19).
+  packages?: string[]
 }
 
 export const profilesDir = new URL('../../../profiles', import.meta.url).pathname
@@ -51,14 +65,17 @@ export class Home {
   // How analyzers run, and which: Docker and the repository's, unless a test stands in for them.
   private readonly runner: AnalyzerRunner | undefined
   private readonly analyzers: Analyzer[] | undefined
+  // Where advisories come from: OSV, unless a test stands in for it.
+  private readonly osv: AdvisorySource
 
   constructor(
     dir: string = homeDir(),
-    options: { runner?: AnalyzerRunner; analyzers?: Analyzer[] } = {},
+    options: { runner?: AnalyzerRunner; analyzers?: Analyzer[]; advisories?: AdvisorySource } = {},
   ) {
     this.dir = dir
     this.runner = options.runner
     this.analyzers = options.analyzers
+    this.osv = options.advisories ?? osvSource()
   }
 
   private projectDir(name: string) {
@@ -97,7 +114,7 @@ export class Home {
 
   async add(
     typed: string,
-    options: { name?: string; kind?: 'application' | 'framework' } = {},
+    options: { name?: string; kind?: 'application' | 'framework'; packages?: string[] } = {},
   ): Promise<Project> {
     // A folder named from the home directory, as the shell would expand it: the web interface
     // sends the path as it was typed.
@@ -116,8 +133,14 @@ export class Home {
     if (await stat(dir).catch(() => undefined))
       throw new EsperError(`a project named ${name} already exists`)
     let project: Project
+    const extra = {
+      ...(options.kind ? { kind: options.kind } : {}),
+      ...(options.packages && options.packages.length > 0
+        ? { packages: [...new Set(options.packages)] }
+        : {}),
+    }
     if (url) {
-      project = { name, source: { url: source }, ...(options.kind ? { kind: options.kind } : {}) }
+      project = { name, source: { url: source }, ...extra }
       await mkdir(dir, { recursive: true })
       try {
         await cloneTarget(source, join(dir, 'checkout'))
@@ -130,7 +153,7 @@ export class Home {
       if (!(await stat(path).catch(() => undefined))?.isDirectory()) {
         throw new EsperError(`${path} is not a folder`)
       }
-      project = { name, source: { path }, ...(options.kind ? { kind: options.kind } : {}) }
+      project = { name, source: { path }, ...extra }
       await mkdir(dir, { recursive: true })
     }
     await writeFile(join(dir, 'project.json'), `${JSON.stringify(project, null, 2)}\n`)
@@ -147,6 +170,8 @@ export class Home {
       ref?: string
       force?: boolean
       precise?: boolean
+      // Skips fetching the advisories: those already fetched are still placed (D19).
+      offline?: boolean
       // Told what a precise index is doing, and every few seconds while it waits on a container.
       progress?: (message: string) => void
     } = {},
@@ -160,6 +185,9 @@ export class Home {
     unchanged?: boolean
     // How the project's notes stand on the snapshot, by anchor state (D8).
     notes: Record<AnchorState, number>
+    // The advisories fetched and linked, or why they were not (D19); absent when the commit was
+    // already indexed.
+    advisories?: AdvisoryReport
   }> {
     const project = await this.project(name)
     const dir = this.sourceDir(project)
@@ -247,10 +275,120 @@ export class Home {
       if (existed) {
         return { id, snapshot, profiles, analyzers: sources, unchanged: true, notes }
       }
-      return { id, snapshot, stats, profiles, analyzers: sources, notes }
+      if (!options.offline) options.progress?.('advisories: fetching from OSV and linking them')
+      const advisories = await this.refreshAdvisories(store, project, dir, {
+        files: snapshot.files,
+        language,
+        profile: detection.profile,
+        modules: detection.modules,
+        offline: options.offline ?? false,
+      })
+      return { id, snapshot, stats, profiles, analyzers: sources, notes, advisories }
     } finally {
       store.close()
     }
+  }
+
+  // Fetches the project's advisories again and links them, from the folder as it is now (D19).
+  async advisories(name: string): Promise<AdvisoryReport> {
+    const project = await this.project(name)
+    const dir = this.sourceDir(project)
+    const snapshot = await readFolder(dir)
+    const detection = detectProfile(snapshot.files, await loadProfiles(profilesDir), {
+      ...(project.kind ? { kind: project.kind } : {}),
+    })
+    if ('refused' in detection) throw new EsperError(`refused: ${detection.refused}`)
+    const store = new Store(this.database(name))
+    try {
+      const report = await this.refreshAdvisories(store, project, dir, {
+        files: snapshot.files,
+        language: languageNamed(detection.profile.language),
+        profile: detection.profile,
+        modules: detection.modules,
+        offline: false,
+      })
+      if (!report.fetched) throw new EsperError(`advisories not fetched: ${report.reason}`)
+      return report
+    } finally {
+      store.close()
+    }
+  }
+
+  // Fetches and links the advisories of the target's packages, unless offline, then says how each
+  // stands on every snapshot of the project. A failed fetch keeps the advisories already stored,
+  // and says why.
+  private async refreshAdvisories(
+    store: Store,
+    project: Project,
+    dir: string,
+    target: {
+      files: TargetFile[]
+      language: Language
+      profile: ResolvedProfile
+      modules: Module[]
+      offline: boolean
+    },
+  ): Promise<AdvisoryReport> {
+    const advisories = new Advisories(store)
+    const git = await isGitRepository(dir)
+    const ecosystem = target.language.ecosystem
+    const packages: Package[] = [
+      ...new Set([
+        ...target.language.modules(target.files).map((m) => m.path),
+        ...(project.packages ?? []),
+      ]),
+    ].map((name) => ({ name, ecosystem }))
+    let report: AdvisoryReport
+    let changed: string[] = []
+    if (target.offline) {
+      report = { ...advisories.report(), fetched: false, reason: 'offline' }
+    } else {
+      try {
+        const imported = await importAdvisories(this.osv, packages)
+        ;({ report, changed } = await advisories.save(imported, (advisory) =>
+          linkAdvisory(advisory, {
+            dir,
+            git,
+            language: target.language,
+            profile: target.profile,
+            modules: target.modules,
+          }),
+        ))
+      } catch (error) {
+        if (process.env.ESPER_DEBUG) throw error
+        report = {
+          ...advisories.report(),
+          fetched: false,
+          reason: (error as Error).message || String(error),
+        }
+      }
+    }
+    // Each advisory's state on each snapshot, where it is missing (a new snapshot, a new advisory)
+    // or the advisory changed: the others still hold, and computing them asks git again.
+    const stored = advisories.list()
+    const states = new Map<number, Map<string, unknown>>()
+    for (const snapshot of store.snapshots()) {
+      states.set(snapshot.id, advisories.states(snapshot.id))
+    }
+    const computed: [string, number, Awaited<ReturnType<typeof stateOn>>][] = []
+    for (const snapshot of store.snapshots()) {
+      const missing = stored.filter(
+        (a) => changed.includes(a.id) || !states.get(snapshot.id)?.has(a.id),
+      )
+      if (missing.length === 0) continue
+      const version = await snapshotVersion(dir, git, snapshot)
+      for (const advisory of missing) {
+        computed.push([
+          advisory.id,
+          snapshot.id,
+          await stateOn(advisory, advisory.fixes, snapshot, version, { dir, git }),
+        ])
+      }
+    }
+    store.transaction(() => {
+      for (const [id, snapshot, state] of computed) advisories.setState(id, snapshot, state)
+    })
+    return report
   }
 
   // The analyzers that resolve the call edges of a language, answering per snapshot: one per

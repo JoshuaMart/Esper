@@ -6,7 +6,15 @@ import { join } from 'node:path'
 import { test } from 'node:test'
 import { promisify } from 'node:util'
 import { parse } from 'yaml'
-import { cacheVolume, dockerAvailable, type Graph, Home, profilesDir, Store } from '../src/index.ts'
+import {
+  cacheVolume,
+  dockerAvailable,
+  type Graph,
+  Home,
+  profilesDir,
+  recordedSource,
+  Store,
+} from '../src/index.ts'
 
 // scip-go through the analyzer contract, in Docker (D12): on the hand-counted targets, the guessed
 // call edges give way to resolved ones that name scip-go, and the entry points stay those counted
@@ -40,7 +48,9 @@ async function both(target: string, count: string) {
   const { commit, entries } = parse(
     await readFile(join(profilesDir, 'chi/counts', count), 'utf8'),
   ) as { commit: string; entries: { ref: string }[] }
-  const home = new Home(await mkdtemp(join(tmpdir(), 'esper-scip-home-')))
+  const home = new Home(await mkdtemp(join(tmpdir(), 'esper-scip-home-')), {
+    advisories: recordedSource(),
+  })
   try {
     await home.add(dir, { name: target })
     const plain = await home.index(target, { ref: commit })
@@ -123,7 +133,9 @@ test('a folder that is not a git checkout is analyzed as it is', {
   timeout,
 }, async () => {
   const dir = await mkdtemp(join(tmpdir(), 'esper-scip-folder-'))
-  const home = new Home(await mkdtemp(join(tmpdir(), 'esper-scip-home-')))
+  const home = new Home(await mkdtemp(join(tmpdir(), 'esper-scip-home-')), {
+    advisories: recordedSource(),
+  })
   try {
     await writeFile(join(dir, 'go.mod'), 'module example.com/plain\n\ngo 1.24\n')
     await writeFile(

@@ -86,3 +86,118 @@ test('esper serve prints its address and token, and refuses a bad port', async (
     await rm(home, { recursive: true })
   }
 })
+
+test('esper advisories asks OSV again, page by page; esper index --offline does not ask it', async () => {
+  const { createServer } = await import('node:http')
+  const { cp, mkdtemp, rm } = await import('node:fs/promises')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const home = await mkdtemp(join(tmpdir(), 'esper-cli-home-'))
+  const dir = await mkdtemp(join(tmpdir(), 'esper-cli-target-'))
+  await cp(fileURLToPath(new URL('../../core/test/fixtures/chiapp/', import.meta.url)), dir, {
+    recursive: true,
+  })
+  const asked: { name: string; page: string | undefined }[] = []
+  const entry = (id: string, severity: string) => ({
+    id,
+    summary: id,
+    database_specific: { severity },
+    affected: [{ package: { name: 'example.com/app', ecosystem: 'Go' } }],
+  })
+  // OSV's API, as far as Esper uses it: two pages for the module, nothing for the other package.
+  const osv = createServer((request, response) => {
+    let text = ''
+    request.on('data', (chunk) => {
+      text += chunk
+    })
+    request.on('end', () => {
+      const body = JSON.parse(text || '{}') as { package?: { name: string }; page_token?: string }
+      asked.push({ name: body.package?.name ?? request.url ?? '', page: body.page_token })
+      const answer =
+        body.package?.name !== 'example.com/app'
+          ? {}
+          : body.page_token
+            ? { vulns: [entry('GHSA-bbbb-bbbb-bbbb', 'LOW')] }
+            : { vulns: [entry('GHSA-aaaa-aaaa-aaaa', 'HIGH')], next_page_token: 'two' }
+      response.setHeader('content-type', 'application/json')
+      response.end(JSON.stringify(answer))
+    })
+  })
+  await new Promise<void>((done) => osv.listen(0, '127.0.0.1', done))
+  const { port } = osv.address() as { port: number }
+  const env = { ...process.env, ESPER_HOME: home, ESPER_OSV_URL: `http://127.0.0.1:${port}` }
+  try {
+    await run(
+      process.execPath,
+      [main, 'add', dir, '--name', 'app', '--package', 'example.com/extra'],
+      {
+        env,
+      },
+    )
+    const offline = await run(process.execPath, [main, 'index', 'app', '--offline'], { env })
+    assert.match(offline.stdout, /advisories {3}not fetched \(offline\); 0 kept from before/)
+    assert.deepEqual(asked, [])
+    const fetched = await run(process.execPath, [main, 'advisories', 'app'], { env })
+    assert.match(fetched.stdout, /example\.com\/app \(Go\), example\.com\/extra \(Go\)/)
+    assert.match(fetched.stdout, /1 kept \(1 high\), 1 low left out/)
+    assert.match(fetched.stdout, /linked none; 1 unlinked/)
+    assert.deepEqual(asked, [
+      { name: 'example.com/app', page: undefined },
+      { name: 'example.com/app', page: 'two' },
+      { name: 'example.com/extra', page: undefined },
+    ])
+    await assert.rejects(run(process.execPath, [main, 'advisories', 'app', '--offline'], { env }), {
+      code: 2,
+    })
+  } finally {
+    osv.close()
+    await rm(home, { recursive: true })
+    await rm(dir, { recursive: true })
+  }
+})
+
+test('esper enrich lists the questions it would ask, and refuses an unknown provider or tier', async () => {
+  const { cp, mkdtemp, rm } = await import('node:fs/promises')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const home = await mkdtemp(join(tmpdir(), 'esper-cli-home-'))
+  const dir = await mkdtemp(join(tmpdir(), 'esper-cli-target-'))
+  await cp(fileURLToPath(new URL('../../core/test/fixtures/chiapp/', import.meta.url)), dir, {
+    recursive: true,
+  })
+  const env = { ...process.env, ESPER_HOME: home }
+  try {
+    await run(process.execPath, [main, 'add', dir, '--name', 'app'], { env })
+    await run(process.execPath, [main, 'index', 'app', '--offline'], { env })
+    const dry = await run(
+      process.execPath,
+      [main, 'enrich', 'app', '--dry-run', '--kind', 'guard', '--limit', '3'],
+      { env },
+    )
+    assert.match(dry.stdout, /app: snapshot 1, \d+ questions due in the bounded tier/)
+    assert.match(
+      dry.stdout,
+      /would ask {4}3 \(3 guard\) in 1 call to claude-sonnet-5-5 through claude-code/,
+    )
+    assert.match(dry.stdout, /guard:mw\/mw\.go#Audit/)
+    const exploring = await run(
+      process.execPath,
+      [main, 'enrich', 'app', '--dry-run', '--tier', 'exploring'],
+      { env },
+    )
+    assert.match(exploring.stdout, /2 \(1 applications, 1 authentication\) in 2 calls/)
+    for (const bad of [
+      ['--provider', 'openai'],
+      ['--tier', 'deep'],
+      ['--kind', 'vibes'],
+      ['--limit', '0'],
+    ]) {
+      await assert.rejects(run(process.execPath, [main, 'enrich', 'app', ...bad], { env }), {
+        code: 2,
+      })
+    }
+  } finally {
+    await rm(home, { recursive: true })
+    await rm(dir, { recursive: true })
+  }
+})

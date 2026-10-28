@@ -263,6 +263,7 @@ const isGo = (path: string) => path.endsWith('.go')
 export const go: Language = {
   name: 'go',
   label: 'Go',
+  ecosystem: 'Go',
   reads: (path) => isGo(path) || posix.basename(path) === 'go.mod',
   source: isGo,
   test: (path) => path.endsWith('_test.go'),

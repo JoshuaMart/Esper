@@ -107,6 +107,7 @@ const tests = /(\.|_)(test|spec|bench)\.[cm]?[jt]sx?$/
 export const typescript: Language = {
   name: 'typescript',
   label: 'TypeScript and JavaScript',
+  ecosystem: 'npm',
   reads: (path) => isTsSource(path) || isManifest(path) || isConfig(path),
   source: isTsSource,
   test: (path) => tests.test(posix.basename(path)),

@@ -18,10 +18,15 @@ export type ServerEvent =
       kind: string
     }
   | { type: 'snapshot'; project: string; id: number }
+  // The advisories were fetched again, or placed on a new snapshot.
+  | { type: 'advisories'; project: string }
+  // A model's claim was added, by `esper enrich` or an agent.
+  | { type: 'claims'; project: string; count: number }
   | {
       type: 'job'
       project: string
       id: number
+      action: 'index' | 'advisories'
       state: 'running' | 'done' | 'failed'
       message?: string
       result?: unknown
@@ -35,9 +40,12 @@ export const watchInterval = 500
 
 interface Watched {
   connection: Connection
-  // What was last seen: the newest snapshot, and how many note revisions there were.
+  // What was last seen: the newest snapshot, how many note revisions there were, and the
+  // advisories' generation.
   snapshot: number
   revisions: number
+  advisories: string
+  claims: number
 }
 
 export class Projects {
@@ -109,8 +117,14 @@ export class Projects {
         }[]
         for (const row of rows) this.emit({ type: 'note', project, ...row })
       }
+      if (now.advisories !== watched.advisories) this.emit({ type: 'advisories', project })
+      if (now.claims > watched.claims) {
+        this.emit({ type: 'claims', project, count: now.claims - watched.claims })
+      }
       watched.snapshot = now.snapshot
       watched.revisions = now.revisions
+      watched.advisories = now.advisories
+      watched.claims = now.claims
     }
   }
 
@@ -121,7 +135,12 @@ export class Projects {
                 (SELECT count(*) FROM note_revisions) AS revisions`,
       )
       .get() as { snapshot: number; revisions: number }
-    return { snapshot: Number(row.snapshot), revisions: Number(row.revisions) }
+    return {
+      snapshot: Number(row.snapshot),
+      revisions: Number(row.revisions),
+      advisories: connection.advisories.generation(),
+      claims: connection.claims.count(),
+    }
   }
 
   close() {

@@ -16,7 +16,7 @@ counted by hand, with none missing and none invented.
 | [M3](#m3--scip-for-go) | SCIP for Go | the first analyzer runs through the contract; guessed edges drop | done |
 | [M4](#m4--typescript-and-hono) | TypeScript and Hono | Hono and Kaneo pass their hand count | done |
 | [M5](#m5--the-server-and-the-web-interface) | The server and the web interface | an audit can be followed and annotated in the browser | done |
-| [M6](#m6--enrichment-and-past-advisories) | Enrichment and past advisories | claims and advisory links measured on chi and Hono | not started |
+| [M6](#m6--enrichment-and-past-advisories) | Enrichment and past advisories | claims and advisory links measured on chi and Hono | done |
 | [M7](#m7--dataflow-on-demand) | Dataflow, on demand | a `flows` question answered by Joern, every step cited | not started |
 | [Next](#after-that) | More frameworks | SvelteKit, Next.js, FastAPI, each a pair of profiles | |
 
@@ -212,6 +212,44 @@ with the [API](/reference/api/) and [interface](/reference/interface/) reference
   linked with `symbol` precision; the others through their fix commit, or listed as `unlinked`.
 - **Advisory links on Hono.** Its medium-and-up advisories are counted by precision. Each link is
   checked by hand on a sample.
+
+It is done. Enrichment ([D31](/decisions/#d31--enrichment-as-built-questions-checks-and-two-providers),
+[claims](/reference/claims/)):
+
+- **Model choice.** On 41 guard questions answered by hand on chi and Hono
+  (`profiles/*/claims/`), Claude Opus 5.5 at low effort answered all 41 right, for $0.138 at list
+  prices; Claude Sonnet 5.5 at low effort took no non-guard for a guard, but 7 of its answers cited
+  no line, or a wrong one, and were rejected; at medium effort it answered all 41 right, with as
+  many tokens as Opus, for $0.068. It scores the same and costs half: the bounded tier runs on
+  Sonnet 5.5 at medium effort.
+- **Exploring share.** None of 245 bounded answers was `insufficient-context`: the bounded tier is
+  kept.
+- **Session restrictions.** `--safe-mode` drops `--mcp-config`, measured with Claude Code 2.1.312
+  and a server that logs what it is asked: bounded runs take `--safe-mode`, exploring runs
+  `--setting-sources ""`, which keeps Esper's server and none of the auditor's settings.
+  `packages/enrich/test/enrich.test.ts` checks the arguments of both runs, and where they start.
+- **Citations.** Every rejected claim names the citation that failed
+  (`packages/core/test/claims.test.ts`, and over MCP in `packages/mcp/test/tools.test.ts`).
+
+`claude-code` was run on the auditor's plan; `anthropic-api` is tested against a transport that
+answers as the API does, without a live run, since no key was at hand. The questions answered by
+hand are checked against their snapshots in `packages/core/test/claim-sets.test.ts`;
+`pnpm measure-claims` measures a model on them.
+
+Past advisories ([D30](/decisions/#d30--advisories-belong-to-the-project-and-are-placed-on-each-snapshot)),
+each criterion a test, from OSV's answers recorded on 2026-10-28
+(`packages/core/test/fixtures/osv/`) on each target's whole history:
+
+- **Advisory links on chi.** At v5.3.2, the four advisories that name `RedirectSlashes` or `RealIP`
+  are linked by symbol, GO-2025-3770 and GHSA-j6qf-3m9c-vwj3 through their fix commits, none
+  unlinked (`profiles/chi/advisories/chi@38939062c5df.yaml`).
+- **Advisory links on Hono.** At v4.13.14, 52 advisories, 4 low left out; of the 48 kept, 37 are
+  linked by `fix-diff`, 1 by `file`, and 10 are `unlinked`. Seven links, one per advisory, were
+  checked by hand against the advisory and its fix's diff, as the file says
+  (`profiles/hono/advisories/hono@bac5c4a8bcd7.yaml`).
+
+Both run in `packages/core/test/advisory-counts.test.ts`; the rules on a repository built for the
+test, across three versions, in `packages/core/test/advisories.test.ts`.
 
 ## M7 — Dataflow, on demand
 

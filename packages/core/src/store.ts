@@ -1,13 +1,13 @@
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { DatabaseSync } from 'node:sqlite'
+import { DatabaseSync, type StatementSync } from 'node:sqlite'
 import { EsperError } from './errors.ts'
 import { canonical, type Graph, type GraphNode, schemaVersion } from './graph.ts'
 import { hashText } from './refs.ts'
 
 // One database per project (D9). Snapshots are rebuilt from the code, notes from nothing: they
 // live in their own tables, which no snapshot owns, so that deleting a snapshot never takes a note
-// with it. Claims come in a later milestone.
+// with it. Advisories and claims have their own tables too.
 const schema = `
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS snapshots (
@@ -105,6 +105,67 @@ CREATE TABLE IF NOT EXISTS note_revisions (
   content TEXT NOT NULL,
   PRIMARY KEY (note_id, revision)
 );
+-- Advisories (D19, D30) belong to the project, like notes: each snapshot places their links on
+-- its code when it is read. Their state on a snapshot, affected or fixed, is computed when the
+-- snapshot is indexed or the advisories fetched again.
+CREATE TABLE IF NOT EXISTS advisories (
+  id TEXT PRIMARY KEY,
+  aliases TEXT NOT NULL,
+  summary TEXT NOT NULL,
+  details TEXT NOT NULL,
+  severity TEXT NOT NULL,
+  rating TEXT,
+  published TEXT,
+  modified TEXT,
+  package TEXT NOT NULL,
+  ranges TEXT NOT NULL,
+  symbols TEXT NOT NULL,
+  refs TEXT NOT NULL,
+  status TEXT NOT NULL,
+  how TEXT NOT NULL,
+  fixes TEXT NOT NULL,
+  links TEXT NOT NULL,
+  fetched_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS advisory_states (
+  advisory_id TEXT NOT NULL,
+  snapshot_id INTEGER NOT NULL REFERENCES snapshots(id) ON DELETE CASCADE,
+  state TEXT NOT NULL,
+  how TEXT NOT NULL,
+  PRIMARY KEY (advisory_id, snapshot_id)
+);
+-- Claims (D17, D31): a model's answers, checked against the code they cite, apart from the facts.
+-- A claim keeps the snapshot it was asked on and the fingerprints it rests on; no snapshot owns it.
+CREATE TABLE IF NOT EXISTS claims (
+  id INTEGER PRIMARY KEY,
+  question TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  subject TEXT NOT NULL,
+  tier TEXT NOT NULL,
+  value TEXT NOT NULL,
+  value_kind TEXT,
+  text TEXT,
+  citations TEXT NOT NULL,
+  reason TEXT,
+  status TEXT NOT NULL,
+  rejection TEXT,
+  model TEXT NOT NULL,
+  provider TEXT NOT NULL,
+  prompt_version TEXT NOT NULL,
+  fingerprints TEXT NOT NULL,
+  reads TEXT NOT NULL,
+  snapshot_id INTEGER NOT NULL,
+  author TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS claims_subject ON claims (subject);
+CREATE TABLE IF NOT EXISTS advisory_fetches (
+  id INTEGER PRIMARY KEY,
+  at TEXT NOT NULL,
+  packages TEXT NOT NULL,
+  advisories INTEGER NOT NULL,
+  low INTEGER NOT NULL
+);
 `
 
 export interface SnapshotInfo {
@@ -179,16 +240,25 @@ export class Store {
     const version = meta
       ? this.db.prepare(`SELECT value FROM meta WHERE key = 'schema_version'`).get()
       : undefined
-    // Schema 3 lacks only the analyzers of each snapshot: it is brought to 4 in place.
-    if (version && Number(version.value) === 3) {
-      // Checked again under the lock: another process may have brought it to 4 first.
+    // Schema 3 lacks the analyzers of each snapshot, and 4 the tables added since: both are
+    // brought to the current schema in place, since nothing is changed, only added.
+    const from = version ? Number(version.value) : undefined
+    if (from === 3 || (from !== undefined && from > 3 && from < schemaVersion)) {
+      // Checked again under the lock: another process may have brought it forward first.
       this.transaction(() => {
-        const now = this.db.prepare(`SELECT value FROM meta WHERE key = 'schema_version'`).get()
-        if (Number(now?.value) !== 3) return
-        this.db.exec(`ALTER TABLE snapshots ADD COLUMN analyzers TEXT NOT NULL DEFAULT '[]'`)
-        this.db.exec(`UPDATE meta SET value = '4' WHERE key = 'schema_version'`)
+        const now = Number(
+          this.db.prepare(`SELECT value FROM meta WHERE key = 'schema_version'`).get()?.value,
+        )
+        if (now >= schemaVersion) return
+        if (now === 3) {
+          this.db.exec(`ALTER TABLE snapshots ADD COLUMN analyzers TEXT NOT NULL DEFAULT '[]'`)
+        }
+        this.db.exec(schema)
+        this.db
+          .prepare(`UPDATE meta SET value = ? WHERE key = 'schema_version'`)
+          .run(String(schemaVersion))
       })
-    } else if (version && Number(version.value) !== schemaVersion) {
+    } else if (version && from !== schemaVersion) {
       this.db.close()
       throw new EsperError(
         `${path} has schema ${String(version.value)}, and this Esper reads schema ${schemaVersion}: index the project into a new home`,
@@ -205,6 +275,19 @@ export class Store {
 
   close() {
     this.db.close()
+  }
+
+  // A statement prepared once and kept: notes, advisories and claims run the same few queries many
+  // times.
+  private readonly statements = new Map<string, StatementSync>()
+
+  statement(text: string): StatementSync {
+    let statement = this.statements.get(text)
+    if (!statement) {
+      statement = this.db.prepare(text)
+      this.statements.set(text, statement)
+    }
+    return statement
   }
 
   // Writes a whole snapshot in one transaction, in canonical order.

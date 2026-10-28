@@ -1,0 +1,65 @@
+# chi's advisories on OSV, linked to its code at v5.3.2 (D19). The answers OSV gave on 2026-10-28
+# are recorded in packages/core/test/fixtures/osv/chi.json: 8 entries, which are 6 advisories once
+# the Go database's entries and GitHub's are taken as one, none rated low.
+#
+# Checked by hand, each against its advisory and its fix:
+# - GO-2026-4316 (open redirect in RedirectSlashes) and GO-2026-5774, 5775, 5777 (IP spoofing in
+#   RealIP) name their functions in the Go database: linked by symbol, in middleware/.
+# - GO-2025-3770 (Host header open redirect in RedirectSlashes) names no symbol; its fix 1be7ad9
+#   changes the redirect target computed in the handler RedirectSlashes returns, its literal fn1.
+# - GHSA-j6qf-3m9c-vwj3 (spoofing in ClientIPFromXFF) points to 7f9b744, which changes how the
+#   client address is taken from X-Forwarded-For and the other headers, in ClientIPFromHeader,
+#   ClientIPFromXFF and ClientIPFromRemoteAddr. Fixed in 5.4.0, so v5.3.2 is affected.
+target: https://github.com/go-chi/chi
+commit: 38939062c5df4d3e8814aad1a488983112627ced
+# Placed on the snapshot: the links whose code it holds, and the entry points that reach one.
+placed: 10
+downstream: 5
+recording: chi
+advisories:
+  GHSA-j6qf-3m9c-vwj3:
+    severity: moderate
+    precision: fix-diff
+    state: affected
+    fix:
+      - 7f9b7448f51d
+    links:
+      - middleware/client_ip.go#ClientIPFromHeader
+      - middleware/client_ip.go#ClientIPFromHeader/fn1/fn1
+      - middleware/client_ip.go#ClientIPFromRemoteAddr/fn1
+      - middleware/client_ip.go#ClientIPFromXFF
+      - middleware/client_ip.go#ClientIPFromXFF/fn1/fn1/fn1
+  GO-2025-3770:
+    severity: moderate
+    precision: fix-diff
+    state: fixed
+    fix:
+      - 1be7ad938cc9
+    links:
+      - middleware/strip.go#RedirectSlashes/fn1
+  GO-2026-4316:
+    severity: moderate
+    precision: symbol
+    state: fixed
+    fix:
+      - 6eb35881c0e4
+    links:
+      - middleware#RedirectSlashes
+  GO-2026-5774:
+    severity: moderate
+    precision: symbol
+    state: fixed
+    links:
+      - middleware#RealIP
+  GO-2026-5775:
+    severity: high
+    precision: symbol
+    state: fixed
+    links:
+      - middleware#RealIP
+  GO-2026-5777:
+    severity: high
+    precision: symbol
+    state: fixed
+    links:
+      - middleware#RealIP

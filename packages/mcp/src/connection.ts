@@ -1,4 +1,6 @@
 import {
+  Advisories,
+  Claims,
   EsperError,
   type Home,
   type Note,
@@ -21,13 +23,20 @@ export class Connection {
   readonly project: string
   readonly store: Store
   readonly notes: Notes
+  readonly advisories: Advisories
+  readonly claims: Claims
   private readonly views = new Map<number, SnapshotView>()
+  // The advisories the loaded snapshots were read with: a fetch, or a state computed since, reads
+  // them again.
+  private generation = ''
 
   constructor(home: Home, project: string) {
     this.home = home
     this.project = project
     this.store = new Store(home.database(project))
     this.notes = new Notes(this.store)
+    this.advisories = new Advisories(this.store)
+    this.claims = new Claims(this.store)
   }
 
   close() {
@@ -44,6 +53,11 @@ export class Connection {
 
   view(id?: number): SnapshotView {
     const info = this.snapshot(id)
+    const generation = this.advisories.generation()
+    if (generation !== this.generation) {
+      this.views.clear()
+      this.generation = generation
+    }
     let view = this.views.get(info.id)
     if (!view) {
       view = SnapshotView.load(this.store, info.id)

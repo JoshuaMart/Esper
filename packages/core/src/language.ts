@@ -38,6 +38,9 @@ export interface Language {
   name: string
   // As messages name it: `Go`.
   label: string
+  // The OSV ecosystem its packages are published in, where advisories name them (D19): `Go`,
+  // `npm`.
+  ecosystem: string
   // Whether the index reads a file: a source file or a manifest.
   reads(path: string): boolean
   // Whether a file is a source file, parsed into the graph.

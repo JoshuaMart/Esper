@@ -340,3 +340,156 @@ export async function materialise(
 }
 
 const skipped = (path: string) => path.split('/').some((part) => notCopied.has(part))
+
+// History, for the advisories of D19: plumbing that runs none of the repository's filters, hooks
+// or configured diff tools. Each answers undefined or nothing rather than failing when the
+// repository does not hold what it is asked about, as a shallow clone may not.
+
+// A commit of the repository, by a full or abbreviated id, or undefined.
+export async function commitOf(dir: string, id: string): Promise<string | undefined> {
+  if (!/^[0-9a-f]{7,40}$/i.test(id)) return undefined
+  const sha = await git(dir, [
+    'rev-parse',
+    '--verify',
+    '--quiet',
+    '--end-of-options',
+    `${id}^{commit}`,
+  ])
+    .then((out) => out.trim())
+    .catch(() => '')
+  return sha || undefined
+}
+
+// The first parent of a commit, or undefined for a root commit or a parent the clone lacks.
+export async function parentOf(dir: string, commit: string): Promise<string | undefined> {
+  const sha = await git(dir, [
+    'rev-parse',
+    '--verify',
+    '--quiet',
+    '--end-of-options',
+    `${commit}^1`,
+  ])
+    .then((out) => out.trim())
+    .catch(() => '')
+  return sha || undefined
+}
+
+// The lines a commit changed, against its first parent, per file of the folder git runs in and
+// with paths relative to it: each hunk as the first line and the count of lines it replaced in the
+// parent. A hunk that only adds lines replaces none, after `start`.
+export async function changedLines(
+  dir: string,
+  parent: string,
+  commit: string,
+): Promise<Map<string, { start: number; count: number }[]>> {
+  const out = await git(dir, [
+    '-c',
+    'diff.noprefix=false',
+    'diff-tree',
+    '-p',
+    '-U0',
+    '--no-ext-diff',
+    '--no-textconv',
+    '--no-renames',
+    '--no-color',
+    '--relative',
+    '--src-prefix=a/',
+    '--dst-prefix=b/',
+    parent,
+    commit,
+  ])
+  const hunks = new Map<string, { start: number; count: number }[]>()
+  let file: string | undefined
+  for (const line of out.split('\n')) {
+    if (line.startsWith('--- ')) {
+      // A name with a space is followed by a tab, so that the header can be read back.
+      const name = unquote(line.slice(4).replace(/\t$/, ''))
+      file = name === '/dev/null' ? undefined : name.replace(/^a\//, '')
+      continue
+    }
+    const hunk = /^@@ -(\d+)(?:,(\d+))? \+\d+(?:,\d+)? @@/.exec(line)
+    if (hunk && file !== undefined) {
+      const list = hunks.get(file) ?? []
+      list.push({ start: Number(hunk[1]), count: hunk[2] === undefined ? 1 : Number(hunk[2]) })
+      hunks.set(file, list)
+    }
+  }
+  return hunks
+}
+
+// A path as git writes it in a diff header: quoted, with C escapes and its bytes in octal, when it
+// holds a space, a quote or a byte outside ASCII (`"a/caf\303\251.go"`).
+function unquote(path: string): string {
+  if (!(path.startsWith('"') && path.endsWith('"'))) return path
+  const escapes: Record<string, number> = { a: 7, b: 8, t: 9, n: 10, v: 11, f: 12, r: 13 }
+  const bytes: number[] = []
+  const text = path.slice(1, -1)
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i] as string
+    if (c !== '\\') {
+      bytes.push(...Buffer.from(c, 'utf8'))
+      continue
+    }
+    const next = text[++i] ?? ''
+    if (/[0-7]/.test(next)) {
+      bytes.push(Number.parseInt(text.slice(i, i + 3), 8))
+      i += 2
+    } else bytes.push(escapes[next] ?? next.charCodeAt(0))
+  }
+  return Buffer.from(bytes).toString('utf8')
+}
+
+// Whether `ancestor` is `commit` or one of its ancestors.
+export async function isAncestor(dir: string, ancestor: string, commit: string): Promise<boolean> {
+  return git(dir, ['merge-base', '--is-ancestor', ancestor, commit]).then(
+    () => true,
+    () => false,
+  )
+}
+
+// The tags that name a commit.
+export async function tagsAt(dir: string, commit: string): Promise<string[]> {
+  return (await git(dir, ['tag', '--points-at', commit]).catch(() => ''))
+    .split('\n')
+    .filter(Boolean)
+}
+
+// The commits of every branch and tag whose message names one of the texts, newest first, at most
+// `limit`.
+export async function commitsNaming(
+  dir: string,
+  texts: string[],
+  limit: number,
+): Promise<string[]> {
+  if (texts.length === 0) return []
+  const out = await git(dir, [
+    'log',
+    '--all',
+    '--format=%H',
+    '-F',
+    '-i',
+    `--max-count=${limit}`,
+    ...texts.map((t) => `--grep=${t}`),
+  ]).catch(() => '')
+  return out.split('\n').filter(Boolean)
+}
+
+// The repositories the target's remotes name, as `host/owner/name` in lower case: what a commit
+// URL of an advisory is compared with.
+export async function remoteRepositories(dir: string): Promise<string[]> {
+  const out = await git(dir, ['config', '--get-regexp', '^remote\\..*\\.url$']).catch(() => '')
+  return out
+    .split('\n')
+    .map((line) => repositoryOf(line.split(' ').slice(1).join(' ')))
+    .filter((r): r is string => r !== undefined)
+}
+
+// `https://github.com/Owner/Repo.git`, `git@github.com:owner/repo` or a commit URL under it, as
+// `github.com/owner/repo`.
+export function repositoryOf(url: string): string | undefined {
+  const match =
+    /^(?:[a-z+]+:\/\/)?(?:[^@/]+@)?([^/:]+)[/:]([^/]+)\/([^/#?]+?)(?:\.git)?(?:[/#?]|$)/i.exec(
+      url.trim(),
+    )
+  return match ? `${match[1]}/${match[2]}/${match[3]}`.toLowerCase() : undefined
+}

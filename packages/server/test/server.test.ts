@@ -4,7 +4,7 @@ import { get } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
-import { Home, Notes, Store } from '@esper/core'
+import { Home, Notes, type OsvRecording, recordedSource, Store } from '@esper/core'
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 import { cookieName, serve, serverToken } from '../src/index.ts'
 
@@ -14,8 +14,10 @@ import { cookieName, serve, serverToken } from '../src/index.ts'
 const fixture = new URL('../../core/test/fixtures/chiapp/', import.meta.url).pathname
 const token = 'a'.repeat(43)
 
-async function started(web?: string) {
-  const home = new Home(await mkdtemp(join(tmpdir(), 'esper-home-')))
+async function started(web?: string, recording: OsvRecording = {}) {
+  const home = new Home(await mkdtemp(join(tmpdir(), 'esper-home-')), {
+    advisories: recordedSource(recording),
+  })
   const dir = await mkdtemp(join(tmpdir(), 'esper-target-'))
   await cp(fixture, dir, { recursive: true })
   const server = await serve(home, { port: 0, token, ...(web ? { web } : {}) })
@@ -169,7 +171,9 @@ test('the API and MCP need the token, and only localhost reaches them', async ()
 })
 
 test('the token is kept in the home, readable by its owner only', async () => {
-  const home = new Home(await mkdtemp(join(tmpdir(), 'esper-home-')))
+  const home = new Home(await mkdtemp(join(tmpdir(), 'esper-home-')), {
+    advisories: recordedSource(),
+  })
   try {
     const first = await serverToken(home)
     assert.equal(await serverToken(home), first)
@@ -404,6 +408,134 @@ test('the server reads the projects of the home it was given', async () => {
   try {
     assert.deepEqual((await s.json('/api/projects')).projects, [])
     assert.equal(await readFile(join(s.home.dir, 'token'), 'utf8').catch(() => 'none'), 'none')
+  } finally {
+    await s.stop()
+  }
+})
+
+test('the advisories are listed, drawn on the nodes they affect, and fetched again as a job', async () => {
+  const s = await started(undefined, {
+    queries: {
+      'Go:example.com/app': [
+        {
+          id: 'GO-2026-0002',
+          summary: 'A flaw in RequireUser',
+          database_specific: { severity: 'HIGH' },
+          affected: [
+            {
+              package: { name: 'example.com/app', ecosystem: 'Go' },
+              ecosystem_specific: {
+                imports: [{ path: 'example.com/app/mw', symbols: ['RequireUser'] }],
+              },
+            },
+          ],
+        },
+      ],
+    },
+  })
+  try {
+    await s.json('/api/projects', { method: 'POST', json: { source: s.dir, name: 'shop' } })
+    const indexed = await s.json('/api/projects/shop/index', { method: 'POST', json: {} })
+    const done = (await job(s.json, indexed.job.id)) as unknown as {
+      result: { advisories: { advisories: number } }
+    }
+    assert.equal(done.result.advisories.advisories, 1)
+    const list = await s.json('/api/projects/shop/advisories?precision=symbol')
+    assert.deepEqual(
+      list.advisories.map((a: { id: string; links: { node: string }[] }) => [
+        a.id,
+        a.links.map((l) => l.node),
+      ]),
+      [['GO-2026-0002', ['mw/mw.go#RequireUser']]],
+    )
+    await assert.rejects(
+      s.json('/api/projects/shop/advisories?offline=maybe'),
+      /400 offline is true or false/,
+    )
+    // A route behind the middleware reaches it: the drawing says so on its node.
+    const drawn = await s.json(
+      `/api/projects/shop/subgraph?node=${encodeURIComponent('route:GET /api/users/{id}')}&chain=true`,
+    )
+    const member = drawn.nodes.find((n: { ref: string }) => n.ref === 'mw/mw.go#RequireUser')
+    assert.equal(member?.advisories, 1)
+    // Fetched again from the interface: a job, and an event when the advisories change.
+    const heard = events(`${s.server.url}/api/events`, (event) => event === 'advisories')
+    await new Promise((r) => setTimeout(r, 100))
+    const again = await s.json('/api/projects/shop/advisories', { method: 'POST', json: {} })
+    assert.equal(again.job.action, 'advisories')
+    const fetched = (await job(s.json, again.job.id)) as unknown as {
+      state: string
+      result: { advisories: number; linked: { symbol: number } }
+    }
+    assert.equal(fetched.state, 'done')
+    assert.equal(fetched.result.linked.symbol, 1)
+    const seen = await heard
+    assert.deepEqual(seen.at(-1), {
+      event: 'advisories',
+      data: { type: 'advisories', project: 'shop' },
+    })
+    await assert.rejects(
+      s.json('/api/projects/shop/advisories', { method: 'POST', json: { offline: true } }),
+      /400 the body is \{\}/,
+    )
+  } finally {
+    await s.stop()
+  }
+})
+
+test('claims by a model are listed apart, counted on the nodes drawn, and heard as they are added', async () => {
+  const s = await started()
+  try {
+    await s.json('/api/projects', { method: 'POST', json: { source: s.dir, name: 'shop' } })
+    const indexed = await s.json('/api/projects/shop/index', {
+      method: 'POST',
+      json: { offline: true },
+    })
+    await job(s.json, indexed.job.id)
+    const text = await readFile(join(s.dir, 'mw/mw.go'), 'utf8')
+    const line = text.split('\n').findIndex((l) => l.includes('Authorization')) + 1
+    const heard = events(`${s.server.url}/api/events`, (event) => event === 'claims')
+    await new Promise((r) => setTimeout(r, 100))
+    // An agent answers over MCP, from its own connection.
+    const client = new Client({ name: 'enricher', version: '0' })
+    await client.connect(
+      new StreamableHTTPClientTransport(new URL(`${s.server.url}/mcp/shop`), {
+        requestInit: { headers: { authorization: `Bearer ${token}` } },
+      }),
+    )
+    try {
+      const result = await client.callTool({
+        name: 'esper_claim_submit',
+        arguments: {
+          question: 'guard:mw/mw.go#RequireUser',
+          value: 'yes',
+          kind: 'authn',
+          citations: [{ file: 'mw/mw.go', line, identifier: 'Authorization' }],
+          model: 'claude-sonnet-5-5',
+          author: 'enricher',
+        },
+      })
+      assert.ok(!result.isError)
+    } finally {
+      await client.close()
+    }
+    const seen = await heard
+    assert.deepEqual(seen.at(-1), {
+      event: 'claims',
+      data: { type: 'claims', project: 'shop', count: 1 },
+    })
+    const listed = await s.json(
+      '/api/projects/shop/claims?node=mw/mw.go%23RequireUser&current=true',
+    )
+    assert.deepEqual(
+      listed.claims.map((c: { value: string; model: string }) => [c.value, c.model]),
+      [['yes', 'claude-sonnet-5-5']],
+    )
+    const drawn = await s.json(
+      `/api/projects/shop/subgraph?node=${encodeURIComponent('route:GET /api/users/{id}')}`,
+    )
+    const member = drawn.nodes.find((n: { ref: string }) => n.ref === 'mw/mw.go#RequireUser')
+    assert.equal(member?.claims, 1)
   } finally {
     await s.stop()
   }

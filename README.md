@@ -8,13 +8,15 @@ served to hunting agents over MCP and explorable in a web interface.
 > and bring out what nobody had seen.
 
 **Status: early development.** The documentation describes the target design.
-[M5](docs/src/content/docs/roadmap.md#m5--the-server-and-the-web-interface) is done: Go applications
+[M6](docs/src/content/docs/roadmap.md#m6--enrichment-and-past-advisories) is done: Go applications
 on chi or `net/http` and chi itself, and TypeScript applications on Hono and Hono itself, can be
-indexed, with their call edges resolved by scip-go or scip-typescript in Docker on request, served
-to agents over MCP (`esper mcp <project>`, or HTTP), and followed and annotated in a web interface
-(`esper serve`), where an agent's notes appear as it writes them. Next is
-[M6](docs/src/content/docs/roadmap.md#m6--enrichment-and-past-advisories), enrichment and past
-advisories.
+indexed, with their call edges resolved by scip-go or scip-typescript in Docker on request, their
+past advisories from OSV linked to the code their fixes touched (`esper advisories`), and a model's
+claims about what parsing cannot see kept apart from the facts (`esper enrich`, on the auditor's
+Claude Code or an API key). All of it is served to agents over MCP (`esper mcp <project>`, or HTTP),
+and followed and annotated in a web interface (`esper serve`), where an agent's notes appear as it
+writes them. Next is [M7](docs/src/content/docs/roadmap.md#m7--dataflow-on-demand), dataflow on
+demand.
 
 ## Documentation
 

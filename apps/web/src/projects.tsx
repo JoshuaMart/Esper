@@ -571,6 +571,16 @@ function AddAndIndex({
               <dd>
                 <NoteStates notes={result.notes} />
               </dd>
+              {result.advisories ? (
+                <>
+                  <dt>Advisories</dt>
+                  <dd>
+                    {result.advisories.fetched
+                      ? `${result.advisories.advisories} from OSV, ${result.advisories.unlinked} unlinked; ${result.advisories.low} low left out`
+                      : `not fetched (${result.advisories.reason}); ${result.advisories.advisories} kept`}
+                  </dd>
+                </>
+              ) : null}
             </dl>
           )}
           <div className="dialog-actions">

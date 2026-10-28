@@ -1,0 +1,26 @@
+# Guard questions on Hono v4.13.14, answered by hand (D17), to measure the bounded tier's models. A
+# guard is a check that can refuse the request before the work is done: each "yes" below answers an
+# error (401, 403, 413, 400) and returns without calling next; each "no" never refuses. CORS
+# answers a preflight but refuses nothing; methodNotAllowed and the combine helpers are left out.
+target: https://github.com/honojs/hono
+commit: bac5c4a8bcd76b165428ce757e1185753c7935bd
+questions:
+  guard:src/middleware/basic-auth/index.ts#basicAuth: authn
+  guard:src/middleware/bearer-auth/index.ts#bearerAuth: authn
+  guard:src/middleware/jwt/jwt.ts#jwt: authn
+  guard:src/middleware/jwk/jwk.ts#jwk: authn
+  guard:src/middleware/csrf/index.ts#csrf: csrf
+  guard:src/middleware/body-limit/index.ts#bodyLimit: validation
+  guard:src/validator/validator.ts#validator: validation
+  guard:src/middleware/cache/index.ts#cache: no
+  guard:src/middleware/compress/index.ts#compress: no
+  guard:src/middleware/cors/index.ts#cors: no
+  guard:src/middleware/etag/index.ts#etag: no
+  guard:src/middleware/language/language.ts#languageDetector: no
+  guard:src/middleware/logger/index.ts#logger: no
+  guard:src/middleware/method-override/index.ts#methodOverride: no
+  guard:src/middleware/pretty-json/index.ts#prettyJSON: no
+  guard:src/middleware/request-id/request-id.ts#requestId: no
+  guard:src/middleware/serve-static/index.ts#serveStatic: no
+  guard:src/middleware/timing/timing.ts#timing: no
+  guard:src/middleware/trailing-slash/index.ts#trimTrailingSlash: no

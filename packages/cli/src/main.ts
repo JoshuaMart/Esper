@@ -1,19 +1,28 @@
 #!/usr/bin/env node
+import { join } from 'node:path'
 import { parseArgs } from 'node:util'
-import { Home } from '@esper/core'
+import { type AdvisoryReport, Home } from '@esper/core'
 import pkg from '../package.json' with { type: 'json' }
 
 const usage = `Usage: esper <command> [options]
 
 Commands:
-  add <path or git URL>   add a project; --name <name>, --kind application|framework
+  add <path or git URL>   add a project; --name <name>, --kind application|framework,
+                          --package <name> for each package whose advisories are the target's,
+                          beside those its manifests declare
   index <project>         index a snapshot of it; --ref <git ref> reads that ref, not the checkout;
                           --force indexes a commit already indexed; --precise also runs the
                           analyzer that resolves call edges with the language's type checker,
-                          in Docker
+                          in Docker; --offline does not fetch the advisories from OSV
+  advisories <project>    fetch the target's advisories from OSV again, and link them to its code
+  enrich <project>        ask a model the questions parsing cannot answer, as claims kept apart
+                          from the facts; --provider claude-code (default) or anthropic-api,
+                          --tier bounded (default) or exploring, --kind <kind>, --limit <n>
+                          (40 by default), --model <id>, --effort low|medium|high, --snapshot <id>,
+                          --dry-run lists the questions without asking them
   list                    the projects and their snapshots
   mcp <project>           serve the project over MCP on stdio; --read-only exposes no tool
-                          that writes
+                          that writes; --trace <file> appends each tool call to the file
   serve                   the web interface, its API and MCP over HTTP at /mcp/<project>, on
                           localhost; --port <port>, 7300 by default, 0 for any free one
 
@@ -28,19 +37,31 @@ Esper keeps its projects in $ESPER_HOME, or ~/.esper.`
 const options = {
   name: { type: 'string' },
   kind: { type: 'string' },
+  package: { type: 'string', multiple: true },
   ref: { type: 'string' },
   force: { type: 'boolean' },
   precise: { type: 'boolean' },
+  offline: { type: 'boolean' },
+  provider: { type: 'string' },
+  tier: { type: 'string' },
+  limit: { type: 'string' },
+  model: { type: 'string' },
+  effort: { type: 'string' },
+  snapshot: { type: 'string' },
+  'dry-run': { type: 'boolean' },
   'read-only': { type: 'boolean' },
+  trace: { type: 'string' },
   port: { type: 'string' },
   version: { type: 'boolean' },
   help: { type: 'boolean' },
 } as const
 const commands: Record<string, (keyof typeof options)[]> = {
-  add: ['name', 'kind'],
-  index: ['ref', 'force', 'precise'],
+  add: ['name', 'kind', 'package'],
+  index: ['ref', 'force', 'precise', 'offline'],
+  advisories: [],
+  enrich: ['provider', 'tier', 'kind', 'limit', 'model', 'effort', 'snapshot', 'dry-run'],
   list: [],
-  mcp: ['read-only'],
+  mcp: ['read-only', 'trace'],
   serve: ['port'],
 }
 
@@ -66,6 +87,27 @@ function parse(args: string[]) {
   }
 }
 
+// What an import of advisories says, in a line or two.
+function advisoryLines(report: AdvisoryReport): string[] {
+  const severity = Object.entries(report.severity)
+    .filter(([, n]) => n > 0)
+    .map(([s, n]) => `${n} ${s}`)
+  const linked = Object.entries(report.linked)
+    .filter(([, n]) => n > 0)
+    .map(([p, n]) => `${n} by ${p}`)
+  const head = report.fetched
+    ? `${report.advisories} kept${severity.length > 0 ? ` (${severity.join(', ')})` : ''}, ${report.low} low left out`
+    : `not fetched (${report.reason}); ${report.advisories} kept from before`
+  return [
+    `  advisories   ${head}`,
+    ...(report.advisories > 0
+      ? [
+          `               linked ${linked.length > 0 ? linked.join(', ') : 'none'}; ${report.unlinked} unlinked`,
+        ]
+      : []),
+  ]
+}
+
 const percent = (part: number, whole: number) =>
   whole === 0 ? '0' : ((100 * part) / whole).toFixed(1)
 
@@ -87,6 +129,7 @@ async function main() {
     const project = await home.add(source, {
       ...(values.name ? { name: values.name } : {}),
       ...(kind ? { kind: kind as 'application' | 'framework' } : {}),
+      ...(values.package ? { packages: values.package } : {}),
     })
     const from = 'path' in project.source ? `reads ${project.source.path} in place` : 'cloned'
     console.log(`added ${project.name}: ${from}`)
@@ -98,11 +141,13 @@ async function main() {
     const [name] = rest
     if (!name || rest.length > 1) fail('index takes one project name')
     const ref = values.ref
-    const { id, snapshot, stats, profiles, analyzers, unchanged, notes } = await home.index(name, {
-      ...(ref ? { ref } : {}),
-      ...(values.force ? { force: true } : {}),
-      ...(values.precise ? { precise: true, progress: (m: string) => console.error(m) } : {}),
-    })
+    const { id, snapshot, stats, profiles, analyzers, unchanged, notes, advisories } =
+      await home.index(name, {
+        ...(ref ? { ref } : {}),
+        ...(values.force ? { force: true } : {}),
+        ...(values.offline ? { offline: true } : {}),
+        ...(values.precise ? { precise: true, progress: (m: string) => console.error(m) } : {}),
+      })
     const version = [
       snapshot.ref,
       snapshot.commit?.slice(0, 12),
@@ -148,6 +193,118 @@ async function main() {
     }
     console.log(`  reads        ${stats.reads}, signals on entry points ${stats.signals}`)
     console.log(noteLine)
+    if (advisories) for (const line of advisoryLines(advisories)) console.log(line)
+    return
+  }
+
+  if (command === 'advisories') {
+    const [name] = rest
+    if (!name || rest.length > 1) fail('advisories takes one project name')
+    const report = await home.advisories(name)
+    console.log(
+      `${name}: advisories of ${report.packages.map((p) => `${p.name} (${p.ecosystem})`).join(', ') || 'no package'}`,
+    )
+    for (const line of advisoryLines(report)) console.log(line)
+    return
+  }
+
+  if (command === 'enrich') {
+    const [name] = rest
+    if (!name || rest.length > 1) fail('enrich takes one project name')
+    await home.project(name)
+    const provider = values.provider ?? 'claude-code'
+    if (provider !== 'claude-code' && provider !== 'anthropic-api') {
+      fail(`--provider is claude-code or anthropic-api, not ${provider}`)
+    }
+    const tier = values.tier ?? 'bounded'
+    if (tier !== 'bounded' && tier !== 'exploring')
+      fail(`--tier is bounded or exploring, not ${tier}`)
+    const { questionKinds } = await import('@esper/core')
+    const kind = values.kind
+    if (kind && !(questionKinds as readonly string[]).includes(kind)) {
+      fail(`--kind is one of ${questionKinds.join(', ')}, not ${kind}`)
+    }
+    const whole = (text: string | undefined, what: string) => {
+      if (text === undefined) return undefined
+      const n = Number(text)
+      if (!Number.isInteger(n) || n < 1) fail(`${what} is a whole number, not ${text}`)
+      return n
+    }
+    const limit = whole(values.limit, '--limit') ?? 40
+    const snapshot = whole(values.snapshot, '--snapshot')
+    const effort = values.effort
+    if (effort && effort !== 'low' && effort !== 'medium' && effort !== 'high') {
+      fail(`--effort is low, medium or high, not ${effort}`)
+    }
+    const { AnthropicApi, ClaudeCode, defaultModels, enrich } = await import('@esper/enrich')
+    const { Connection } = await import('@esper/mcp')
+    const connection = new Connection(home, name)
+    try {
+      const view = connection.view(snapshot)
+      const base = defaultModels[tier]
+      const model = {
+        ...base,
+        ...(values.model ? { id: values.model } : {}),
+        ...(effort ? { effort: effort as 'low' | 'medium' | 'high' } : {}),
+      }
+      // Runs start in a folder of Esper's home, never in the target (D17).
+      const chosen =
+        provider === 'claude-code'
+          ? new ClaudeCode({
+              folder: join(home.dir, 'enrich', name),
+              esper: {
+                command: process.execPath,
+                args: [process.argv[1] as string],
+                home: home.dir,
+                project: name,
+              },
+            })
+          : new AnthropicApi({ connection })
+      const report = await enrich(view, connection.store, chosen, {
+        tier,
+        model,
+        limit,
+        ...(kind ? { kinds: [kind as (typeof questionKinds)[number]] } : {}),
+        ...(values['dry-run'] ? { dryRun: true } : {}),
+        progress: (m) => console.error(m),
+      })
+      const counts = new Map<string, number>()
+      for (const q of report.asked) counts.set(q.kind, (counts.get(q.kind) ?? 0) + 1)
+      console.log(
+        `${name}: snapshot ${report.snapshot}, ${report.due} questions due in the ${tier} tier`,
+      )
+      if (values['dry-run']) {
+        const calls = tier === 'bounded' ? Math.ceil(report.asked.length / 10) : report.asked.length
+        console.log(
+          `  would ask    ${report.asked.length} (${[...counts].map(([k, n]) => `${n} ${k}`).join(', ') || 'none'}) in ${calls} ${calls === 1 ? 'call' : 'calls'} to ${model.id} through ${provider}`,
+        )
+        for (const q of report.asked.slice(0, 20)) console.log(`    ${q.id}`)
+        if (report.asked.length > 20) console.log(`    … ${report.asked.length - 20} more`)
+        return
+      }
+      console.log(
+        `  asked        ${report.asked.length} in ${report.calls} calls to ${model.id} through ${provider}`,
+      )
+      console.log(
+        `  claims       ${report.accepted} accepted, ${report.rejected.length} rejected, ${report.insufficient} insufficient context, ${report.unanswered.length} unanswered`,
+      )
+      for (const r of report.rejected.slice(0, 10))
+        console.log(`    rejected ${r.question}: ${r.rejection}`)
+      if (report.insufficient > 0 && tier === 'bounded') {
+        console.log(
+          `  next         esper enrich ${name} --tier exploring, for the insufficient ones`,
+        )
+      }
+      if (report.usage && report.usage.calls > 0) {
+        const u = report.usage
+        console.log(
+          `  used         ${u.inputTokens + u.cacheReadTokens + u.cacheWriteTokens} input and ${u.outputTokens} output tokens, $${u.costUsd.toFixed(4)} at list prices`,
+        )
+      }
+      if (report.stopped) console.log(`  stopped      ${report.stopped}`)
+    } finally {
+      connection.close()
+    }
     return
   }
 
@@ -156,7 +313,10 @@ async function main() {
     if (!name || rest.length > 1) fail('mcp takes one project name')
     // Loaded here: the other commands do not need the MCP SDK.
     const { serve } = await import('@esper/mcp')
-    await serve(home, name, { readOnly: values['read-only'] ?? false })
+    await serve(home, name, {
+      readOnly: values['read-only'] ?? false,
+      ...(values.trace ? { trace: values.trace } : {}),
+    })
     return
   }
 

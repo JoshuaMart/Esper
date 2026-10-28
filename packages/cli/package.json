@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@esper/core": "workspace:*",
+    "@esper/enrich": "workspace:*",
     "@esper/mcp": "workspace:*",
     "@esper/server": "workspace:*"
   },

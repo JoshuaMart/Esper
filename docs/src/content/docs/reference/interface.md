@@ -7,7 +7,7 @@ The interface is a React application in `apps/web`, built with Vite and served b
 [`esper serve`](/reference/api/)
 ([D14](/decisions/#d14--one-server-for-the-api-mcp-and-the-web-interface)). It reads and writes
 through the JSON API only. Its screens were designed in Claude Design on Wakapi and chi before it
-was built.
+was built; the advisories and claims of M6 were added in the same style.
 
 Open it at the address `esper serve` prints: the token in it becomes a session for this browser,
 and leaves the address.
@@ -53,7 +53,8 @@ then, side by side:
 - **What it reaches**, drawn left to right with ELK's layered layout and React Flow: the entry
   point, its chain folded into one card (or each member, in order, with **Chain members**), its
   handler, and what the handler calls, to a **depth** of 1 to 3 from the handler. A guessed call is
-  dashed; a library symbol is grey; a node shows how many sinks and notes it carries. Past ten
+  dashed; a library symbol is grey; a node shows how many advisories, sinks, notes and claims it
+  carries. Past ten
   callees of one node, the rest fold into a "+ N more" card; **show all** draws them, up to 300.
 - **The code** of the node selected in the drawing (the handler at first), with each line a fact
   cites marked: **R** a read, **S** a sink, **G** a guard. A long declaration reads further on
@@ -63,6 +64,32 @@ then, side by side:
 **Write a note** opens a drawer beside the code: the nodes it is about (the selected one, and
 others found by name), its kind and status, its Markdown, the lines it cites (those picked in the
 code), and its author, remembered in this browser and offered from the user the server runs as.
+
+### Past advisories
+
+`/p/<project>/advisories` lists the target's advisories
+([D19](/decisions/#d19--past-vulnerabilities-advisories-linked-to-the-code-they-touched)) as the
+snapshot being read stands against them, the most severe first. Each shows its severity, whether
+this version is affected or fixed and why (its version, or the fix its commit holds), how it was
+linked, and the nodes it affects here, each opening as its subgraph, with whether its code is as
+the fix left it. **Details and references** shows the advisory's text, its package and its rating;
+**On OSV** opens its page in a new tab. Filters: severity, whether this version is affected, and
+the link's precision. **Fetch again** asks OSV and links the advisories on the server, as
+`esper advisories` does, and says what came back. The text is a third party's, shown as text.
+
+The advisories also show where they apply: on an entry point, **Past advisories reached** lists
+the advisories whose fixed code it reaches (`fix-downstream`), with the declaration; in its
+drawing, a node an advisory affects says so; beside the code, **Past advisories on this node**
+gives each one's severity, state and fix.
+
+### Claims by a model
+
+What a model claimed ([claims](/reference/claims/)) is shown where it applies, always set apart
+from the facts: dashed, and named **claimed**. On an entry point, **Guards claimed by a model**
+lists the chain members and handlers a model claims are guards, beside the **Guards** the profiles
+name, which a claim never changes. In the drawing, a node says how many claims hold on it; beside
+the code, **Claimed by a model** gives each claim's answer, its reason, the lines it cites, the
+model and the provider. Rejected claims are not shown; `esper_claims` lists them.
 
 ### Notes
 
@@ -90,7 +117,8 @@ bubble lights its links and lists what it touches; an entry point opens as its s
 
 ## Live
 
-The interface listens to the server's [events](/reference/api/#events). A note written by an agent,
+The interface listens to the server's [events](/reference/api/#events). Advisories fetched again
+show at once. A note written by an agent,
 over `/mcp/<project>` or `esper mcp` in another process, or in another tab, appears where it sits
 without a reload, and a notice says who wrote it with a link to it; a new snapshot and an index's
 progress show the same way. The top bar says whether the interface is connected.

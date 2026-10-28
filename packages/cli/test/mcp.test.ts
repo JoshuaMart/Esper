@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { test } from 'node:test'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
-import { Home, profilesDir } from '@esper/core'
+import { Home, profilesDir, recordedSource } from '@esper/core'
 import { tools } from '@esper/mcp'
 import { Client } from '@modelcontextprotocol/client'
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio'
@@ -25,7 +25,7 @@ async function agent(home: string, project: string, ...options: string[]) {
     new StdioClientTransport({
       command: process.execPath,
       args: [main, 'mcp', project, ...options],
-      env: { ESPER_HOME: home, PATH: process.env.PATH ?? '' },
+      env: { ESPER_HOME: home, PATH: process.env.PATH ?? '', ESPER_OSV_URL: 'http://127.0.0.1:9' },
       stderr: 'pipe',
     }),
   )
@@ -42,7 +42,9 @@ async function agent(home: string, project: string, ...options: string[]) {
 }
 
 test('esper mcp serves one project over stdio; --read-only exposes no tool that writes', async () => {
-  const home = new Home(await mkdtemp(join(tmpdir(), 'esper-home-')))
+  const home = new Home(await mkdtemp(join(tmpdir(), 'esper-home-')), {
+    advisories: recordedSource(),
+  })
   const dir = await mkdtemp(join(tmpdir(), 'esper-target-'))
   // A client left open keeps its server waiting on stdin, and the test with it.
   const closing: Client[] = []
@@ -84,7 +86,7 @@ test('esper mcp serves one project over stdio; --read-only exposes no tool that 
 
     await assert.rejects(
       run(process.execPath, [main, 'mcp', 'nope'], {
-        env: { ...process.env, ESPER_HOME: home.dir },
+        env: { ...process.env, ESPER_HOME: home.dir, ESPER_OSV_URL: 'http://127.0.0.1:9' },
       }),
       (error: { code: number; stderr: string }) =>
         error.code === 1 && /no project named nope/.test(error.stderr),
@@ -113,7 +115,9 @@ test('an agent hunts chi over MCP, and its notes survive a reindex', {
   ) as {
     commit: string
   }
-  const home = new Home(await mkdtemp(join(tmpdir(), 'esper-home-')))
+  const home = new Home(await mkdtemp(join(tmpdir(), 'esper-home-')), {
+    advisories: recordedSource(),
+  })
   try {
     await home.add(chi as string, { name: 'chi' })
     const { client, call } = await agent(home.dir, 'chi')
@@ -211,6 +215,41 @@ test('an agent hunts chi over MCP, and its notes survive a reindex', {
       await client.close()
     }
   } finally {
+    await rm(home.dir, { recursive: true })
+  }
+})
+
+test('esper mcp --trace records each tool call, as an exploring enrichment run reads it', async () => {
+  const home = new Home(await mkdtemp(join(tmpdir(), 'esper-home-')), {
+    advisories: recordedSource(),
+  })
+  const dir = await mkdtemp(join(tmpdir(), 'esper-target-'))
+  const trace = join(home.dir, 'trace.jsonl')
+  let client: Client | undefined
+  try {
+    await cp(fixture, dir, { recursive: true })
+    await home.add(dir, { name: 'shop' })
+    await home.index('shop', { offline: true })
+    const reader = await agent(home.dir, 'shop', '--read-only', '--trace', trace)
+    client = reader.client
+    const names = (await client.listTools()).tools.map((t) => t.name)
+    assert.ok(!names.includes('esper_claim_submit'))
+    await reader.call('esper_node', { node: 'mw/mw.go#RequireUser' })
+    await reader.call('esper_read', { file: 'mw/mw.go', startLine: 1, endLine: 3 })
+    const lines = (await readFile(trace, 'utf8'))
+      .trim()
+      .split('\n')
+      .map((l) => JSON.parse(l))
+    assert.deepEqual(
+      lines.map((l) => [l.tool, l.input.node ?? l.input.file]),
+      [
+        ['esper_node', 'mw/mw.go#RequireUser'],
+        ['esper_read', 'mw/mw.go'],
+      ],
+    )
+  } finally {
+    await client?.close()
+    await rm(dir, { recursive: true })
     await rm(home.dir, { recursive: true })
   }
 })

@@ -72,12 +72,15 @@ Parsing only, without a model, without running anything
    candidate.
 5. **Name and fingerprint.** Every node gets its stable reference and a fingerprint of its code
    ([D7](/decisions/#d7--stable-references-and-fingerprints)).
-6. **Link past advisories.** The target's advisories of medium severity or more are fetched from
+6. **Compute signals.** From the facts, by rules: `data-write`, `request-key`, `divergent-guard`
+   between sibling routes, and the rest of the closed vocabulary
+   ([D6](/decisions/#d6--the-graph-model)).
+7. **Link past advisories.** The target's advisories of medium severity or more are fetched from
    OSV and linked to the declarations they concern, each link with its precision
-   ([D19](/decisions/#d19--past-vulnerabilities-advisories-linked-to-the-code-they-touched)).
-7. **Compute signals.** From the facts, by rules: `data-write`, `request-key`, `divergent-guard`
-   between sibling routes, `fix-downstream` from the advisories, and the rest of the closed
-   vocabulary ([D6](/decisions/#d6--the-graph-model)).
+   ([D19](/decisions/#d19--past-vulnerabilities-advisories-linked-to-the-code-they-touched)). They
+   belong to the project: each snapshot, when it is read, places them on its code and gives
+   `fix-downstream` to the entry points that reach one
+   ([D30](/decisions/#d30--advisories-belong-to-the-project-and-are-placed-on-each-snapshot)).
 
 How an advisory is linked:
 
@@ -127,7 +130,8 @@ An analyzer reads code and writes a file; it never sees the database.
 
 A model answers closed questions on the nodes reachable from an entry point, and a few on the whole
 repository. Its answers are **claims**, stored apart from the facts
-([D17](/decisions/#d17--model-enrichment-claims-beside-the-facts)).
+([D17](/decisions/#d17--model-enrichment-claims-beside-the-facts),
+[claims](/reference/claims/)).
 
 ```mermaid
 flowchart LR
@@ -222,7 +226,7 @@ Edits and deletions of notes are kept as revisions, so the auditor can see what 
 | Component | Runs | Reads | Writes |
 |---|---|---|---|
 | Indexer | in Esper's process | the target's files, and its git history for fix commits | the snapshot |
-| Advisory import | in Esper's process, the one network call (`--offline` turns it off) | OSV | `advisory` nodes and `affects` edges |
+| Advisory import | in Esper's process, the one network call (`--offline` turns it off) | OSV, and the target's git history | advisories and their links, placed on each snapshot as `advisory` nodes and `affects` edges |
 | Analyzers | in a container | the target's files, mounted read-only | one JSON Lines file |
 | Enrichment, bounded | `claude -p` or the API, no tools | the question it is given | its answer |
 | Enrichment, exploring | `claude -p` or the API, Esper's read-only tools | the snapshot, through Esper | its answer |

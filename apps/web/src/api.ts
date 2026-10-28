@@ -94,6 +94,75 @@ export interface Fact {
   value: string
   citation: string
   source: string
+  data?: Record<string, unknown>
+}
+
+export type Severity = 'critical' | 'high' | 'moderate' | 'low' | 'unrated'
+export type AdvisoryState = 'affected' | 'fixed' | 'unaffected' | 'unknown'
+export type Precision = 'symbol' | 'fix-diff' | 'file'
+
+// A link from an advisory to a node of the snapshot (D19).
+export interface AdvisoryLink {
+  node: string
+  precision: Precision
+  source: string
+  fix?: string
+  hunk?: string
+  code?: 'as-fixed' | 'as-before-fix' | 'changed'
+  movedFrom?: string
+}
+
+export interface Advisory {
+  id: string
+  aliases: string[]
+  summary: string
+  details: string
+  severity: Severity
+  rating: { from: string; by: 'rating' | 'cvss'; score?: number } | null
+  published: string | null
+  modified: string | null
+  package: { name: string; ecosystem: string }
+  state: AdvisoryState
+  stateHow: string
+  status: 'linked' | 'unlinked'
+  how: string
+  fixes: string[]
+  references: { type: string; url: string }[]
+  links: AdvisoryLink[]
+  unplaced: number
+}
+
+// A model's answer about the code, checked against the lines it cites (D17): never a fact.
+export interface Claim {
+  id: number
+  question: string
+  kind: string
+  subject: string
+  tier: 'bounded' | 'exploring'
+  value: string
+  valueKind: string | null
+  text: string | null
+  citations: { file: string; line: number; identifier: string }[]
+  reason: string | null
+  status: 'accepted' | 'rejected' | 'insufficient'
+  rejection: string | null
+  model: string
+  provider: string
+  author: string
+  createdAt: string
+  askedOn: number
+  current: boolean
+}
+
+export interface AdvisoryReport {
+  fetched: boolean
+  reason?: string
+  packages: { name: string; ecosystem: string }[]
+  advisories: number
+  severity: Record<Severity, number>
+  low: number
+  linked: Record<Precision, number>
+  unlinked: number
 }
 
 export interface NodeDetail extends Bounded {
@@ -111,6 +180,15 @@ export interface NodeDetail extends Bounded {
   edges: { out: Record<string, number>; in: Record<string, number> }
   excerpt?: { file: string; startLine: number; endLine: number; text: string }
   notes: Note[]
+  advisories: {
+    ref: string
+    name: string
+    summary: string
+    severity: Severity
+    state: AdvisoryState
+    link: AdvisoryLink
+  }[]
+  claims: number
 }
 
 export interface DrawnNode {
@@ -125,6 +203,8 @@ export interface DrawnNode {
   reads: number
   signals: string[]
   notes: number
+  advisories: number
+  claims: number
 }
 
 export interface DrawnEdge {
@@ -176,14 +256,16 @@ export interface IndexResult extends Bounded {
   skipped: number
   skips: { path: string; reason: string }[]
   notes: Record<AnchorState, number>
+  advisories?: AdvisoryReport
 }
 
 export interface Job {
   id: number
   project: string
+  action: 'index' | 'advisories'
   state: 'running' | 'done' | 'failed'
   messages: string[]
-  result?: IndexResult
+  result?: IndexResult | AdvisoryReport
   error?: string
 }
 
@@ -250,6 +332,26 @@ export const api = {
   index: (project: string, input: { ref?: string; force?: boolean; precise?: boolean }) =>
     request<{ job: Job }>('POST', `${p(project)}/index`, input),
   jobs: () => request<{ jobs: Job[] }>('GET', '/jobs'),
+  advisories: (project: string, params: Params) =>
+    request<
+      Bounded & {
+        snapshot: SnapshotRef
+        fetched: {
+          at: string
+          packages: { name: string; ecosystem: string }[]
+          low: number
+        } | null
+        advisories: Advisory[]
+        total: number
+      }
+    >('GET', `${p(project)}/advisories${search(params)}`),
+  claims: (project: string, params: Params) =>
+    request<Bounded & { snapshot: SnapshotRef; claims: Claim[]; total: number }>(
+      'GET',
+      `${p(project)}/claims${search(params)}`,
+    ),
+  fetchAdvisories: (project: string) =>
+    request<{ job: Job }>('POST', `${p(project)}/advisories`, {}),
   entrypoints: (project: string, params: Params) =>
     request<Bounded & { snapshot: SnapshotRef; entrypoints: Entry[]; total: number }>(
       'GET',

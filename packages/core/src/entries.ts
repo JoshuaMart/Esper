@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import type { Citation, Fact, Graph, GraphEdge, GraphNode } from './graph.ts'
 import type { ResolvedProfile } from './profile.ts'
+import { callsOf, reach } from './reach.ts'
 import { Names } from './refs.ts'
 
 // Entry points, from what a language module found (D5, D6): an application's routes with their
@@ -108,32 +109,14 @@ export function addEntries(
   const { profile, routes } = options
   const source = `tree-sitter:${profile.name}`
   const nodes = new Map(graph.nodes.map((n) => [n.ref, n]))
-  const calls = new Map<string, { to: string; guessed: boolean }[]>()
-  for (const e of graph.edges) {
-    if (e.kind !== 'calls') continue
-    const list = calls.get(e.from) ?? []
-    list.push({ to: e.to, guessed: e.data?.resolution === 'guessed' })
-    calls.set(e.from, list)
-  }
+  const calls = callsOf(graph.edges)
   const factsOf = new Map<string, Fact[]>()
   for (const fact of options.facts) {
     factsOf.set(fact.node, [...(factsOf.get(fact.node) ?? []), fact])
   }
   // Everything reachable through calls, each with whether the only paths to it go through a
   // guessed edge: a signal reached that way says so.
-  const reach = (start: string[]): Map<string, boolean> => {
-    const best = new Map<string, boolean>()
-    const queue = start.map((ref) => ({ ref, guessed: false }))
-    while (queue.length > 0) {
-      const { ref, guessed } = queue.shift() as { ref: string; guessed: boolean }
-      const known = best.get(ref)
-      if (known === false || (known === true && guessed)) continue
-      best.set(ref, guessed)
-      for (const next of calls.get(ref) ?? [])
-        queue.push({ ref: next.to, guessed: guessed || next.guessed })
-    }
-    return best
-  }
+  const reachFrom = (start: string[]) => reach(calls, start)
   const ensure = (ref: string, name: string) => {
     if (!nodes.has(ref)) {
       const node = { ref, kind: 'external' as const, name }
@@ -173,7 +156,7 @@ export function addEntries(
     members: Member[],
     accept: (f: Fact) => boolean,
   ) => {
-    const reached = reach(members.flatMap((m) => m.targets.map((t) => t.ref)))
+    const reached = reachFrom(members.flatMap((m) => m.targets.map((t) => t.ref)))
     for (const [decl, guessed] of reached) {
       for (const fact of factsOf.get(decl) ?? []) {
         if (!accept(fact)) continue
@@ -276,7 +259,7 @@ export function addEntries(
     // It is known by the code that answers, not by how it is written or built: `auth` and
     // `(auth)` are one guard, and so are two factories that build the same middleware.
     for (const member of route.chain) {
-      const reached = reach(member.targets.map((t) => t.ref))
+      const reached = reachFrom(member.targets.map((t) => t.ref))
       const stops = [...reached.keys()]
         .filter((decl) => (factsOf.get(decl) ?? []).some((f) => f.value === 'short-circuit'))
         .sort()
@@ -327,7 +310,7 @@ export function addEntries(
     for (const node of graph.nodes) {
       if (node.kind !== 'decl' || node.data?.literal || !node.file) continue
       if (!options.surfaced(node)) continue
-      const reached = reach([node.ref])
+      const reached = reachFrom([node.ref])
       const reads = [...reached.keys()].some((decl) =>
         (factsOf.get(decl) ?? []).some((f) => f.kind === 'read'),
       )

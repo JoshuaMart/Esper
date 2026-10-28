@@ -10,10 +10,12 @@ lists those that exist. From the repository, `pnpm esper <command>` runs them fr
 
 | Command | Does |
 |---|---|
-| `esper add <path or git URL>` | adds a project. A path is read in place and never written; a URL is cloned into the project's folder. `--name` sets its name (by default, the folder's or the repository's), `--kind application\|framework` overrides the detection |
-| `esper index <project>` | indexes a snapshot. Without options, it reads the folder as it is. With `--ref <tag, branch or commit>`, it reads that ref from git and leaves the checkout alone. `--precise` also runs the analyzer that resolves the language's call edges, in Docker ([analyzers](/reference/analyzers/)). A clean commit already indexed with the same profiles and analyzers is not indexed again; `--force` does it anyway |
+| `esper add <path or git URL>` | adds a project. A path is read in place and never written; a URL is cloned into the project's folder. `--name` sets its name (by default, the folder's or the repository's), `--kind application\|framework` overrides the detection, and `--package <name>`, once per package, names a package whose advisories are the target's, beside those its manifests declare |
+| `esper index <project>` | indexes a snapshot. Without options, it reads the folder as it is. With `--ref <tag, branch or commit>`, it reads that ref from git and leaves the checkout alone. `--precise` also runs the analyzer that resolves the language's call edges, in Docker ([analyzers](/reference/analyzers/)). A clean commit already indexed with the same profiles and analyzers is not indexed again; `--force` does it anyway. It then fetches the target's advisories from OSV and links them ([below](#past-advisories)); `--offline` does not fetch them, and keeps those already fetched |
+| `esper advisories <project>` | fetches the target's advisories from OSV again, links them to its code, and says how each snapshot stands against them |
+| `esper enrich <project>` | asks a model the questions parsing cannot answer, and stores its answers as [claims](/reference/claims/), checked against the lines they cite. `--provider claude-code\|anthropic-api`, `--tier bounded\|exploring`, `--kind`, `--limit` (40 by default), `--model`, `--effort`, `--snapshot`, and `--dry-run`, which lists the questions without asking them |
 | `esper list` | the projects, and the snapshots of each |
-| `esper mcp <project>` | serves the project over MCP on stdio, for one agent ([MCP tools](/reference/mcp/)). `--read-only` exposes no tool that writes |
+| `esper mcp <project>` | serves the project over MCP on stdio, for one agent ([MCP tools](/reference/mcp/)). `--read-only` exposes no tool that writes; `--trace <file>` appends each tool call to the file, as an exploring enrichment run records what it read |
 | `esper serve` | starts the server on `127.0.0.1` for every project: the [web interface](/reference/interface/), its [API](/reference/api/), and MCP over HTTP at `/mcp/<project>`. `--port` sets its port, 7300 by default, 0 for any free one. It prints its address and the token, kept in `$ESPER_HOME/token` |
 
 An unknown option is refused, as is an option of another command. A refusal exits with code 1 and
@@ -33,10 +35,40 @@ chi: snapshot 2 (v5.3.2, 38939062c5df)
   call edges   540, 94.4 % resolved; 106 calls without an edge
   reads        55, signals on entry points 10
   notes        2 attached, 1 stale
+  advisories   6 kept (2 high, 4 moderate), 0 low left out
+               linked 4 by symbol, 2 by fix-diff; 0 unlinked
 ```
 
-The last line says how the project's [notes](/reference/notes/) stand on the new snapshot, by
-anchor state.
+The notes line says how the project's [notes](/reference/notes/) stand on the new snapshot, by
+anchor state; the advisories lines, what OSV gave and how it was linked.
+
+## Past advisories
+
+The target's published vulnerabilities, fetched from [OSV](https://osv.dev) when a snapshot is
+indexed and by `esper advisories`
+([D19](/decisions/#d19--past-vulnerabilities-advisories-linked-to-the-code-they-touched),
+[D30](/decisions/#d30--advisories-belong-to-the-project-and-are-placed-on-each-snapshot)). This is
+the one network call Esper makes; `ESPER_OSV_URL` points it at another server.
+
+- **Which packages.** Each module the target's manifests declare (a `go.mod`'s module path, a
+  `package.json`'s name), in its language's ecosystem, and each `--package` of `esper add`.
+- **Which advisories.** Those rated `MODERATE` or more by their database, or by an alias's, or
+  with a CVSS 3 base score of 4.0 or more; one no rating reaches is kept as `unrated`. An entry and
+  its aliases (the Go database's and GitHub's) are one advisory. The low ones are counted, and left
+  out.
+- **How each is linked**, by its most precise link: `symbol` (the functions it names), `fix-diff`
+  (the declarations its fix commit changed, read in the commit's parent), `file` (the fix changed
+  lines outside any declaration), or `unlinked`, listed but linked to nothing. A fix commit is one
+  the repository holds, pointed to by the advisory, or found by its identifiers in the messages of
+  the history: a clone without its history, or a folder that is not a repository, links by symbol
+  only.
+- **Where it stands** on each snapshot: `affected` or `fixed` from the advisory's version ranges and
+  the snapshot's version (its ref, or a tag of its commit), else from whether its commit holds a
+  fix; `unaffected` before the flaw came in; `unknown` otherwise.
+
+Advisories belong to the project, not to a snapshot: a snapshot indexed `--offline` gets those
+already fetched, and fetching them again reaches every snapshot. Their text is a third party's, and
+is shown as text.
 
 ## Where projects live
 
@@ -44,6 +76,7 @@ In `$ESPER_HOME`, or `~/.esper` by default:
 
 ```text
 token                          the token of esper serve
+enrich/<project>/              where esper enrich runs claude, never in the target
 projects/<name>/project.json   the project: its name, its source, its kind if forced
 projects/<name>/esper.db       its snapshots
 projects/<name>/checkout/      its clone, for a project added by URL

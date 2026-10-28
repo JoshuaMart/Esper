@@ -26,6 +26,7 @@ export default defineConfig({
 						'reference/api',
 						'reference/interface',
 						'reference/notes',
+						'reference/claims',
 						'reference/analyzers',
 					], },
 			],

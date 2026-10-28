@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react'
+import { AdvisoriesPage } from './advisories.tsx'
 import { ApiError, api } from './api.ts'
 import { EntriesPage } from './entries.tsx'
 import { EntryPage } from './entry.tsx'
@@ -91,7 +92,7 @@ export function App() {
 
 function Routes() {
   const { path } = useLocation()
-  const match = path.match(/^\/p\/([^/]+)(\/entry|\/notes)?\/?$/)
+  const match = path.match(/^\/p\/([^/]+)(\/entry|\/notes|\/advisories)?\/?$/)
   // biome-ignore lint/correctness/useExhaustiveDependencies: runs on each new path, which is the point
   useEffect(() => {
     // Focus moves to the new view's heading, as a page load would put it at the top.
@@ -115,6 +116,7 @@ function Routes() {
   const project = decodeURIComponent(match[1] as string)
   if (match[2] === '/entry') return <EntryPage project={project} />
   if (match[2] === '/notes') return <NotesPage project={project} />
+  if (match[2] === '/advisories') return <AdvisoriesPage project={project} />
   return <EntriesPage project={project} />
 }
 

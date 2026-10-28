@@ -1,3 +1,4 @@
+import { Advisories, advisoryLayer } from './advisories.ts'
 import { EsperError, NotFound } from './errors.ts'
 import type { Citation, EdgeKind, Fact, Graph, GraphEdge, GraphNode, NodeKind } from './graph.ts'
 import type { SnapshotInfo, Store } from './store.ts'
@@ -94,10 +95,18 @@ export class SnapshotView {
     for (const fact of graph.facts) add(this.facts, fact.node, fact)
   }
 
+  // A stored snapshot, with the project's advisories placed on its code (D19): their nodes, their
+  // `affects` edges, and `fix-downstream` on the entry points that reach one.
   static load(store: Store, id: number): SnapshotView {
     const info = store.snapshot(id)
     if (!info) throw new NotFound(`no snapshot ${id}; esper_snapshots lists them`)
-    return new SnapshotView(info, store.graph(id))
+    const graph = store.graph(id)
+    const advisories = new Advisories(store)
+    const layer = advisoryLayer(advisories.list(), advisories.states(id), graph)
+    graph.nodes.push(...layer.nodes)
+    graph.edges.push(...layer.edges)
+    graph.facts.push(...layer.facts)
+    return new SnapshotView(info, graph)
   }
 
   // A node named by its reference, a `file:line`, or its name (D13).

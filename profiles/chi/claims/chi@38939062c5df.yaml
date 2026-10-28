@@ -1,0 +1,31 @@
+# Guard questions on chi v5.3.2, answered by hand (D17), to measure the bounded tier's models. A
+# guard is a check that can refuse the request before the work is done: each "yes" below writes an
+# error status and returns without calling the next handler; each "no" never refuses, though some
+# answer a request of their own (RedirectSlashes redirects, Heartbeat answers /ping).
+# RequestSize (the body's reader fails later, not the middleware) and SupressNotFound (answers 404
+# for an unknown route) are left out: either answer can be argued.
+target: https://github.com/go-chi/chi
+commit: 38939062c5df4d3e8814aad1a488983112627ced
+questions:
+  guard:middleware/basic_auth.go#BasicAuth: authn
+  guard:middleware/content_charset.go#ContentCharset: validation
+  guard:middleware/content_encoding.go#AllowContentEncoding: validation
+  guard:middleware/content_type.go#AllowContentType: validation
+  guard:middleware/clean_path.go#CleanPath: no
+  guard:middleware/compress.go#Compress: no
+  guard:middleware/get_head.go#GetHead: no
+  guard:middleware/heartbeat.go#Heartbeat: no
+  guard:middleware/logger.go#Logger: no
+  guard:middleware/nocache.go#NoCache: no
+  guard:middleware/page_route.go#PageRoute: no
+  guard:middleware/path_rewrite.go#PathRewrite: no
+  guard:middleware/profiler.go#Profiler: no
+  guard:middleware/realip.go#RealIP: no
+  guard:middleware/recoverer.go#Recoverer: no
+  guard:middleware/request_id.go#RequestID: no
+  guard:middleware/route_headers.go#HeaderRouter.Handler: no
+  guard:middleware/strip.go#RedirectSlashes: no
+  guard:middleware/strip.go#StripSlashes: no
+  guard:middleware/url_format.go#URLFormat: no
+  guard:middleware/client_ip.go#ClientIPFromXFF: no
+  guard:context.go#URLParam: no

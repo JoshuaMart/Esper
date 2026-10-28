@@ -109,7 +109,8 @@ export interface NoteEvent {
 }
 
 interface Live {
-  // Bumped when a project's notes or snapshots change: queries that read them load again.
+  // Bumped when a project's notes, snapshots, advisories or claims change: queries that read them load
+  // again.
   version: (project: string) => number
   connected: boolean
   jobs: Map<number, Job>
@@ -156,6 +157,12 @@ export function LiveProvider({ children, enabled }: { children: ReactNode; enabl
     source.addEventListener('snapshot', (e) => {
       bump((JSON.parse((e as MessageEvent).data) as { project: string }).project)
     })
+    source.addEventListener('claims', (e) => {
+      bump((JSON.parse((e as MessageEvent).data) as { project: string }).project)
+    })
+    source.addEventListener('advisories', (e) => {
+      bump((JSON.parse((e as MessageEvent).data) as { project: string }).project)
+    })
     source.addEventListener('job', (e) => {
       const event = JSON.parse((e as MessageEvent).data) as Job & { message?: string }
       setJobs((all) => {
@@ -163,6 +170,7 @@ export function LiveProvider({ children, enabled }: { children: ReactNode; enabl
         const job: Job = {
           id: event.id,
           project: event.project,
+          action: event.action,
           state: event.state,
           messages: [...(before?.messages ?? []), ...(event.message ? [event.message] : [])],
           ...(event.result ? { result: event.result } : {}),

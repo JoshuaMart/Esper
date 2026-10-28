@@ -27,7 +27,7 @@ const numbers = new Set([
   'to',
   'min',
 ])
-const flags = new Set(['includeDeleted', 'chain', 'force', 'precise'])
+const flags = new Set(['includeDeleted', 'chain', 'force', 'precise', 'offline', 'current'])
 
 function query(params: Record<string, string>): Json {
   const out: Json = {}
@@ -103,6 +103,8 @@ const integer = (value: unknown, what: string, bound: { min: number; max: number
 export interface Job {
   id: number
   project: string
+  // An index, or a fetch of the advisories again.
+  action: 'index' | 'advisories'
   state: 'running' | 'done' | 'failed'
   startedAt: string
   messages: string[]
@@ -203,24 +205,21 @@ export function api(projects: Projects) {
     c.json(await call(await project(c.req.param('project')), 'esper_diff', query(c.req.query()))),
   )
 
-  // An index runs as a job: the answer comes at once, and the job's progress and result come as
-  // events, and from GET /jobs.
-  app.post('/projects/:project/index', async (c) => {
-    const name = c.req.param('project')
-    const connection = await project(name)
-    const input = await body(c)
+  // An index, or a fetch of the advisories, runs as a job: the answer comes at once, and the
+  // job's progress and result come as events, and from GET /jobs. One runs at a time per project.
+  const start = (
+    name: string,
+    action: Job['action'],
+    input: Json,
+    work: (tell: (message: string) => void) => Promise<unknown>,
+  ): Job => {
     if (jobs.some((j) => j.project === name && j.state === 'running')) {
-      throw new HttpError(409, `${name} is already being indexed`)
-    }
-    // The input is checked before the job starts, so that a mistake is refused at once.
-    const tool = tools.find((t) => t.name === 'esper_index')
-    const parsed = tool?.input.safeParse(input)
-    if (!parsed?.success) {
-      throw new HttpError(400, parsed?.error.issues.map((i) => i.message).join('; ') ?? 'invalid')
+      throw new HttpError(409, `${name} is already being indexed or its advisories fetched`)
     }
     const job: Job = {
       id: nextJob++,
       project: name,
+      action,
       state: 'running',
       startedAt: new Date().toISOString(),
       messages: [],
@@ -229,11 +228,11 @@ export function api(projects: Projects) {
     jobs.push(job)
     while (jobs.length > keptJobs && jobs[0]?.state !== 'running') jobs.shift()
     const tell = (event: Partial<Extract<ServerEvent, { type: 'job' }>>) =>
-      projects.emit({ type: 'job', project: name, id: job.id, state: job.state, ...event })
+      projects.emit({ type: 'job', project: name, id: job.id, action, state: job.state, ...event })
     tell({})
-    // Let the answer go out before the index, which holds the event loop while it parses.
+    // Let the answer go out before the work, which holds the event loop while it parses.
     setImmediate(() => {
-      call(connection, 'esper_index', input, (message) => {
+      work((message) => {
         job.messages.push(message)
         tell({ message })
       }).then(
@@ -248,11 +247,47 @@ export function api(projects: Projects) {
           job.error =
             error instanceof EsperError
               ? error.message
-              : 'the index failed; the server log says why'
+              : `the ${action} failed; the server log says why`
           if (!(error instanceof EsperError)) console.error(error)
           tell({ error: job.error })
         },
       )
+    })
+    return job
+  }
+
+  app.post('/projects/:project/index', async (c) => {
+    const name = c.req.param('project')
+    const connection = await project(name)
+    const input = await body(c)
+    // The input is checked before the job starts, so that a mistake is refused at once.
+    const tool = tools.find((t) => t.name === 'esper_index')
+    const parsed = tool?.input.safeParse(input)
+    if (!parsed?.success) {
+      throw new HttpError(400, parsed?.error.issues.map((i) => i.message).join('; ') ?? 'invalid')
+    }
+    const job = start(name, 'index', input, (tell) => call(connection, 'esper_index', input, tell))
+    return c.json({ job }, 202)
+  })
+
+  app.get('/projects/:project/advisories', async (c) =>
+    c.json(
+      await call(await project(c.req.param('project')), 'esper_advisories', {
+        limit: 200,
+        ...query(c.req.query()),
+      }),
+    ),
+  )
+
+  // Fetches the advisories from OSV again and links them, as `esper advisories` does.
+  app.post('/projects/:project/advisories', async (c) => {
+    const name = c.req.param('project')
+    await project(name)
+    const input = await body(c)
+    if (Object.keys(input).length > 0) throw new HttpError(400, 'the body is {}')
+    const job = start(name, 'advisories', input, async (tell) => {
+      tell('fetching the advisories from OSV and linking them')
+      return projects.home.advisories(name)
     })
     return c.json({ job }, 202)
   })
@@ -310,7 +345,14 @@ export function api(projects: Projects) {
         if (node) notes.set(node, (notes.get(node) ?? 0) + 1)
       }
     }
-    const drawn = subgraph(view, root, { depth, limit, chain: q.chain === true, notes })
+    // The claims that hold on this snapshot, by node.
+    const claims = new Map<string, number>()
+    for (const c of connection.claims.list()) {
+      if (c.status !== 'rejected' && connection.claims.current(c, view)) {
+        claims.set(c.subject, (claims.get(c.subject) ?? 0) + 1)
+      }
+    }
+    const drawn = subgraph(view, root, { depth, limit, chain: q.chain === true, notes, claims })
     const cut =
       drawn.nodes.length - 1 < drawn.total
         ? [
@@ -363,6 +405,15 @@ export function api(projects: Projects) {
       cut,
     })
   })
+
+  app.get('/projects/:project/claims', async (c) =>
+    c.json(
+      await call(await project(c.req.param('project')), 'esper_claims', {
+        limit: 500,
+        ...query(c.req.query()),
+      }),
+    ),
+  )
 
   app.get('/projects/:project/notes', async (c) =>
     c.json(

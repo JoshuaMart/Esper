@@ -11,7 +11,7 @@ import {
 } from '@xyflow/react'
 import ELK from 'elkjs/lib/elk.bundled.js'
 import { memo, useEffect, useMemo, useState } from 'react'
-import { api, type DrawnNode, type NodeDetail, type Subgraph } from './api.ts'
+import { api, type Claim, type DrawnNode, type NodeDetail, type Subgraph } from './api.ts'
 import { useProject } from './app.tsx'
 import { Composer, citationsOf } from './composer.tsx'
 import {
@@ -24,7 +24,17 @@ import {
   useLocation,
   withParams,
 } from './lib.tsx'
-import { ErrorNotice, Icon, KindBadge, NoteText, Spinner, StateBadge, TopBar } from './ui.tsx'
+import {
+  AdvisoryStateBadge,
+  ErrorNotice,
+  Icon,
+  KindBadge,
+  NoteText,
+  SeverityBadge,
+  Spinner,
+  StateBadge,
+  TopBar,
+} from './ui.tsx'
 
 // An entry point, what it reaches drawn left to right with a layered layout (D14), and the code
 // of the node picked in the drawing beside it, with the notes that sit on that node.
@@ -60,8 +70,13 @@ const Card = memo(function Card({ data }: NodeProps<Node<CardData>>) {
       ) : (
         <div className={`gnode gnode-${data.kind}`} data-selected={data.selected} title={n?.ref}>
           <span className="name">{data.label}</span>
-          {n && (n.sinks > 0 || n.notes > 0) ? (
+          {n && (n.sinks > 0 || n.notes > 0 || n.advisories > 0 || n.claims > 0) ? (
             <span className="meta">
+              {n.advisories > 0 ? (
+                <span className="advisory-count">
+                  {n.advisories} {n.advisories === 1 ? 'advisory' : 'advisories'}
+                </span>
+              ) : null}
               {n.sinks > 0 ? (
                 <span className="sink">
                   {n.sinks} {n.sinks === 1 ? 'sink' : 'sinks'}
@@ -70,6 +85,11 @@ const Card = memo(function Card({ data }: NodeProps<Node<CardData>>) {
               {n.notes > 0 ? (
                 <span>
                   {n.notes} {n.notes === 1 ? 'note' : 'notes'}
+                </span>
+              ) : null}
+              {n.claims > 0 ? (
+                <span className="claim-count">
+                  {n.claims} {n.claims === 1 ? 'claim' : 'claims'}
                 </span>
               ) : null}
             </span>
@@ -105,7 +125,7 @@ function folded(graph: Subgraph): { hidden: Set<string>; more: Map<string, numbe
   const more = new Map<string, number>()
   const rank = (ref: string) => {
     const n = byRef.get(ref)
-    return (n && n.sinks + n.notes > 0 ? 0 : 2) + (n?.kind === 'external' ? 1 : 0)
+    return (n && n.sinks + n.notes + n.advisories > 0 ? 0 : 2) + (n?.kind === 'external' ? 1 : 0)
   }
   for (const [parent, kids] of children) {
     const unique = [...new Set(kids)]
@@ -155,7 +175,7 @@ function build(graph: Subgraph, expand: boolean, selected: string | undefined, f
         kind: n.kind === 'entry' ? 'entry' : n.kind === 'external' ? 'external' : 'decl',
         selected: selected === n.ref,
       },
-      ...size(label, n.sinks > 0 || n.notes > 0),
+      ...size(label, n.sinks > 0 || n.notes > 0 || n.advisories > 0 || n.claims > 0),
     })
   }
   if (fold) {
@@ -356,6 +376,18 @@ export function EntryPage({ project }: { project: string }) {
 
   const e = entry.data?.entry
   const title = e ? (e.method && e.path ? `${e.method} ${e.path}` : e.name) : node
+  // The guards a model claims among its chain and handler: shown as claims, never as guards.
+  const guardClaims = useData(
+    p.snapshot && e ? `${project}:${p.snapshot}:guard-claims:${p.version}` : undefined,
+    () => api.claims(project, { snapshot: p.snapshot, kind: 'guard', status: 'accepted' }),
+  )
+  const claimedGuards = (guardClaims.data?.claims ?? []).filter(
+    (c) => c.value === 'yes' && (e?.chain.includes(c.subject) || e?.handlers.includes(c.subject)),
+  )
+  // The past advisories whose fixed code the entry point reaches (D19).
+  const downstream = (entry.data?.facts ?? [])
+    .filter((f) => f.kind === 'signal' && f.value === 'fix-downstream')
+    .map((f) => ({ advisory: String(f.data?.advisory ?? ''), via: String(f.data?.via ?? '') }))
 
   return (
     <>
@@ -477,6 +509,38 @@ export function EntryPage({ project }: { project: string }) {
                   )}
                 </dd>
               </div>
+              {claimedGuards.length > 0 ? (
+                <div>
+                  <dt>Guards claimed by a model</dt>
+                  <dd>
+                    {claimedGuards.map((c) => (
+                      <span key={c.id} className="chip chip-claim" title={c.reason ?? ''}>
+                        {c.valueKind} · {shortRef(c.subject)}
+                      </span>
+                    ))}
+                  </dd>
+                </div>
+              ) : null}
+              {downstream.length > 0 ? (
+                <div>
+                  <dt>Past advisories reached</dt>
+                  <dd>
+                    {downstream.map((f) => (
+                      <Link
+                        key={`${f.advisory}:${f.via}`}
+                        className="chip chip-sink"
+                        to={href(`/p/${encodeURIComponent(project)}/advisories`, {
+                          id: f.advisory,
+                          snapshot: p.asked,
+                        })}
+                        title={`fixed once in ${f.via}`}
+                      >
+                        {f.advisory} · {shortRef(f.via)}
+                      </Link>
+                    ))}
+                  </dd>
+                </div>
+              ) : null}
             </dl>
           ) : null}
         </section>
@@ -774,6 +838,10 @@ function CodePanel({
           </div>
         </>
       )}
+      {d && d.advisories.length > 0 ? <NodeAdvisories project={project} detail={d} /> : null}
+      {d && d.claims > 0 ? (
+        <NodeClaims project={project} snapshot={snapshot} node={d.node.ref} version={version} />
+      ) : null}
       {d ? <NodeNotes project={project} detail={d} /> : null}
     </section>
   )
@@ -788,6 +856,128 @@ function marksOf(d: NodeDetail | undefined) {
     if (mark && marks.get(f.citation) !== 'S') marks.set(f.citation, mark)
   }
   return marks
+}
+
+const claimWords: Record<string, (c: Claim) => string> = {
+  guard: (c) => (c.value === 'yes' ? `a guard, ${c.valueKind}` : 'not a guard'),
+  effects: (c) =>
+    c.value === 'sink'
+      ? `a sink, ${c.valueKind}`
+      : c.value === 'none'
+        ? 'no data, no sink'
+        : c.value.replaceAll('-', ' '),
+  intent: (c) => c.text ?? '',
+  trust: (c) => (c.value === 'none' ? 'trusts no request value' : (c.text ?? '')),
+  applications: (c) => c.text ?? '',
+  authentication: (c) => (c.value === 'none' ? 'no authentication' : (c.text ?? '')),
+}
+
+// What a model claimed about this node, apart from its facts (D17): each with the model, the
+// lines it cites, checked by code, and whether the code it rests on is still the same.
+function NodeClaims({
+  project,
+  snapshot,
+  node,
+  version,
+}: {
+  project: string
+  snapshot: number
+  node: string
+  version: number
+}) {
+  const claims = useData(`${project}:${snapshot}:${node}:claims:${version}`, () =>
+    api.claims(project, { node, snapshot }),
+  )
+  const shown = (claims.data?.claims ?? []).filter((c) => c.status !== 'rejected')
+  return (
+    <div
+      className="stack claims"
+      style={{ padding: 14, borderTop: '1px solid var(--border)', gap: 10 }}
+    >
+      <h3 className="h2">
+        Claimed by a model{' '}
+        <span className="muted" style={{ fontWeight: 400 }}>
+          {shown.length}
+        </span>
+      </h3>
+      <p className="muted" style={{ margin: 0, fontSize: '0.75rem' }}>
+        A model's answers, checked against the lines they cite. They are not facts: they set no
+        signal.
+      </p>
+      {shown.map((c) => (
+        <article key={c.id} className="note-card">
+          <div className="row" style={{ gap: 8 }}>
+            <span className="badge claim-badge">claimed</span>
+            <span className="mono" style={{ fontSize: '0.75rem' }}>
+              {c.kind}
+            </span>
+            <span style={{ fontWeight: 500 }}>
+              {c.status === 'insufficient'
+                ? 'not enough context to answer'
+                : claimWords[c.kind]?.(c)}
+            </span>
+          </div>
+          {c.reason ? <p style={{ margin: 0 }}>{c.reason}</p> : null}
+          <div className="chips">
+            {c.citations.map((x) => (
+              <span key={`${x.file}:${x.line}:${x.identifier}`} className="chip">
+                {x.file}:{x.line} {x.identifier}
+              </span>
+            ))}
+          </div>
+          <p className="muted" style={{ margin: 0, fontSize: '0.75rem' }}>
+            {c.model} through {c.provider}, {c.tier}, {formatShortDate(c.createdAt)}
+            {c.author !== `esper enrich (${c.provider})` ? ` · ${c.author}` : ''}
+          </p>
+        </article>
+      ))}
+    </div>
+  )
+}
+
+const codeWords = {
+  'as-fixed': 'its code is as the fix left it',
+  'as-before-fix': 'its code is as it was before the fix',
+  changed: 'its code changed since the fix',
+}
+
+// The past advisories whose fix touched this node: where a flaw was once, look for its variants.
+function NodeAdvisories({ project, detail }: { project: string; detail: NodeDetail }) {
+  return (
+    <div className="stack" style={{ padding: 14, borderTop: '1px solid var(--border)', gap: 10 }}>
+      <h3 className="h2">
+        Past advisories on this node{' '}
+        <span className="muted" style={{ fontWeight: 400 }}>
+          {detail.advisories.length}
+        </span>
+      </h3>
+      {detail.advisories.map((a) => (
+        <article key={a.ref} className="note-card">
+          <div className="row" style={{ gap: 8 }}>
+            <SeverityBadge severity={a.severity} />
+            <AdvisoryStateBadge state={a.state} />
+            <span className="mono" style={{ fontSize: '0.75rem' }}>
+              {a.name}
+            </span>
+            <Link
+              className="link"
+              style={{ marginInlineStart: 'auto', fontSize: '0.75rem' }}
+              to={href(`/p/${encodeURIComponent(project)}/advisories`, { id: a.name })}
+            >
+              Open
+            </Link>
+          </div>
+          <p style={{ margin: 0 }}>{a.summary}</p>
+          <p className="muted" style={{ margin: 0, fontSize: '0.75rem' }}>
+            Linked by {a.link.precision}
+            {a.link.fix ? `, fix ${a.link.fix.slice(0, 12)}` : ''}
+            {a.link.code ? `; ${codeWords[a.link.code]}` : ''}
+            {a.link.movedFrom ? `; moved from ${shortRef(a.link.movedFrom)}` : ''}.
+          </p>
+        </article>
+      ))}
+    </div>
+  )
 }
 
 function NodeNotes({ project, detail }: { project: string; detail: NodeDetail }) {

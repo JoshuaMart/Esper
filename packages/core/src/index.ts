@@ -1,4 +1,34 @@
 export {
+  Advisories,
+  type Advisory,
+  type AdvisoryImport,
+  type AdvisoryLink,
+  type AdvisoryReport,
+  type AdvisorySource,
+  type AdvisoryState,
+  advisoryLayer,
+  advisoryStates,
+  fixCommits,
+  importAdvisories,
+  type LinkContext,
+  type Linked,
+  linkAdvisory,
+  type OsvEntry,
+  type OsvRecording,
+  osvSource,
+  type Package,
+  type PlacedLink,
+  type Precision,
+  placeLinks,
+  precisions,
+  recordedSource,
+  type Severity,
+  type StoredAdvisory,
+  severities,
+  snapshotVersion,
+  stateOn,
+} from './advisories.ts'
+export {
   type Analysis,
   AnalysisError,
   type Analyzer,
@@ -12,6 +42,7 @@ export {
   parseManifest,
   type Referent,
 } from './analyzer.ts'
+export * from './claims.ts'
 export { type Detection, detectProfile } from './detect.ts'
 export {
   type AnalyzerInput,
@@ -56,17 +87,21 @@ export {
   textLines,
 } from './store.ts'
 export {
+  changedLines,
   classify,
   languageOf,
   materialise,
   readFolder,
   readRef,
+  remoteRepositories,
+  repositoryOf,
   type TargetFile,
   type TargetSnapshot,
 } from './target.ts'
 export { type TsFile, TsProgram, type TsType, typeSymbol } from './ts.ts'
 export { indexTs, typescript } from './ts-index.ts'
 export { parseJsonc, Resolver } from './ts-modules.ts'
+export { compareVersions, cvss3Score, parseVersion, type Range, versionState } from './versions.ts'
 export {
   diffEntries,
   type EntryChange,

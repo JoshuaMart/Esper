@@ -18,6 +18,7 @@ import {
   profilesDir,
   readFolder,
   readRef,
+  recordedSource,
   Store,
 } from '../src/index.ts'
 
@@ -116,7 +117,9 @@ test('a folder is read as it is, a ref from git, and a changed checkout is dirty
 
 test('a project added by path is indexed into its own database, and its folder is not written', async () => {
   const { dir } = await repository()
-  const home = new Home(await mkdtemp(join(tmpdir(), 'esper-home-')))
+  const home = new Home(await mkdtemp(join(tmpdir(), 'esper-home-')), {
+    advisories: recordedSource(),
+  })
   try {
     const before = (await readdir(dir)).sort()
     const project = await home.add(dir, { name: 'shop' })
@@ -162,7 +165,9 @@ test('a symbolic link is skipped, never followed out of the target', async () =>
 
 test('a ref is read for a project in a subfolder of the repository, with its own go.mod', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'esper-mono-'))
-  const home = new Home(await mkdtemp(join(tmpdir(), 'esper-home-')))
+  const home = new Home(await mkdtemp(join(tmpdir(), 'esper-home-')), {
+    advisories: recordedSource(),
+  })
   try {
     await cp(fixture, join(dir, 'backend'), { recursive: true })
     const git = (...args: string[]) =>
@@ -236,6 +241,7 @@ test('a precise index runs the analyzer on the whole tree, and is a snapshot of 
   await git('commit', '--quiet', '-m', 'sum')
   const seen: { input: AnalyzerInput; tree: string[]; main: string; sum: string }[] = []
   const home = new Home(await mkdtemp(join(tmpdir(), 'esper-home-')), {
+    advisories: recordedSource(),
     analyzers: [fake],
     runner: async (analyzer, src, input) => {
       seen.push({
@@ -262,6 +268,7 @@ test('a precise index runs the analyzer on the whole tree, and is a snapshot of 
     assert.deepEqual(told, [
       "fake@1.0: writing the snapshot's tree",
       'fake@1.0: importing its output',
+      'advisories: fetching from OSV and linking them',
     ])
     assert.notEqual(precise.id, plain.id)
     assert.deepEqual(precise.analyzers, ['fake@1.0'])
@@ -295,6 +302,7 @@ test('a precise index runs the analyzer on the whole tree, and is a snapshot of 
 test("an analyzer's file that is refused fails the index, and stores no snapshot", async () => {
   const { dir } = await repository()
   const home = new Home(await mkdtemp(join(tmpdir(), 'esper-home-')), {
+    advisories: recordedSource(),
     analyzers: [fake],
     runner: async () =>
       [
@@ -318,12 +326,18 @@ test("an analyzer's file that is refused fails the index, and stores no snapshot
     const store = new Store(home.database('shop'))
     assert.deepEqual(store.snapshots(), [])
     store.close()
-    const none = new Home(home.dir, { analyzers: [{ ...fake, provides: ['flows'] }] })
+    const none = new Home(home.dir, {
+      advisories: recordedSource(),
+      analyzers: [{ ...fake, provides: ['flows'] }],
+    })
     await assert.rejects(
       none.index('shop', { precise: true }),
       /no analyzer resolves the call edges of go/,
     )
-    const two = new Home(home.dir, { analyzers: [fake, { ...fake, name: 'other' }] })
+    const two = new Home(home.dir, {
+      advisories: recordedSource(),
+      analyzers: [fake, { ...fake, name: 'other' }],
+    })
     await assert.rejects(
       two.index('shop', { precise: true }),
       /fake@1.0 and other@1.0 both resolve/,
@@ -359,7 +373,9 @@ test("a commit's tree is written out in batches, never read whole", async () => 
 
 test('a folder named from the home directory is read there, as the shell would expand ~', async () => {
   const fake = await mkdtemp(join(tmpdir(), 'esper-user-'))
-  const home = new Home(await mkdtemp(join(tmpdir(), 'esper-home-')))
+  const home = new Home(await mkdtemp(join(tmpdir(), 'esper-home-')), {
+    advisories: recordedSource(),
+  })
   const before = process.env.HOME
   try {
     await mkdir(join(fake, 'code', 'budget'), { recursive: true })

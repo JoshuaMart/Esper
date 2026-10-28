@@ -11,6 +11,7 @@ import {
   loadProfiles,
   profilesDir,
   readFolder,
+  recordedSource,
   resolveProfile,
   Store,
 } from '../src/index.ts'
@@ -178,7 +179,7 @@ test("a framework's surface is what it exports, and its handlers, that read the 
 test('a TypeScript project is added and indexed like any other, its snapshot stored', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'esper-home-'))
   try {
-    const home = new Home(dir)
+    const home = new Home(dir, { advisories: recordedSource() })
     await home.add(fixture, { name: 'honoapp' })
     const result = await home.index('honoapp')
     assert.deepEqual(result.profiles, ['hono/application'])

@@ -1,0 +1,16 @@
+{
+  "name": "@esper/enrich",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "1.3.0",
+    "@esper/core": "workspace:*",
+    "@esper/mcp": "workspace:*",
+    "zod": "4.6.7"
+  }
+}

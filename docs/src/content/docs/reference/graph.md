@@ -10,9 +10,10 @@ built. The source of truth is the code: `packages/core/src/graph.ts` for the mod
 ## Tables
 
 One database per project ([D9](/decisions/#d9--storage-one-sqlite-database-per-project-outside-the-target)),
-schema version **4**, recorded in `meta`. A database of schema 3 is brought to 4 in place, since 4
-only adds the `analyzers` of each snapshot; a database of another version is refused rather than
-read.
+schema version **5**, recorded in `meta`. A database of schema 3 or 4 is brought to 5 in place,
+since 4 only added the `analyzers` of each snapshot and 5 only adds tables, for advisories and
+claims; a database of another
+version is refused rather than read.
 
 | Table | One row per | Columns |
 |---|---|---|
@@ -37,6 +38,37 @@ have changed since.
 | `notes` | note, as it now is | `id`, `kind`, `status`, `body`, `citations` (JSON list), `author`, `created_at`, `updated_at`, `revision`, `snapshot_id` (the snapshot it is anchored on), `deleted_at`, `deleted_by`, `deleted_reason` |
 | `note_anchors` | anchor of a note | `note_id`, `position`, `ref`, `kind`, `fingerprint` |
 | `note_revisions` | revision of a note | `note_id`, `revision`, `action` (`create`, `update`, `delete`), `author`, `at`, `content` (the note then, as JSON) |
+
+[Advisories](/reference/command-line/#past-advisories) are the project's too
+([D30](/decisions/#d30--advisories-belong-to-the-project-and-are-placed-on-each-snapshot)):
+
+| Table | One row per | Columns |
+|---|---|---|
+| `advisories` | advisory kept from the last fetch | `id` (its OSV identifier), `aliases`, `summary`, `details`, `severity`, `rating`, `published`, `modified`, `package`, `ranges`, `symbols`, `refs`, `status` (`linked`, `unlinked`), `how`, `fixes` (the fix commits), `links` (JSON list), `fetched_at` |
+| `advisory_states` | advisory and snapshot | `advisory_id`, `snapshot_id`, `state` (`affected`, `fixed`, `unaffected`, `unknown`), `how` |
+| `advisory_fetches` | fetch from OSV | `id`, `at`, `packages`, `advisories` (kept), `low` (left out) |
+
+[Claims](/reference/claims/) by a model are the project's too, apart from the facts
+([D17](/decisions/#d17--model-enrichment-claims-beside-the-facts)):
+
+| Table | One row per | Columns |
+|---|---|---|
+| `claims` | answer a model gave | `id`, `question`, `kind`, `subject`, `tier`, `value`, `value_kind`, `text`, `citations` (JSON list), `reason`, `status` (`accepted`, `rejected`, `insufficient`), `rejection`, `model`, `provider`, `prompt_version`, `fingerprints` (the nodes it rests on), `reads`, `snapshot_id` (where it was asked), `author`, `created_at` |
+
+A link holds its precision (`symbol`, `fix-diff`, `file`), the node's reference where the fix
+changed it (for a symbol, its name and folder), the fix commit, the changed line of the parent
+(`hunk`), the node's fingerprints before and after the fix, and its source.
+
+### Advisories on a snapshot
+
+When a snapshot is read, each advisory is a node `osv:<id>` of kind `advisory`, whose `data` holds
+its summary, severity, aliases, status and its `state` on the snapshot. Each link is an `affects`
+edge from it, placed on the node of the same reference, else on a node of the same kind with its
+code from before or after the fix (`data.movedFrom`). The edge cites the node's first line, and its
+`data` holds `precision`, `state`, `fix`, `hunk`, and `code`: `as-fixed`, `as-before-fix` or
+`changed`. An entry point whose handler or chain reaches an affected declaration through calls gets
+a `fix-downstream` signal for each advisory, with `data.advisory`, `data.via`, `data.from` and
+`data.guessed`. None of these rows is stored with the snapshot.
 
 ## Conventions
 

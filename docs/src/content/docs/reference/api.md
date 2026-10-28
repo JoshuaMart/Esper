@@ -65,7 +65,7 @@ The source of truth is `packages/server/src`: `app.ts` for the server, `api.ts` 
 | `GET /api/projects/:p/snapshots` | the project's snapshots | `esper_snapshots` |
 | `GET /api/projects/:p/diff?from&to` | what changed between two snapshots | `esper_diff` |
 | `POST /api/projects/:p/index` | starts indexing `{ ref?, force?, precise? }`, and answers `202` with the job at once | `esper_index` |
-| `GET /api/jobs` | the index jobs, running and the last twenty finished, with their messages and results | |
+| `GET /api/jobs` | the jobs, running and the last twenty finished, each an index or a fetch of the advisories (`action`), with their messages and results | |
 | `GET /api/projects/:p/entrypoints` | the entry points, filtered; up to 500 by default | `esper_entrypoints` |
 | `GET /api/projects/:p/node?node` | one node, its facts, code and notes | `esper_node` |
 | `GET /api/projects/:p/read?file&startLine&endLine` | lines of a file of the snapshot | `esper_read` |
@@ -73,14 +73,17 @@ The source of truth is `packages/server/src`: `app.ts` for the server, `api.ts` 
 | `GET /api/projects/:p/paths?from&to` or `&fact&value` | paths to a node, or to any node carrying a fact | `esper_paths` |
 | `GET /api/projects/:p/subgraph?node&depth&limit&chain` | what a node reaches, to draw: below | |
 | `POST /api/projects/:p/map` | the code a group of entry points shares, to draw: below | |
+| `GET /api/projects/:p/advisories` | the past advisories, placed on the snapshot; up to 200 by default | `esper_advisories` |
+| `POST /api/projects/:p/advisories` | fetches the advisories from OSV again and links them, as `esper advisories` does, with `{}`; answers `202` with the job at once | |
+| `GET /api/projects/:p/claims?node&kind&status&current` | the claims by a model, apart from the facts; up to 500 by default | `esper_claims` |
 | `GET /api/projects/:p/notes` | the notes, placed on the snapshot | `esper_notes` |
 | `POST /api/projects/:p/notes` | writes a note | `esper_note_create` |
 | `PATCH /api/projects/:p/notes/:id` | edits a note, as a new revision | `esper_note_update` |
 | `DELETE /api/projects/:p/notes/:id` | deletes a note, with `{ author, reason? }` | `esper_note_delete` |
 | `GET /api/events` | what changes, as server-sent events: below | |
 
-An index runs one at a time per project. A precise index sends the analyzer's progress as
-messages of its job.
+One job runs at a time per project, an index or a fetch of the advisories; another is refused with
+`409`. A precise index sends the analyzer's progress as messages of its job.
 
 ### A subgraph
 
@@ -99,7 +102,8 @@ route behind it shares them.
 | `chain` | also follow what chain members call; default `false` |
 
 The answer has `nodes` (each with its kind, name, place, depth, how many sinks and distinct reads
-it carries, its signals and its live notes), `edges` (every `calls`, `handles`, `chain` or `flows`
+it carries, its signals, its live notes, the advisories that affect it, and the claims about it that
+hold), `edges` (every `calls`, `handles`, `chain` or `flows`
 edge between two drawn nodes, with its citation and whether it was guessed), `total` (how many
 nodes the walk found), and `truncated` and `cut` when `limit` left some out.
 
@@ -121,9 +125,11 @@ sends a comment every 15 seconds while nothing happens, and then:
 |---|---|---|
 | `note` | a note is written, edited or deleted | `project`, `id`, `revision`, `action` (`create`, `update`, `delete`), `author`, `at`, `kind` |
 | `snapshot` | a snapshot is added | `project`, `id` |
-| `job` | an index job starts, says what it does, ends or fails | `project`, `id`, `state`, and `message`, `result` or `error` |
+| `advisories` | the advisories are fetched again, or placed on a new snapshot | `project` |
+| `claims` | claims by a model are added, by `esper enrich` or an agent | `project`, `count` |
+| `job` | a job starts, says what it does, ends or fails | `project`, `id`, `action`, `state`, and `message`, `result` or `error` |
 
 After a reconnection, the interface loads everything again and reads `/api/jobs`, since events
-sent while the stream was down are lost. Notes and snapshots are found in each open project's database, every half second while someone
-listens, and at once after this server writes: an agent writing through `/mcp/<project>`, through
+sent while the stream was down are lost. Notes, snapshots, advisories and claims are found in each open project's database, every half second
+while someone listens, and at once after this server writes: an agent writing through `/mcp/<project>`, through
 the API, or through `esper mcp` in another process is heard the same way.
