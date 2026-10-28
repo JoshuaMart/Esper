@@ -5,13 +5,14 @@ import {
   declaredAt,
   type GoFile,
   GoProgram,
+  type Located,
   line,
   type ParsedFile,
   present,
 } from './go.ts'
 import { type Member, type Route, RouteInterpreter } from './go-routes.ts'
 import { declFacts } from './go-signals.ts'
-import type { Fact, Graph, GraphEdge } from './graph.ts'
+import type { Fact, Graph, GraphEdge, GraphNode } from './graph.ts'
 import { loadLibrary } from './library.ts'
 import type { ReadKind, ReadRule, ResolvedProfile } from './profile.ts'
 import { Names } from './refs.ts'
@@ -63,13 +64,6 @@ function chainFrom(node: Node): { field?: string; args?: Node[]; node: Node }[] 
     } else break
   }
   return items
-}
-
-function literal(node: Node | undefined): string | undefined {
-  if (node?.type === 'interpreted_string_literal' || node?.type === 'raw_string_literal') {
-    return node.text.slice(1, -1)
-  }
-  return undefined
 }
 
 function extractReads(program: GoProgram, profile: ResolvedProfile): Fact[] {
@@ -127,8 +121,16 @@ function extractReads(program: GoProgram, profile: ResolvedProfile): Fact[] {
             return item.field !== undefined ? seen?.field === item.field : seen?.args !== undefined
           })
           if (!fits) continue
+          // `r.RemoteAddr = ip` writes the request; it reads nothing.
+          const outer = observed[items.length - 1]?.node
+          const list = outer?.parent
+          const assigned =
+            list?.type === 'expression_list' &&
+            list.parent?.type === 'assignment_statement' &&
+            list.parent.childForFieldName('left')?.id === list.id
+          if (assigned) break
           const named = items.findIndex((item) => item.call?.name)
-          const name = named < 0 ? undefined : literal(observed[named]?.args?.[0])
+          const name = named < 0 ? undefined : program.stringValue(observed[named]?.args?.[0], file)
           add(file, id, rule.read, name)
           break
         }
@@ -141,10 +143,38 @@ function extractReads(program: GoProgram, profile: ResolvedProfile): Fact[] {
       const rule = (program.targets(fn, file) ?? []).map((t) => calls.get(t.ref)).find((r) => r)
       if (!rule) continue
       const args = present(call.childForFieldName('arguments')?.namedChildren ?? [])
-      add(file, call, rule.read, rule.name === undefined ? undefined : literal(args[rule.name]))
+      add(
+        file,
+        call,
+        rule.read,
+        rule.name === undefined ? undefined : program.stringValue(args[rule.name], file),
+      )
     }
   }
   return facts
+}
+
+// The functions and methods that take a response writer and the request: a framework's handlers.
+function handlerDecls(program: GoProgram, profile: ResolvedProfile): Set<string> {
+  const found = new Set<string>()
+  const is = (symbol: string | undefined, type: Located | undefined) => {
+    const [path, name] = (symbol ?? '').split('#')
+    return !!type && 'importPath' in type && type.importPath === path && type.name === name
+  }
+  for (const file of program.files) {
+    for (const decl of file.decls) {
+      if (decl.node.type === 'func_literal') continue
+      const params = present(decl.node.childForFieldName('parameters')?.namedChildren ?? [])
+      const types = params.map((p) => {
+        const text = p.childForFieldName('type')?.text
+        return text ? program.locate(text, file) : undefined
+      })
+      if (types.some((t) => is(profile.request, t)) && types.some((t) => is(profile.response, t))) {
+        found.add(decl.ref)
+      }
+    }
+  }
+  return found
 }
 
 const sha256 = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex')
@@ -170,12 +200,15 @@ export async function indexGo(
     ...options,
     fluent: library.fluent,
     returns: library.returns,
+    keeps: library.keeps,
   })
   try {
     const { graph, stats } = program.callGraph()
     const profile = options.profile
     const source = `tree-sitter:${profile.name}`
-    const routes = new RouteInterpreter(program, profile).routes()
+    // A framework has no routes of its own: its entry points are its request surface (D5).
+    const routes =
+      profile.kind === 'application' ? new RouteInterpreter(program, profile).routes() : []
     const reads = extractReads(program, profile)
     const signals = declFacts(program, profile, library, reads)
     graph.facts.push(...reads, ...signals)
@@ -237,6 +270,36 @@ export async function indexGo(
       }
     }
     const guardRules = new Map(profile.guards.map((g) => [`ext:${g.call}`, g.kind]))
+    // Gives an entry the reads and signals of what some of its members reach.
+    const take = (
+      ref: string,
+      seen: Set<string>,
+      part: 'handler' | 'chain',
+      members: Member[],
+      accept: (f: Fact) => boolean,
+    ) => {
+      const reached = reach(members.flatMap((m) => m.targets.map((t) => t.ref)))
+      for (const [decl, guessed] of reached) {
+        for (const fact of factsOf.get(decl) ?? []) {
+          if (!accept(fact)) continue
+          const key = `${fact.kind}\0${fact.value}\0${fact.citation.file}:${fact.citation.line}`
+          if (seen.has(key)) continue
+          seen.add(key)
+          const data = { via: fact.node, from: part, ...(guessed ? { guessed: true } : {}) }
+          const value = fact.kind === 'sink' ? 'sink-reachable' : fact.value
+          const kind = fact.kind === 'sink' ? 'signal' : fact.kind
+          graph.facts.push({
+            ...fact,
+            node: ref,
+            kind,
+            value,
+            data: { ...data, ...(fact.kind === 'sink' ? { sink: fact.value } : {}) },
+          })
+        }
+      }
+    }
+    const fromTheHandler = (f: Fact) =>
+      f.kind === 'read' || f.kind === 'sink' || fromHandler.has(f.value)
 
     const ordered = [...routes].sort((a, b) => {
       const ka = `${a.method} ${a.path}\0${a.citation.file}\0${String(a.citation.line).padStart(9, '0')}`
@@ -311,33 +374,10 @@ export async function indexGo(
 
       // Reads and signals, from what the handler and the chain reach.
       const seen = new Set<string>()
-      const take = (part: 'handler' | 'chain', members: Member[], accept: (f: Fact) => boolean) => {
-        const reached = reach(members.flatMap((m) => m.targets.map((t) => t.ref)))
-        for (const [decl, guessed] of reached) {
-          for (const fact of factsOf.get(decl) ?? []) {
-            if (!accept(fact)) continue
-            const key = `${fact.kind}\0${fact.value}\0${fact.citation.file}:${fact.citation.line}`
-            if (seen.has(key)) continue
-            seen.add(key)
-            const data = { via: fact.node, from: part, ...(guessed ? { guessed: true } : {}) }
-            const value = fact.kind === 'sink' ? 'sink-reachable' : fact.value
-            const kind = fact.kind === 'sink' ? 'signal' : fact.kind
-            graph.facts.push({
-              ...fact,
-              node: ref,
-              kind,
-              value,
-              data: { ...data, ...(fact.kind === 'sink' ? { sink: fact.value } : {}) },
-            })
-          }
-        }
-      }
+      take(ref, seen, 'handler', [route.handler], fromTheHandler)
       take(
-        'handler',
-        [route.handler],
-        (f) => f.kind === 'read' || f.kind === 'sink' || fromHandler.has(f.value),
-      )
-      take(
+        ref,
+        seen,
         'chain',
         route.chain,
         (f) => f.kind === 'read' || (f.kind === 'signal' && fromChain.has(f.value)),
@@ -388,14 +428,56 @@ export async function indexGo(
       }
     }
 
+    // A framework's request surface: each exported function, and each exported method of an
+    // exported type, that reads the request through what it reaches.
+    let surface = 0
+    const entries: GraphNode[] = []
+    if (profile.kind === 'framework') {
+      const exported = (name: string) => name.split('.').every((part) => /^[A-Z]/.test(part))
+      const handlers = handlerDecls(program, profile)
+      for (const node of graph.nodes) {
+        if (node.kind !== 'decl' || node.data?.literal || !node.file) continue
+        const surfaced =
+          (profile.surface.exported && exported(node.name)) ||
+          (profile.surface.handlers && handlers.has(node.ref))
+        if (!surfaced) continue
+        const reached = reach([node.ref])
+        const reads = [...reached.keys()].some((decl) =>
+          (factsOf.get(decl) ?? []).some((f) => f.kind === 'read'),
+        )
+        if (!reads) continue
+        const ref = `entry:${node.ref}`
+        const citation = { file: node.file, line: node.startLine ?? 1 }
+        entries.push({
+          ref,
+          kind: 'entry',
+          name: node.name,
+          file: node.file,
+          ...(node.startLine ? { startLine: node.startLine } : {}),
+          ...(node.endLine ? { endLine: node.endLine } : {}),
+          ...(node.fingerprint ? { fingerprint: node.fingerprint } : {}),
+          data: { symbol: node.ref },
+        })
+        const member: Member = {
+          text: node.name,
+          citation,
+          targets: [{ ref: node.ref, resolution: 'resolved' }],
+        }
+        link('handles', ref, member, {})
+        take(ref, new Set(), 'handler', [member], fromTheHandler)
+        surface++
+      }
+      graph.nodes.push(...entries)
+    }
+
+    const isEntry = (ref: string) => ref.startsWith('route:') || ref.startsWith('entry:')
     return {
       graph,
       stats: {
         ...stats,
-        entries: ordered.length,
+        entries: ordered.length + surface,
         reads: reads.length,
-        signals: graph.facts.filter((f) => f.kind === 'signal' && f.node.startsWith('route:'))
-          .length,
+        signals: graph.facts.filter((f) => f.kind === 'signal' && isEntry(f.node)).length,
       },
       routes: ordered,
     }

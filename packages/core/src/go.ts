@@ -367,6 +367,8 @@ export class GoProgram {
   // What functions outside the module return first: `encoding/json#NewDecoder` gives
   // `encoding/json#Decoder`.
   private readonly returns: Map<string, string>
+  // Functions outside the module that return their string argument normalised.
+  private readonly keeps: Set<string>
   private readonly functions: Map<string, Decl[]>
   private readonly methods: Map<string, Decl[]>
   private readonly methodsByName: Map<string, Decl[]>
@@ -381,22 +383,25 @@ export class GoProgram {
       module?: string
       fluent?: Iterable<string>
       returns?: Iterable<[string, string]>
+      keeps?: Iterable<string>
     } = {},
   ): Promise<GoProgram> {
     const parsed = await Promise.all(files.map(parseFile))
     return new GoProgram(parsed, options.module, {
       fluent: new Set(options.fluent ?? []),
       returns: new Map(options.returns ?? []),
+      keeps: new Set(options.keeps ?? []),
     })
   }
 
   private constructor(
     parsed: ParsedFile[],
     module: string | undefined,
-    library: { fluent: Set<string>; returns: Map<string, string> },
+    library: { fluent: Set<string>; returns: Map<string, string>; keeps: Set<string> },
   ) {
     this.fluent = library.fluent
     this.returns = library.returns
+    this.keeps = library.keeps
     this.files = parsed.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
     this.module = module
     this.byPath = new Map(this.files.map((file) => [file.path, file]))
@@ -519,6 +524,47 @@ export class GoProgram {
       }
     }
     return new Map([...sets].sort(([a], [b]) => (a < b ? -1 : 1)))
+  }
+
+  // The string an expression always is: a literal, or a constant or package variable initialised
+  // with one, in this package (`trueClientIP`) or another of the module (`conf.Path`).
+  stringValue(node: Node | undefined, file: ParsedFile): string | undefined {
+    if (!node) return undefined
+    if (node.type === 'interpreted_string_literal' || node.type === 'raw_string_literal') {
+      return node.text.slice(1, -1)
+    }
+    if (node.type === 'call_expression') {
+      const fn = node.childForFieldName('function')
+      const operand =
+        fn?.type === 'selector_expression' ? fn.childForFieldName('operand') : undefined
+      const importPath = operand ? this.packageOf(operand, file) : undefined
+      const symbol = `${importPath}#${fn?.childForFieldName('field')?.text}`
+      const [first] = present(node.childForFieldName('arguments')?.namedChildren ?? [])
+      return importPath && this.keeps.has(symbol) ? this.stringValue(first, file) : undefined
+    }
+    let name: string | undefined
+    let dir: string | undefined
+    if (node.type === 'identifier' && !declaredAt(node.text, node)) {
+      name = node.text
+      dir = file.dir
+    } else if (node.type === 'selector_expression') {
+      const operand = node.childForFieldName('operand')
+      const importPath = operand ? this.packageOf(operand, file) : undefined
+      dir = importPath ? this.internalDir(importPath) : undefined
+      name = node.childForFieldName('field')?.text
+    }
+    if (!name || dir === undefined) return undefined
+    for (const other of this.filesIn(dir)) {
+      for (const top of present(other.tree.rootNode.namedChildren)) {
+        if (top.type !== 'const_declaration' && top.type !== 'var_declaration') continue
+        for (const spec of present(top.descendantsOfType(['const_spec', 'var_spec']))) {
+          const declared = names(spec)
+          const value = spec.childForFieldName('value')?.namedChildren[declared.indexOf(name)]
+          if (declared.includes(name) && value) return this.stringValue(value, other)
+        }
+      }
+    }
+    return undefined
   }
 
   // The declared type of a field `x.f`, as written, when `x` is a struct of the module.

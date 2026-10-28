@@ -1,0 +1,12 @@
+# chi itself: its request surface is each exported function and method that reads the request,
+# directly or through what it calls, such as `middleware.RealIP` reading `X-Forwarded-For`, and
+# each of its internal handlers, such as the router's own `routeHTTP`.
+name: chi
+kind: framework
+language: go
+extends: [net-http]
+detect:
+  module: [github.com/go-chi/chi/v5, github.com/go-chi/chi]
+surface:
+  exported: true
+  handlers: true

@@ -9,6 +9,12 @@
 fluent:
   - gorm.io/gorm#DB
 
+# Functions that return their string argument normalised, so that what they return is still
+# known: `http.CanonicalHeaderKey("True-Client-IP")`.
+keeps:
+  - net/http#CanonicalHeaderKey
+  - net/textproto#CanonicalMIMEHeaderKey
+
 # The type a function outside the module returns first, for the chains that start from it:
 # `json.NewDecoder(r.Body).Decode(&v)`.
 returns:

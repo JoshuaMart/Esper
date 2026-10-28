@@ -6,6 +6,7 @@ language: go
 detect:
   import: [net/http]
 request: net/http#Request
+response: net/http#ResponseWriter
 handlers:
   adapters: [net/http#HandlerFunc]
 routers:

@@ -92,7 +92,9 @@ export function declFacts(
       for (const decl of present(other.tree.rootNode.namedChildren)) {
         if (decl.type !== 'var_declaration') continue
         for (const spec of present(decl.descendantsOfType('var_spec'))) {
-          for (const name of spec.childrenForFieldName('name')) packageVars.add(name.text)
+          for (const name of spec.childrenForFieldName('name')) {
+            if (name.text !== '_') packageVars.add(name.text)
+          }
         }
       }
     }

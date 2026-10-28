@@ -61,8 +61,10 @@ export interface Profile {
   extends?: string[]
   detect: { dependency?: string[]; module?: string[]; import?: string[] }
   request?: string
+  response?: string
   handlers?: { adapters?: string[] }
   routers?: RouterSpec[]
+  surface?: { exported?: boolean; handlers?: boolean }
   guards?: GuardRule[]
   reads?: ReadRule[]
 }
@@ -76,8 +78,10 @@ export interface ResolvedProfile {
   // The profile and every profile it extends, as `<name>/<kind>`.
   sources: string[]
   request?: string
+  response?: string
   adapters: string[]
   routers: RouterSpec[]
+  surface: { exported: boolean; handlers: boolean }
   guards: GuardRule[]
   reads: ReadRule[]
 }
@@ -130,7 +134,7 @@ export async function loadProfiles(dir: string): Promise<Profile[]> {
   return profiles
 }
 
-// Resolves a profile's `extends`, by name among profiles of the same kind.
+// Resolves a profile's `extends`, by name.
 export function resolveProfile(profile: Profile, all: Profile[]): ResolvedProfile {
   const chain: Profile[] = []
   const visit = (p: Profile, path: string[]) => {
@@ -138,7 +142,11 @@ export function resolveProfile(profile: Profile, all: Profile[]): ResolvedProfil
       throw new ProfileError(`${p.name}: extends itself through ${path.join(' → ')}`)
     }
     for (const name of p.extends ?? []) {
-      const parent = all.find((other) => other.name === name && other.kind === p.kind)
+      // A profile of the same kind, or else of the other: a framework profile can take the
+      // request type and its reads from an application profile.
+      const parent =
+        all.find((other) => other.name === name && other.kind === p.kind) ??
+        all.find((other) => other.name === name)
       if (!parent) throw new ProfileError(`${p.name}: extends unknown profile ${name}`)
       visit(parent, [...path, p.name])
     }
@@ -147,6 +155,7 @@ export function resolveProfile(profile: Profile, all: Profile[]): ResolvedProfil
   visit(profile, [])
   // The nearest profile's request type wins; lists add up, the extended profiles' first.
   const request = [...chain].reverse().find((p) => p.request)?.request
+  const response = [...chain].reverse().find((p) => p.response)?.response
   return {
     name: profile.name,
     kind: profile.kind,
@@ -154,8 +163,13 @@ export function resolveProfile(profile: Profile, all: Profile[]): ResolvedProfil
     detect: profile.detect,
     sources: chain.map((p) => `${p.name}/${p.kind}`),
     ...(request ? { request } : {}),
+    ...(response ? { response } : {}),
     adapters: chain.flatMap((p) => p.handlers?.adapters ?? []),
     routers: chain.flatMap((p) => p.routers ?? []),
+    surface: {
+      exported: profile.surface?.exported ?? false,
+      handlers: profile.surface?.handlers ?? false,
+    },
     guards: chain.flatMap((p) => p.guards ?? []),
     reads: chain.flatMap((p) => p.reads ?? []),
   }

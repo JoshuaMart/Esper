@@ -16,6 +16,7 @@ export interface Sink {
 export interface Library {
   fluent: Set<string>
   returns: Map<string, string>
+  keeps: Set<string>
   // By external reference: `ext:database/sql#DB.Query`.
   sinks: Map<string, Sink>
   writes: Set<string>
@@ -26,6 +27,7 @@ export interface Library {
 interface LibraryFile {
   fluent?: string[]
   returns?: Record<string, string>
+  keeps?: string[]
   sinks?: Partial<Record<SinkKind, string[]>>
   data?: { write?: string[]; read?: string[] }
   decoders?: string[]
@@ -54,6 +56,7 @@ export function loadLibrary(language: LanguageName): Promise<Library> {
       return {
         fluent: new Set(file.fluent ?? []),
         returns: new Map(Object.entries(file.returns ?? {})),
+        keeps: new Set(file.keeps ?? []),
         sinks,
         writes: new Set((file.data?.write ?? []).map(ext)),
         reads: new Set((file.data?.read ?? []).map(ext)),

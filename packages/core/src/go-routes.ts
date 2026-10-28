@@ -71,21 +71,7 @@ const defaultArgs: Record<RouterMethod['does'], ArgRole[]> = {
 // itself in `${…}`, so that the route is kept and says what it could not read.
 function pathOf(program: GoProgram, node: Node | undefined, file: ParsedFile): string {
   if (!node) return `\${?}`
-  if (node.type === 'interpreted_string_literal' || node.type === 'raw_string_literal') {
-    return node.text.slice(1, -1)
-  }
-  if (node.type === 'identifier' && !declaredAt(node.text, node)) {
-    for (const other of program.filesIn(file.dir)) {
-      for (const spec of present(other.tree.rootNode.descendantsOfType('const_spec'))) {
-        const names = spec.childrenForFieldName('name').map((n) => n.text)
-        const value = spec.childForFieldName('value')?.namedChildren[names.indexOf(node.text)]
-        if (names.includes(node.text) && value?.type.endsWith('string_literal')) {
-          return value.text.slice(1, -1)
-        }
-      }
-    }
-  }
-  return `\${${node.text}}`
+  return program.stringValue(node, file) ?? `\${${node.text}}`
 }
 
 // A route pattern, normalised (D7): parameters as `{name}`, catch-alls as `{name...}`, no trailing

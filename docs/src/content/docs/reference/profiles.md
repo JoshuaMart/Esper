@@ -41,9 +41,10 @@ Symbols are written `<import path>#<symbol>`.
 | Field | What it says |
 |---|---|
 | `detect` | how the profile recognises its target: `dependency` for an application that requires the framework, `module` for the framework itself, `import` for a file that imports a package |
-| `request` | the request's type (`net/http#Request`), for the `chain` reads |
+| `request`, `response` | the request's type (`net/http#Request`), for the `chain` reads, and the type a handler writes to (`net/http#ResponseWriter`) |
 | `handlers.adapters` | conversions whose first argument is the handler (`net/http#HandlerFunc`), seen through |
 | `routers` | each kind of router: its types, the functions that `create` one, the package functions that register on a `default` one, its `pattern` syntax, and what each of its methods `does` |
+| `surface` | for a framework: `exported` makes each exported function and method that reaches a read of the request an entry point; `handlers` adds each function and method that takes a response writer and the request, exported or not |
 | `guards` | middleware that can refuse a request, by kind: `{ call: github.com/go-chi/chi/v5/middleware#BasicAuth, kind: authn }` |
 | `reads` | what reads the request: a `chain` of fields and calls on it, or a `call` to a function given it |
 
@@ -82,6 +83,38 @@ a call to `Query`, then a call to `Get`, whose first argument names what is read
 
 A `call` names a function and the positions of the request and of the name:
 `chi.URLParam(r, "id")` is `path.id`.
+
+## A framework's request surface
+
+A framework has no routes of its own ([D5](/decisions/#d5--two-kinds-of-target-applications-and-the-frameworks-themselves)).
+Its `framework` profile says what its entry points are instead:
+
+```yaml
+name: chi
+kind: framework
+language: go
+extends: [net-http]        # an application profile, for the request type and its reads
+detect:
+  module: [github.com/go-chi/chi/v5]
+surface:
+  exported: true
+  handlers: true
+```
+
+Each entry point is `entry:<reference>`. It has a `handles` edge to its declaration, and the reads
+and signals of what it reaches. A read's name is resolved through constants and package variables,
+and through the functions that `library.yaml` says return their argument normalised:
+`var xRealIP = http.CanonicalHeaderKey("X-Real-IP")` makes `r.Header.Get(xRealIP)` read
+`header.X-Real-IP`.
+
+Measured on chi 5.3.2: 29 entry points.
+- 27 are exported middleware and methods, among them `middleware.RealIP`, which reads
+  `header.True-Client-IP`, `header.X-Forwarded-For` and `header.X-Real-IP` and rewrites the
+  request's `RemoteAddr` (`retained-mutation`).
+- 2 are the router's own handlers: `Mux.ServeHTTP` and `Mux.routeHTTP`, the latter reached only
+  through a handler the router builds at run time.
+
+Every signal on them was checked by hand.
 
 ## How routes are read
 

@@ -21,7 +21,7 @@
       "type": "string"
     },
     "extends": {
-      "description": "Profiles whose request type, handler adapters, routers and reads also apply.",
+      "description": "Profiles whose request type, handler adapters, routers, guards and reads also apply: a profile of the same kind when there is one, otherwise of the other kind.",
       "type": "array",
       "items": {
         "type": "string"
@@ -48,6 +48,10 @@
       "description": "The type of the incoming request, as `<import path>#<Type>`.",
       "$ref": "#/$defs/symbol"
     },
+    "response": {
+      "description": "The type a handler writes its response to, as `<import path>#<Type>`.",
+      "$ref": "#/$defs/symbol"
+    },
     "handlers": {
       "type": "object",
       "additionalProperties": false,
@@ -65,6 +69,19 @@
       "type": "array",
       "items": {
         "$ref": "#/$defs/router"
+      }
+    },
+    "surface": {
+      "description": "For a framework: what its request surface is. `exported` makes each exported function, and each exported method of an exported type, an entry point when what it reaches reads the request. `handlers` makes each function and method that takes a response writer and the request an entry point, exported or not: the framework's internal handlers.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "exported": {
+          "type": "boolean"
+        },
+        "handlers": {
+          "type": "boolean"
+        }
       }
     },
     "guards": {
