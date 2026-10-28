@@ -196,3 +196,19 @@ test('an import is read from import declarations, not from comments or strings',
   )
   assert.ok('refused' in refused)
 })
+
+test('a ref is refused in one line when it looks like an option or names nothing', async () => {
+  const { dir } = await repository()
+  try {
+    for (const ref of ['--output=/tmp/x', '-n', '', 'a b']) {
+      await assert.rejects(readRef(dir, ref), { name: 'Error', message: /is not a git ref/ })
+    }
+    await assert.rejects(readRef(dir, 'nope'), (error: Error) => {
+      assert.equal(error.message, 'nope is not a commit, tag or branch of the repository')
+      assert.ok(!error.message.includes(dir))
+      return true
+    })
+  } finally {
+    await rm(dir, { recursive: true })
+  }
+})

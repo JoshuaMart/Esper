@@ -10,24 +10,41 @@ built. The source of truth is the code: `packages/core/src/graph.ts` for the mod
 ## Tables
 
 One database per project ([D9](/decisions/#d9--storage-one-sqlite-database-per-project-outside-the-target)),
-schema version **1**, recorded in `meta`. A database of another version is refused rather than
+schema version **3**, recorded in `meta`. A database of another version is refused rather than
 read.
 
 | Table | One row per | Columns |
 |---|---|---|
-| `snapshots` | indexed version of the target | `id`, `ref` (the git ref asked for), `commit_sha`, `dirty`, `created_at`, `schema_version`, `profiles` (JSON list) |
+| `snapshots` | indexed version of the target | `id`, `ref` (the git ref asked for), `commit_sha`, `dirty`, `created_at`, `schema_version`, `profiles` (JSON list), `indexer` (what indexed it, hashed) |
 | `files` | file read | `path`, `hash` (SHA-256 of its content), `language` |
 | `skips` | folder or file skipped | `path`, `reason` |
 | `nodes` | node | `ref`, `kind`, `name`, `file`, `start_line`, `end_line`, `fingerprint`, `data` (JSON) |
 | `edges` | edge | `kind`, `from_ref`, `to_ref`, `file`, `line`, `source`, `data` (JSON) |
 | `facts` | fact on a node | `node_ref`, `kind`, `value`, `file`, `line`, `source`, `data` (JSON) |
+| `contents` | file text | `hash`, as in `files`, and `text` |
 
-Every row but `meta`'s carries its `snapshot_id`, and deleting a snapshot deletes its rows. An edge
-or a fact without a `file` and a `line` cannot be stored: the columns are `NOT NULL`.
+Every row of these but `contents`' carries its `snapshot_id`, and deleting a snapshot deletes its
+rows. An edge or a fact without a `file` and a `line` cannot be stored: the columns are `NOT NULL`.
+The text of each file read is stored once, by its hash, for the snapshots that hold it: code is read
+back from the snapshot (`esper_read`, a node's excerpt), never from the target, whose checkout may
+have changed since.
+
+[Notes](/reference/notes/) have their own tables, which no snapshot owns:
+
+| Table | One row per | Columns |
+|---|---|---|
+| `notes` | note, as it now is | `id`, `kind`, `status`, `body`, `citations` (JSON list), `author`, `created_at`, `updated_at`, `revision`, `snapshot_id` (the snapshot it is anchored on), `deleted_at`, `deleted_by`, `deleted_reason` |
+| `note_anchors` | anchor of a note | `note_id`, `position`, `ref`, `kind`, `fingerprint` |
+| `note_revisions` | revision of a note | `note_id`, `revision`, `action` (`create`, `update`, `delete`), `author`, `at`, `content` (the note then, as JSON) |
 
 ## Conventions
 
 - **Paths** are relative to the target's root, with `/`. **Lines** are 1-based.
+- **Fingerprints** are the SHA-256 of a node's tree-sitter tokens, comments left out
+  ([D7](/decisions/#d7--stable-references-and-fingerprints)). A declaration's own name is left out
+  too, so that a function renamed without other change keeps its fingerprint
+  ([D21](/decisions/#d21--a-declarations-fingerprint-leaves-its-name-out)); a file's covers the
+  whole file.
 - **Order.** A snapshot is written in canonical order: files, skips and nodes by path or
   reference, edges by kind, ends and citation, facts by node, kind, value and citation. The same code
   gives the same rows, whatever order its files were read in.

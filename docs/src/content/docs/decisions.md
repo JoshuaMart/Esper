@@ -29,6 +29,7 @@ says why. Versions and behaviours cited here were checked on 2026-10-28.
 | [D18](#d18--running-esper-one-home-many-projects) | Running Esper: one home, many projects, one project per MCP connection | settled |
 | [D19](#d19--past-vulnerabilities-advisories-linked-to-the-code-they-touched) | Past vulnerabilities: advisories of medium severity or more, linked to the code their fix touched | settled |
 | [D20](#d20--a-reindex-reads-the-whole-target) | A reindex reads the whole target; an unchanged commit is not indexed again | settled |
+| [D21](#d21--a-declarations-fingerprint-leaves-its-name-out) | A declaration's fingerprint leaves its own name out | settled |
 
 ## D1 — What Esper is and is not
 
@@ -249,7 +250,8 @@ targets. The snapshot is what makes notes and diffs between versions possible.
   - **A read** is named by the node that makes it and the read: `route:GET /users/{id}@path.id`.
     This is how a dataflow question names its start
     ([D12](#d12--precision-scip-right-after-the-first-index-dataflow-later)).
-- The fingerprint is the SHA-256 of the node's tree-sitter tokens, comments and whitespace left out.
+- The fingerprint is the SHA-256 of the node's tree-sitter tokens, comments and whitespace left out,
+  and a declaration's own name too ([D21](#d21--a-declarations-fingerprint-leaves-its-name-out)).
   An entry's fingerprint also covers its chain and its handler.
 
 **Why.** Findings, coverage and notes cite nodes, and must survive a reindex. The reference answers
@@ -797,3 +799,25 @@ indexed again: `esper index` says which snapshot already holds it, and `--force`
 
 **Rules out.** Reusing facts from a previous snapshot for files that did not change.
 
+## D21 — A declaration's fingerprint leaves its name out
+
+This amends the fingerprint of [D7](#d7--stable-references-and-fingerprints), which hashed every
+token of a node, the declaration's own name included.
+
+**Decision.** A declaration's fingerprint leaves out the identifier that names it: `func Audit(…)`
+and `func Record(…)` with the same parameters and body have the same fingerprint. Every other token
+counts, the receiver of a method and a call of the function to itself included. A file's
+fingerprint still covers the whole file.
+
+**Why.**
+- **What D7 promised.** The reference answers "is it the same node?" and the fingerprint "has its
+  code changed?", so that "a note can move with a renamed function". With the name inside the
+  fingerprint, a rename changes both, and a note on the function is `orphaned` rather than `moved`
+  ([D8](#d8--notes)). Found while building the anchor states in M2.
+- **Copies are told apart.** Leaving the name out gives functions with the same body the same
+  fingerprint (chi's pass-through middleware, for one). An anchor moves only onto a node that was
+  not already there with that code when the note was anchored, so a sibling with the same body is
+  never taken for the renamed one ([notes](/reference/notes/#anchors-after-a-reindex)).
+
+**Rules out.** Matching a renamed function by its name or position, which would move notes onto
+code that only looks alike.

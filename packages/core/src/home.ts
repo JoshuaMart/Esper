@@ -4,7 +4,9 @@ import { homedir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
 import pkg from '../package.json' with { type: 'json' }
 import { detectProfile } from './detect.ts'
+import { EsperError } from './errors.ts'
 import { type IndexStats, indexGo } from './go-index.ts'
+import { type AnchorState, Notes } from './notes.ts'
 import { loadProfiles } from './profile.ts'
 import { Store } from './store.ts'
 import { cloneTarget, isGitRepository, readFolder, readRef, type TargetSnapshot } from './target.ts'
@@ -12,13 +14,13 @@ import { cloneTarget, isGitRepository, readFolder, readRef, type TargetSnapshot 
 // Esper's home (D18): one folder per project, holding its settings and its database, and the
 // clone of a target added by URL. Nothing is ever written to a target added by path.
 
+export { EsperError }
+
 export interface Project {
   name: string
   source: { path: string } | { url: string }
   kind?: 'application' | 'framework'
 }
-
-export class EsperError extends Error {}
 
 export const profilesDir = new URL('../../../profiles', import.meta.url).pathname
 
@@ -120,13 +122,16 @@ export class Home {
     stats?: IndexStats
     profiles: string[]
     unchanged?: boolean
+    // How the project's notes stand on the snapshot, by anchor state (D8).
+    notes: Record<AnchorState, number>
   }> {
     const project = await this.project(name)
     const dir = this.sourceDir(project)
-    if (options.ref && !(await isGitRepository(dir))) {
+    if (options.ref !== undefined && !(await isGitRepository(dir))) {
       throw new EsperError(`--ref needs a git repository, and ${dir} is not one`)
     }
-    const snapshot = options.ref ? await readRef(dir, options.ref) : await readFolder(dir)
+    const snapshot =
+      options.ref !== undefined ? await readRef(dir, options.ref) : await readFolder(dir)
     const detection = detectProfile(snapshot.files, await loadProfiles(profilesDir), {
       ...(project.kind ? { kind: project.kind } : {}),
     })
@@ -149,7 +154,13 @@ export class Home {
               (s.ref ?? undefined) === snapshot.ref,
           )
         if (same) {
-          return { id: same.id, snapshot, profiles: detection.profile.sources, unchanged: true }
+          return {
+            id: same.id,
+            snapshot,
+            profiles: detection.profile.sources,
+            unchanged: true,
+            notes: new Notes(store).summary(same.id),
+          }
         }
       } finally {
         store.close()
@@ -169,15 +180,17 @@ export class Home {
         dirty: snapshot.dirty,
         profiles: detection.profile.sources,
         indexer,
+        sources: goFiles,
       }
       const { id, existed } = options.force
         ? { id: store.addSnapshot(graph, info), existed: false }
         : store.addSnapshotOnce(graph, info)
+      const notes = new Notes(store).summary(id)
       // Another index of the same commit finished first: its snapshot is the one kept.
       if (existed) {
-        return { id, snapshot, profiles: detection.profile.sources, unchanged: true }
+        return { id, snapshot, profiles: detection.profile.sources, unchanged: true, notes }
       }
-      return { id, snapshot, stats, profiles: detection.profile.sources }
+      return { id, snapshot, stats, profiles: detection.profile.sources, notes }
     } finally {
       store.close()
     }

@@ -8,9 +8,10 @@ served to hunting agents over MCP and explorable in a web interface.
 > and bring out what nobody had seen.
 
 **Status: early development.** The documentation describes the target design.
-[M1](docs/src/content/docs/roadmap.md#m1--the-core-on-go-and-chi) is done: Go applications on chi
-or `net/http`, and chi itself, can be indexed from the command line. Next is
-[M2](docs/src/content/docs/roadmap.md#m2--mcp-and-notes), MCP and notes.
+[M2](docs/src/content/docs/roadmap.md#m2--mcp-and-notes) is done: Go applications on chi or
+`net/http`, and chi itself, can be indexed from the command line and served to an agent over MCP
+(`esper mcp <project>`), whose notes survive a reindex. Next is
+[M3](docs/src/content/docs/roadmap.md#m3--scip-for-go), SCIP for Go.
 
 ## Documentation
 

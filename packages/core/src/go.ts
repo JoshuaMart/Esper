@@ -838,6 +838,7 @@ export class GoProgram {
       }
 
       for (const decl of file.decls) {
+        const named = decl.node.childForFieldName('name')
         const node: GraphNode = {
           ref: decl.ref,
           kind: 'decl',
@@ -845,7 +846,9 @@ export class GoProgram {
           file: file.path,
           startLine: line(decl.node),
           endLine: decl.node.endPosition.row + 1,
-          fingerprint: fingerprint(decl.node, isComment),
+          // Its own name is left out, so that a function renamed without other change is found
+          // again by its code, and the notes on it follow it (D7).
+          fingerprint: fingerprint(decl.node, (n) => isComment(n) || n.id === named?.id),
         }
         if (decl.node.type === 'func_literal') node.data = { literal: true }
         graph.nodes.push(node)

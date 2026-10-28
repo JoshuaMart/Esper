@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto'
 import { lstat, readdir, readFile } from 'node:fs/promises'
 import { join, posix } from 'node:path'
 import { promisify } from 'node:util'
+import { EsperError } from './errors.ts'
 import type { Skip } from './graph.ts'
 
 // Reading a target (D11): its files, from a folder as it is or from a git ref, and what is skipped.
@@ -182,7 +183,17 @@ export async function readFolder(dir: string): Promise<TargetSnapshot> {
 
 // A git ref, read from the object database: the checkout is not touched.
 export async function readRef(dir: string, ref: string): Promise<TargetSnapshot> {
-  const commit = (await git(dir, ['rev-parse', '--verify', `${ref}^{commit}`])).trim()
+  // A ref is a name for git, never an option: `--output=…` must not reach its command line.
+  if (ref === '' || /^-|[\0-\x20\x7f]/.test(ref)) {
+    throw new EsperError(`${JSON.stringify(ref)} is not a git ref`)
+  }
+  // A ref that does not exist is a refusal said in one line, not git's own error, which names
+  // the folder and the command.
+  const commit = (
+    await git(dir, ['rev-parse', '--verify', '--end-of-options', `${ref}^{commit}`]).catch(() => {
+      throw new EsperError(`${ref} is not a commit, tag or branch of the repository`)
+    })
+  ).trim()
   // Paths are relative to the project's folder, which may be a subfolder of the repository.
   const entries = (await git(dir, ['ls-tree', '-r', '-z', commit])).split('\0').filter(Boolean)
   const modes = new Map<string, string>()

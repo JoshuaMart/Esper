@@ -12,7 +12,7 @@ counted by hand, with none missing and none invented.
 |---|---|---|---|
 | [M0](#m0--the-workspace) | The workspace | the workspace type-checks, lints and tests in CI | done |
 | [M1](#m1--the-core-on-go-and-chi) | The core, on Go and chi | chi and Wakapi pass their hand count | done |
-| [M2](#m2--mcp-and-notes) | MCP and notes | an agent hunts chi over MCP and its notes survive a reindex | not started |
+| [M2](#m2--mcp-and-notes) | MCP and notes | an agent hunts chi over MCP and its notes survive a reindex | done |
 | [M3](#m3--scip-for-go) | SCIP for Go | the first analyzer runs through the contract; guessed edges drop | not started |
 | [M4](#m4--typescript-and-hono) | TypeScript and Hono | Hono and Kaneo pass their hand count | not started |
 | [M5](#m5--the-server-and-the-web-interface) | The server and the web interface | an audit can be followed and annotated in the browser | not started |
@@ -86,6 +86,12 @@ snapshots (`esper_snapshots`, `esper_diff`).
   or `orphaned`, none is lost, and `esper_diff` lists the notes whose state changed;
 - every answer is bounded and says when it was cut;
 - a read-only connection exposes no write tool.
+
+Each is a test: chi 5.3.2 hunted over stdio through `esper mcp` (`packages/cli/test/mcp.test.ts`),
+a chi application reindexed on a second version with a changed, a renamed and a removed function
+(`packages/mcp/test/tools.test.ts`), and the anchor rules on their own
+(`packages/core/test/notes.test.ts`). The tools, their schemas and bounds are in the
+[MCP reference](/reference/mcp/), the notes in [Notes](/reference/notes/).
 
 ## M3 — SCIP for Go
 

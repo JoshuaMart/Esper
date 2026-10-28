@@ -10,6 +10,8 @@ Commands:
   index <project>         index a snapshot of it; --ref <git ref> reads that ref, not the checkout;
                           --force indexes a commit already indexed
   list                    the projects and their snapshots
+  mcp <project>           serve the project over MCP on stdio; --read-only exposes no tool
+                          that writes
 
 Options:
   --version  print the version
@@ -24,6 +26,7 @@ const options = {
   kind: { type: 'string' },
   ref: { type: 'string' },
   force: { type: 'boolean' },
+  'read-only': { type: 'boolean' },
   version: { type: 'boolean' },
   help: { type: 'boolean' },
 } as const
@@ -31,6 +34,7 @@ const commands: Record<string, (keyof typeof options)[]> = {
   add: ['name', 'kind'],
   index: ['ref', 'force'],
   list: [],
+  mcp: ['read-only'],
 }
 
 function fail(message: string, code = 2): never {
@@ -87,7 +91,7 @@ async function main() {
     const [name] = rest
     if (!name || rest.length > 1) fail('index takes one project name')
     const ref = values.ref
-    const { id, snapshot, stats, profiles, unchanged } = await home.index(name, {
+    const { id, snapshot, stats, profiles, unchanged, notes } = await home.index(name, {
       ...(ref ? { ref } : {}),
       ...(values.force ? { force: true } : {}),
     })
@@ -97,10 +101,15 @@ async function main() {
       snapshot.dirty ? 'dirty' : undefined,
     ].filter(Boolean)
     const label = `${name}: snapshot ${id}${version.length > 0 ? ` (${version.join(', ')})` : ''}`
+    const states = Object.entries(notes)
+      .filter(([, n]) => n > 0)
+      .map(([state, n]) => `${n} ${state}`)
+    const noteLine = `  notes        ${states.length > 0 ? states.join(', ') : 'none'}`
     if (unchanged || !stats) {
       console.log(
         `${label} already indexes this commit with these profiles; --force indexes it again`,
       )
+      if (states.length > 0) console.log(noteLine)
       return
     }
     const edges = stats.resolved + stats.guessed
@@ -124,6 +133,16 @@ async function main() {
       `  call edges   ${edges}, ${percent(stats.resolved, edges)} % resolved; ${stats.unresolved} calls without an edge`,
     )
     console.log(`  reads        ${stats.reads}, signals on entry points ${stats.signals}`)
+    console.log(noteLine)
+    return
+  }
+
+  if (command === 'mcp') {
+    const [name] = rest
+    if (!name || rest.length > 1) fail('mcp takes one project name')
+    // Loaded here: the other commands do not need the MCP SDK.
+    const { serve } = await import('@esper/mcp')
+    await serve(home, name, { readOnly: values['read-only'] ?? false })
     return
   }
 

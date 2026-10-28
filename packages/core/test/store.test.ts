@@ -69,3 +69,25 @@ test('a snapshot of a commit already stored by the same indexer is not stored tw
   assert.equal(store.addSnapshotOnce(await shop(), { ...info, dirty: true }).existed, false)
   store.close()
 })
+
+test('a database of another schema is refused before anything is written to it', async () => {
+  const { mkdtemp, rm } = await import('node:fs/promises')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const { DatabaseSync } = await import('node:sqlite')
+  const dir = await mkdtemp(join(tmpdir(), 'esper-store-'))
+  const path = join(dir, 'esper.db')
+  const old = new DatabaseSync(path)
+  old.exec(`CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+    INSERT INTO meta VALUES ('schema_version', '2')`)
+  old.close()
+  assert.throws(() => new Store(path), /has schema 2, and this Esper reads schema 3/)
+  const db = new DatabaseSync(path)
+  const tables = db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table'`).all()
+  assert.deepEqual(
+    tables.map((t) => t.name),
+    ['meta'],
+  )
+  db.close()
+  await rm(dir, { recursive: true })
+})

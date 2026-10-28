@@ -12,7 +12,8 @@
     "test": "node --test \"packages/*/test/**/*.test.ts\"",
     "esper": "node packages/cli/src/main.ts",
     "docs": "pnpm --filter @esper/docs dev",
-    "fetch-targets": "node scripts/fetch-targets.ts"
+    "fetch-targets": "node scripts/fetch-targets.ts",
+    "reference": "node scripts/reference.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.3",

@@ -13,6 +13,7 @@ lists those that exist. From the repository, `pnpm esper <command>` runs them fr
 | `esper add <path or git URL>` | adds a project. A path is read in place and never written; a URL is cloned into the project's folder. `--name` sets its name (by default, the folder's or the repository's), `--kind application\|framework` overrides the detection |
 | `esper index <project>` | indexes a snapshot. Without options, it reads the folder as it is. With `--ref <tag, branch or commit>`, it reads that ref from git and leaves the checkout alone. A clean commit already indexed with the same profiles is not indexed again; `--force` does it anyway |
 | `esper list` | the projects, and the snapshots of each |
+| `esper mcp <project>` | serves the project over MCP on stdio, for one agent ([MCP tools](/reference/mcp/)). `--read-only` exposes no tool that writes |
 
 An unknown option is refused, as is an option of another command. A refusal exits with code 1 and
 says why; a mistake in the command line exits with code 2.
@@ -30,7 +31,11 @@ chi: snapshot 2 (v5.3.2, 38939062c5df)
   entry points 40
   call edges   540, 94.4 % resolved; 106 calls without an edge
   reads        55, signals on entry points 10
+  notes        2 attached, 1 stale
 ```
+
+The last line says how the project's [notes](/reference/notes/) stand on the new snapshot, by
+anchor state.
 
 ## Where projects live
 

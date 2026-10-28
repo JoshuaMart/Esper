@@ -19,5 +19,8 @@
     "@esper/core": "workspace:*",
     "@esper/mcp": "workspace:*",
     "@esper/server": "workspace:*"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/client": "2.4.0"
   }
 }

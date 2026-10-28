@@ -192,7 +192,8 @@ flowchart TB
 ## Notes across versions
 
 A note is attached to a node's reference, with the fingerprint the node had when the note was
-written ([D8](/decisions/#d8--notes)). Each new snapshot checks every anchor:
+written ([D8](/decisions/#d8--notes)). Each new snapshot checks every anchor
+([Notes](/reference/notes/#anchors-after-a-reindex)):
 
 ```mermaid
 flowchart LR

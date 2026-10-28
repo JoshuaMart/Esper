@@ -1,10 +1,13 @@
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
+import { EsperError } from './errors.ts'
 import { canonical, type Graph, type GraphNode, schemaVersion } from './graph.ts'
+import { hashText } from './refs.ts'
 
-// One database per project (D9). Snapshots are rebuilt from the code; claims and notes, added in
-// later milestones, live in their own tables.
+// One database per project (D9). Snapshots are rebuilt from the code, notes from nothing: they
+// live in their own tables, which no snapshot owns, so that deleting a snapshot never takes a note
+// with it. Claims come in a later milestone.
 const schema = `
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS snapshots (
@@ -65,6 +68,42 @@ CREATE TABLE IF NOT EXISTS facts (
 );
 CREATE INDEX IF NOT EXISTS facts_node ON facts (snapshot_id, node_ref);
 CREATE INDEX IF NOT EXISTS facts_kind ON facts (snapshot_id, kind, value);
+CREATE INDEX IF NOT EXISTS nodes_fingerprint ON nodes (snapshot_id, kind, fingerprint);
+-- What each file of a snapshot says, by its hash in files, shared by the snapshots that hold it:
+-- reading a snapshot's code never reads the target, which may have changed since.
+CREATE TABLE IF NOT EXISTS contents (hash TEXT PRIMARY KEY, text TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS notes (
+  id INTEGER PRIMARY KEY,
+  kind TEXT NOT NULL,
+  status TEXT,
+  body TEXT NOT NULL,
+  citations TEXT NOT NULL,
+  author TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  revision INTEGER NOT NULL,
+  snapshot_id INTEGER NOT NULL,
+  deleted_at TEXT,
+  deleted_by TEXT,
+  deleted_reason TEXT
+);
+CREATE TABLE IF NOT EXISTS note_anchors (
+  note_id INTEGER NOT NULL REFERENCES notes(id),
+  position INTEGER NOT NULL,
+  ref TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  fingerprint TEXT,
+  PRIMARY KEY (note_id, position)
+);
+CREATE TABLE IF NOT EXISTS note_revisions (
+  note_id INTEGER NOT NULL REFERENCES notes(id),
+  revision INTEGER NOT NULL,
+  action TEXT NOT NULL,
+  author TEXT NOT NULL,
+  at TEXT NOT NULL,
+  content TEXT NOT NULL,
+  PRIMARY KEY (note_id, revision)
+);
 `
 
 export interface SnapshotInfo {
@@ -85,6 +124,34 @@ export interface NewSnapshot {
   profiles?: string[]
   createdAt?: string
   indexer?: string
+  // The text of the graph's files, stored with the snapshot so that its code can be read back.
+  sources?: { path: string; source: string }[]
+}
+
+export interface SnapshotCounts {
+  files: number
+  nodes: number
+  entries: number
+  edges: number
+  facts: number
+}
+
+const snapshotInfo = (row: Record<string, unknown>): SnapshotInfo => ({
+  id: Number(row.id),
+  ref: (row.ref as string | null) ?? null,
+  commit: (row.commit_sha as string | null) ?? null,
+  dirty: row.dirty === 1,
+  createdAt: String(row.created_at),
+  profiles: JSON.parse(String(row.profiles)) as string[],
+  indexer: (row.indexer as string | null) ?? null,
+})
+
+// The lines of a file, as an editor numbers them: a file that ends with a newline has no line
+// after it.
+export function textLines(text: string): string[] {
+  const all = text.split('\n')
+  if (all.at(-1) === '') all.pop()
+  return all
 }
 
 const json = (value: unknown) => (value === undefined ? null : JSON.stringify(value))
@@ -99,17 +166,26 @@ export class Store {
     this.db = new DatabaseSync(path)
     // Several processes write to one project (agents, the server): a writer waits for the lock
     // rather than failing at once.
-    this.db.exec('PRAGMA busy_timeout = 5000; PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;')
-    this.db.exec(schema)
-    const version = this.db.prepare(`SELECT value FROM meta WHERE key = 'schema_version'`).get()
-    if (!version) {
-      this.db
-        .prepare(`INSERT INTO meta (key, value) VALUES ('schema_version', ?)`)
-        .run(String(schemaVersion))
-    } else if (Number(version.value) !== schemaVersion) {
-      throw new Error(
+    this.db.exec('PRAGMA busy_timeout = 5000;')
+    // A database of another schema is refused before anything is written to it.
+    const meta = this.db
+      .prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'meta'`)
+      .get()
+    const version = meta
+      ? this.db.prepare(`SELECT value FROM meta WHERE key = 'schema_version'`).get()
+      : undefined
+    if (version && Number(version.value) !== schemaVersion) {
+      this.db.close()
+      throw new EsperError(
         `${path} has schema ${String(version.value)}, and this Esper reads schema ${schemaVersion}: index the project into a new home`,
       )
+    }
+    this.db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;')
+    this.db.exec(schema)
+    if (!version) {
+      this.db
+        .prepare(`INSERT OR IGNORE INTO meta (key, value) VALUES ('schema_version', ?)`)
+        .run(String(schemaVersion))
     }
   }
 
@@ -131,8 +207,7 @@ export class Store {
 
   private write(graph: Graph, info: NewSnapshot, once: boolean): { id: number; existed: boolean } {
     const g = canonical(graph)
-    this.db.exec('BEGIN IMMEDIATE')
-    try {
+    return this.transaction(() => {
       if (once && info.commit && !info.dirty) {
         const existing = this.db
           .prepare(
@@ -140,10 +215,7 @@ export class Store {
              ORDER BY id DESC LIMIT 1`,
           )
           .get(info.commit, info.indexer ?? null, info.ref ?? null)
-        if (existing) {
-          this.db.exec('COMMIT')
-          return { id: Number(existing.id), existed: true }
-        }
+        if (existing) return { id: Number(existing.id), existed: true }
       }
       const { lastInsertRowid } = this.db
         .prepare(
@@ -162,6 +234,12 @@ export class Store {
       const id = Number(lastInsertRowid)
       const file = this.db.prepare(`INSERT INTO files VALUES (?, ?, ?, ?)`)
       for (const f of g.files) file.run(id, f.path, f.hash, f.language)
+      const content = this.db.prepare(`INSERT OR IGNORE INTO contents VALUES (?, ?)`)
+      const hashes = new Set(g.files.map((f) => f.hash))
+      for (const { source } of info.sources ?? []) {
+        const hash = hashText(source)
+        if (hashes.has(hash)) content.run(hash, source)
+      }
       const skip = this.db.prepare(`INSERT INTO skips VALUES (?, ?, ?)`)
       for (const s of g.skips) skip.run(id, s.path, s.reason)
       const node = this.db.prepare(`INSERT INTO nodes VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
@@ -195,12 +273,8 @@ export class Store {
           json(f.data),
         )
       }
-      this.db.exec('COMMIT')
       return { id, existed: false }
-    } catch (error) {
-      this.db.exec('ROLLBACK')
-      throw error
-    }
+    })
   }
 
   snapshots(): SnapshotInfo[] {
@@ -209,15 +283,60 @@ export class Store {
         `SELECT id, ref, commit_sha, dirty, created_at, profiles, indexer FROM snapshots ORDER BY id`,
       )
       .all()
-      .map((row) => ({
-        id: Number(row.id),
-        ref: (row.ref as string | null) ?? null,
-        commit: (row.commit_sha as string | null) ?? null,
-        dirty: row.dirty === 1,
-        createdAt: String(row.created_at),
-        profiles: JSON.parse(String(row.profiles)) as string[],
-        indexer: (row.indexer as string | null) ?? null,
-      }))
+      .map(snapshotInfo)
+  }
+
+  snapshot(id: number): SnapshotInfo | undefined {
+    const row = this.db
+      .prepare(
+        `SELECT id, ref, commit_sha, dirty, created_at, profiles, indexer FROM snapshots WHERE id = ?`,
+      )
+      .get(id)
+    return row ? snapshotInfo(row) : undefined
+  }
+
+  // The snapshot read when none is named: the last one written.
+  latest(): SnapshotInfo | undefined {
+    const row = this.db.prepare(`SELECT max(id) AS id FROM snapshots`).get()
+    return row?.id === null || row?.id === undefined ? undefined : this.snapshot(Number(row.id))
+  }
+
+  counts(id: number): SnapshotCounts {
+    const count = (sql: string) => Number(this.db.prepare(sql).get(id)?.n ?? 0)
+    return {
+      files: count(`SELECT count(*) AS n FROM files WHERE snapshot_id = ?`),
+      nodes: count(`SELECT count(*) AS n FROM nodes WHERE snapshot_id = ?`),
+      entries: count(`SELECT count(*) AS n FROM nodes WHERE snapshot_id = ? AND kind = 'entry'`),
+      edges: count(`SELECT count(*) AS n FROM edges WHERE snapshot_id = ?`),
+      facts: count(`SELECT count(*) AS n FROM facts WHERE snapshot_id = ?`),
+    }
+  }
+
+  // The text of a file of a snapshot: undefined when the snapshot does not hold the file, null
+  // when it holds it but its text was not given when the snapshot was written.
+  content(snapshotId: number, path: string): string | null | undefined {
+    const row = this.db
+      .prepare(
+        `SELECT contents.text AS text, files.hash AS hash FROM files
+         LEFT JOIN contents ON contents.hash = files.hash
+         WHERE files.snapshot_id = ? AND files.path = ?`,
+      )
+      .get(snapshotId, path)
+    if (!row) return undefined
+    return typeof row.text === 'string' ? row.text : null
+  }
+
+  // Runs `work` in one write transaction, waiting for the lock like any other writer.
+  transaction<T>(work: () => T): T {
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      const result = work()
+      this.db.exec('COMMIT')
+      return result
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
   }
 
   // Reads a snapshot back into the in-memory model, in canonical order.

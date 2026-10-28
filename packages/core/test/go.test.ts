@@ -104,3 +104,18 @@ test('default package names drop major versions', () => {
   assert.equal(defaultPackageName('gopkg.in/yaml.v3'), 'yaml')
   assert.equal(defaultPackageName('net/http'), 'http')
 })
+
+test("a declaration's fingerprint leaves its own name out, so that a renamed function is found again", async () => {
+  const print = async (source: string) => {
+    const { graph } = await extractGo([{ path: 'a.go', source }], { module: 'x' })
+    return graph.nodes.find((n) => n.kind === 'decl')?.fingerprint
+  }
+  const base = await print('package a\nfunc f() { g(1) }\n')
+  assert.equal(await print('package a\nfunc h() { g(1) }\n'), base)
+  assert.notEqual(await print('package a\nfunc f() { g(2) }\n'), base)
+  // A function that calls itself names itself in its body: renaming it changes its code.
+  assert.notEqual(
+    await print('package a\nfunc f() { f() }\n'),
+    await print('package a\nfunc h() { h() }\n'),
+  )
+})
