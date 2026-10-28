@@ -1,4 +1,4 @@
-/* Palette Blade Runner : cyan néon et ambre. */
+/* Blade Runner palette: neon cyan and amber. */
 :root {
 	--sl-color-accent-low: #083344;
 	--sl-color-accent: #0891b2;
@@ -8,4 +8,21 @@
 	--sl-color-accent-low: #cffafe;
 	--sl-color-accent: #0e7490;
 	--sl-color-accent-high: #164e63;
+}
+
+/* Hero mark: a soft neon glow. */
+.esper-mark {
+	filter: drop-shadow(0 0 1.5rem rgb(34 211 238 / 0.35));
+}
+
+/* Cards in the accent colour rather than a rainbow. */
+.card {
+	--sl-card-border: var(--sl-color-accent);
+	--sl-card-bg: var(--sl-color-accent-low);
+}
+
+.esper-lede {
+	font-size: var(--sl-text-lg);
+	color: var(--sl-color-gray-2);
+	max-width: 62ch;
 }
