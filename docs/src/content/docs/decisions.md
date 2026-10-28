@@ -27,6 +27,7 @@ says why. Versions and behaviours cited here were checked on 2026-10-28.
 | [D16](#d16--measured-against-hand-counted-targets) | Each profile measured against hand-counted targets | settled |
 | [D17](#d17--model-enrichment-claims-beside-the-facts) | Model enrichment: claims beside the facts, bounded first, exploring when needed | settled |
 | [D18](#d18--running-esper-one-home-many-projects) | Running Esper: one home, many projects, one project per MCP connection | settled |
+| [D19](#d19--past-vulnerabilities-advisories-linked-to-the-code-they-touched) | Past vulnerabilities: advisories of medium severity or more, linked to the code their fix touched | settled |
 
 ## D1 — What Esper is and is not
 
@@ -145,6 +146,7 @@ measured against a real target ([D16](#d16--measured-against-hand-counted-target
 | `decl` | a declaration: function, method, class, or a property holding a function (`actions.create`) |
 | `external` | a library callee, named by its import path, so that two importers share one node |
 | `entry` | an entry point: a route of an application, or an exported symbol of a library that reads the request |
+| `advisory` | a published vulnerability of the target (GHSA, CVE, GO…), imported from OSV ([D19](#d19--past-vulnerabilities-advisories-linked-to-the-code-they-touched)) |
 
 | Edge | From → to | Carries |
 |---|---|---|
@@ -153,6 +155,7 @@ measured against a real target ([D16](#d16--measured-against-hand-counted-target
 | `calls` | decl → decl or external | `resolved` or `guessed`, and the reason when guessed |
 | `handles` | entry → decl | the handler |
 | `chain` | entry → decl | the middleware in front of the handler, with its position |
+| `affects` | advisory → decl or file | the precision of the link, the fix commit, and whether the node changed since the fix ([D19](#d19--past-vulnerabilities-advisories-linked-to-the-code-they-touched)) |
 | `flows` | read or decl → sink | that a value flows from one to the other, with each step cited; filled by a dataflow analyzer ([D12](#d12--precision-scip-right-after-the-first-index-dataflow-later)) |
 
 Facts sit on nodes: an entry's method and path, its **reads** (`header`, `query`, `path`, `body`,
@@ -349,7 +352,8 @@ Streamable HTTP for the rest. Tools:
 |---|---|
 | `esper_index` | index or reindex a target; returns counts, skips and refusals |
 | `esper_entrypoints` | entry points, filtered by method, path, chain member, read or signal |
-| `esper_node` | one node: its facts, its code excerpt, its notes |
+| `esper_node` | one node: its facts, its code excerpt, its notes, its past advisories |
+| `esper_advisories` | the target's advisories, filtered by severity or precision, with the nodes each one affects ([D19](#d19--past-vulnerabilities-advisories-linked-to-the-code-they-touched)) |
 | `esper_callers`, `esper_callees` | one hop or more, up to a depth |
 | `esper_paths` | the paths from one node to another, up to a depth and a count |
 | `esper_search` | find a node by name, reference or `file:line` |
@@ -587,3 +591,53 @@ checkout as the source of truth. Scoping a connection to one project keeps agent
 untrusted text they may carry, from crossing between audits.
 
 **Rules out.** One database for every project; a server that indexes whatever path a client sends.
+
+## D19 — Past vulnerabilities: advisories linked to the code they touched
+
+Where a vulnerability was fixed, the same defect often lives on next to it: in a sibling method,
+another adapter, the same pattern elsewhere. And a share of a framework's advisories are bypasses of
+an earlier fix. Knowing that a function was already fixed once, and how, tells a hunter where to
+look first.
+
+**Decision.**
+
+- **Import the target's advisories from [OSV](https://osv.dev)**, which gathers the GitHub advisory
+  database, the Go vulnerability database, PyPI, npm and others. The target's packages are read from
+  its manifests (`go.mod`, `package.json`, `pyproject.toml`, `composer.json`) and can be set with
+  `esper add --package`. Advisories are fetched when a snapshot is indexed and refreshed with
+  `esper advisories <project>`; this is the one network call Esper itself makes, and `--offline`
+  turns it off.
+- **Medium severity or more only.** An advisory is kept when its CVSS base score is 4.0 or more, or,
+  without a vector, when its database rates it `MODERATE` or more. An entry without any rating takes
+  the rating of its aliases: entries of the Go vulnerability database carry none, their GHSA alias
+  does. An advisory still unrated after that is kept and marked `unrated`, rather than dropped. The
+  import report counts the low ones it skipped: Hono has 52 advisories on OSV, 4 of them low.
+- **Each advisory is an `advisory` node, linked by `affects` edges** to the code it concerns
+  ([D6](#d6--the-graph-model)), each with how precise the link is:
+
+  | Precision | Where the link comes from |
+  |---|---|
+  | `symbol` | the advisory names the function: the Go database lists the affected symbols (chi's `RedirectSlashes`, `RealIP`) |
+  | `fix-diff` | the advisory references its fix commit; the declarations its diff touches, read in the parent commit, are the ones linked |
+  | `file` | only the file is known: the fix touches lines outside any declaration |
+  | `none` | no symbol and no fix reference (most of Hono's advisories): the fix commit is searched in the target's history (`git log --grep` with the advisory's identifiers), and if none is found the advisory stays unlinked |
+
+  A model can propose a link for an unlinked advisory through the exploring tier
+  ([D17](#d17--model-enrichment-claims-beside-the-facts)); its answer is a claim, never an `affects`
+  edge.
+- **The link follows the code across versions.** It is made on the version the fix changed, then
+  carried to every snapshot by reference and fingerprint ([D7](#d7--stable-references-and-fingerprints)),
+  like a note. On each snapshot the edge says whether the version is affected or fixed, from the
+  advisory's ranges, and whether the node changed since the fix.
+- **It feeds `fix-downstream`.** The signal is set on an entry point that reaches a node with an
+  advisory, so that `esper_entrypoints` can list them and the auditor sees them first.
+- **Advisory text is data.** It comes from a third party, like the audited code, and is shown and
+  passed on as such.
+
+**Why.** The links are facts, not notes: they are imported from a source and can be rebuilt from it,
+each cites the code it points at and, for `fix-diff`, the commit and hunk it comes from. Stating the
+precision keeps a link from a symbol list apart from a guess from a filename. Low advisories are
+mostly hardening and noise in a ranking meant to point at the code worth reading.
+
+**Rules out.** Advisories written as notes; links proposed by a model stored as facts; scanning the
+target's dependencies for known vulnerabilities, which is a dependency scanner's job.

@@ -12,6 +12,7 @@ Esper is at the design stage: this page describes the target design, as settled 
 flowchart LR
     SRC["Audited code<br/>read-only"] --> IDX
     PROF["Profiles<br/>app · framework"] --> IDX
+    OSV["Advisories<br/>OSV · medium and up"] --> IDX
     IDX["1 · Index<br/>tree-sitter"] --> SNAP[("Snapshot<br/>facts with citations")]
     SNAP --> AN["2 · Analyzers<br/>SCIP · Joern"]
     AN -- "JSON Lines" --> SNAP
@@ -48,6 +49,10 @@ second snapshot:
 notes on unchanged nodes carry over, the note on the fixed function is marked `stale`, and the two
 snapshots can be compared.
 
+The index also links Hono's past advisories to the code their fixes touched
+([D19](/decisions/#d19--past-vulnerabilities-advisories-linked-to-the-code-they-touched)): the entry points that reach one carry the `fix-downstream` signal, and the agent can
+start from them, looking for a variant or a bypass of the fix.
+
 ## 1 · Index
 
 Parsing only, without a model, without running anything
@@ -70,6 +75,20 @@ Parsing only, without a model, without running anything
    ([D6](/decisions/#d6--the-graph-model)).
 6. **Name and fingerprint.** Every node gets its stable reference and a fingerprint of its code
    ([D7](/decisions/#d7--stable-references-and-fingerprints)).
+
+7. **Link past advisories.** The target's advisories of medium severity or more are fetched from
+   OSV and linked to the declarations they concern, each link with its precision
+   ([D19](/decisions/#d19--past-vulnerabilities-advisories-linked-to-the-code-they-touched)):
+
+```mermaid
+flowchart LR
+    A["Advisory<br/>GHSA · CVE · GO"] --> SYSymbols<br/>listed?
+    SY -- "yes" --> S["symbol"]
+    SY -- "no" --> FXFix commit<br/>referenced or found<br/>in git log?
+    FX -- "yes" --> D["fix-diff<br/>declarations the diff touches"]
+    D -. "outside any declaration" .-> FI["file"]
+    FX -- "no" --> U["unlinked<br/>a model may propose one, as a claim"]
+```
 
 Every fact is stored with its citation (`file:line`) and its source. A reindex parses only the files
 whose hash changed, and the same code with the same profiles gives the same snapshot.
@@ -192,7 +211,8 @@ Edits and deletions of notes are kept as revisions, so the auditor can see what 
 
 | Component | Runs | Reads | Writes |
 |---|---|---|---|
-| Indexer | in Esper's process | the target's files | the snapshot |
+| Indexer | in Esper's process | the target's files, and its git history for fix commits | the snapshot |
+| Advisory import | in Esper's process, the one network call (`--offline` turns it off) | OSV | `advisory` nodes and `affects` edges |
 | Analyzers | in a container | the target's files, mounted read-only | one JSON Lines file |
 | Enrichment, bounded | `claude -p` or the API, no tools | the question it is given | its answer |
 | Enrichment, exploring | `claude -p` or the API, Esper's read-only tools | the snapshot, through Esper | its answer |
