@@ -1,0 +1,11 @@
+/* Palette Blade Runner : cyan néon et ambre. */
+:root {
+	--sl-color-accent-low: #083344;
+	--sl-color-accent: #0891b2;
+	--sl-color-accent-high: #a5f3fc;
+}
+:root[data-theme='light'] {
+	--sl-color-accent-low: #cffafe;
+	--sl-color-accent: #0e7490;
+	--sl-color-accent-high: #164e63;
+}
