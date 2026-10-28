@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import type { Node } from 'web-tree-sitter'
+import type { Analysis } from './analyzer.ts'
 import {
   type CallStats,
   declaredAt,
@@ -133,7 +134,7 @@ function extractReads(program: GoProgram, profile: ResolvedProfile): Fact[] {
     for (const call of present(file.tree.rootNode.descendantsOfType('call_expression'))) {
       const fn = call.childForFieldName('function')
       if (!fn || fn.type === 'func_literal') continue
-      const rule = (program.targets(fn, file) ?? []).map((t) => calls.get(t.ref)).find((r) => r)
+      const rule = (program.callees(fn, file) ?? []).map((t) => calls.get(t.ref)).find((r) => r)
       if (!rule) continue
       const args = present(call.childForFieldName('arguments')?.namedChildren ?? [])
       add(
@@ -186,7 +187,13 @@ const fromChain = new Set(['short-circuit', 'live-state', 'callback-passed', 're
 
 export async function indexGo(
   files: GoFile[],
-  options: { module?: string; modules?: GoModuleRoot[]; profile: ResolvedProfile },
+  options: {
+    module?: string
+    modules?: GoModuleRoot[]
+    profile: ResolvedProfile
+    // What an analyzer resolved, imported before the entry points follow the calls (D12).
+    analysis?: Analysis
+  },
 ): Promise<{ graph: Graph; stats: IndexStats; routes: Route[] }> {
   const library = await loadLibrary('go')
   const program = await GoProgram.load(files, {
@@ -258,7 +265,8 @@ export async function indexGo(
           from,
           to: target.ref,
           citation: member.citation,
-          source,
+          // A handler or chain member an analyzer named has it as its source.
+          source: target.source ?? source,
           data: { ...data, ...resolution },
         })
       }

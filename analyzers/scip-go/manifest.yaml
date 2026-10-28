@@ -1,0 +1,12 @@
+# scip-go (https://github.com/scip-code/scip-go): Go's type checker over the snapshot, as SCIP,
+# turned into the references of each call site and the methods that implement each interface.
+name: scip-go
+version: 0.2.9
+description: Resolves Go call edges with the Go type checker.
+languages: [go]
+provides: [edges.resolve]
+answers: snapshot
+image:
+  dockerfile: Dockerfile
+fetch: [fetch]
+analyze: [analyze]

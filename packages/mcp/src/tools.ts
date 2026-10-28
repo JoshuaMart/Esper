@@ -37,7 +37,11 @@ export interface ToolSpec {
   writes: boolean
   input: z.ZodObject
   output: z.ZodObject
-  run: (connection: Connection, input: never) => unknown | Promise<unknown>
+  run: (
+    connection: Connection,
+    input: never,
+    progress?: (message: string) => void,
+  ) => unknown | Promise<unknown>
 }
 
 function define<I extends z.ZodObject, O extends z.ZodObject>(spec: {
@@ -47,7 +51,11 @@ function define<I extends z.ZodObject, O extends z.ZodObject>(spec: {
   writes?: boolean
   input: I
   output: O
-  run: (connection: Connection, input: z.infer<I>) => z.infer<O> | Promise<z.infer<O>>
+  run: (
+    connection: Connection,
+    input: z.infer<I>,
+    progress?: (message: string) => void,
+  ) => z.infer<O> | Promise<z.infer<O>>
 }): ToolSpec {
   return { ...spec, writes: spec.writes ?? false } as ToolSpec
 }
@@ -264,6 +272,9 @@ export const tools: ToolSpec[] = [
       snapshots: z.array(
         snapshotOut.extend({
           profiles: z.array(z.string()),
+          analyzers: z
+            .array(z.string())
+            .describe('the analyzers whose facts it holds, such as scip-go@0.2.9'),
           counts: z.object({
             files: z.number().int(),
             nodes: z.number().int(),
@@ -291,6 +302,7 @@ export const tools: ToolSpec[] = [
         snapshots: shown.map((s) => ({
           ...snap(s),
           profiles: s.profiles,
+          analyzers: s.analyzers,
           counts: c.store.counts(s.id),
           notes: c.notes.summary(s.id),
         })),
@@ -414,7 +426,7 @@ export const tools: ToolSpec[] = [
     name: 'esper_index',
     title: 'Index the project',
     description:
-      "Indexes a snapshot of this connection's project: a git ref of it, or its checkout as it is without one. A commit already indexed is not indexed again unless forced. Returns the counts, what was skipped and why, and how the notes stand on the new snapshot; a target no profile matches is refused, with the reason.",
+      "Indexes a snapshot of this connection's project: a git ref of it, or its checkout as it is without one. A commit already indexed is not indexed again unless forced. Returns the counts, what was skipped and why, and how the notes stand on the new snapshot; a target no profile matches is refused, with the reason. A precise index runs an analyzer in Docker and can take minutes: it sends progress notifications to a client that asks for them.",
     writes: true,
     input: z.object({
       ref: z
@@ -423,11 +435,20 @@ export const tools: ToolSpec[] = [
         .optional()
         .describe('a tag, branch or commit of the project; its checkout as it is without one'),
       force: z.boolean().default(false).describe('index a commit already indexed'),
+      precise: z
+        .boolean()
+        .default(false)
+        .describe(
+          "also run the analyzer that resolves the language's call edges with its type checker, in Docker: slower, and needs Docker",
+        ),
     }),
     output: z.object({
       snapshot: snapshotOut,
       unchanged: z.boolean().describe('whether the commit was already indexed'),
       profiles: z.array(z.string()),
+      analyzers: z
+        .array(z.string())
+        .describe('the analyzers whose facts the snapshot holds, such as scip-go@0.2.9'),
       stats: z
         .object({
           files: z.number().int(),
@@ -435,6 +456,7 @@ export const tools: ToolSpec[] = [
           resolved: z.number().int(),
           guessed: z.number().int(),
           unresolved: z.number().int(),
+          analyzed: z.number().int().describe('calls whose callees an analyzer named'),
           reads: z.number().int(),
           signals: z.number().int(),
         })
@@ -449,10 +471,12 @@ export const tools: ToolSpec[] = [
       }),
       ...bounded,
     }),
-    run: async (c, input) => {
+    run: async (c, input, progress) => {
       const result = await c.home.index(c.project, {
+        ...(progress ? { progress } : {}),
         ...(input.ref !== undefined ? { ref: input.ref } : {}),
         ...(input.force ? { force: true } : {}),
+        ...(input.precise ? { precise: true } : {}),
       })
       const cut: string[] = []
       const skips = page(result.snapshot.skips, 0, bounds.index.skips, 'skips', cut)
@@ -461,6 +485,7 @@ export const tools: ToolSpec[] = [
         snapshot: snap(c.snapshot(result.id)),
         unchanged: result.unchanged ?? false,
         profiles: result.profiles,
+        analyzers: result.analyzers,
         ...(stats
           ? {
               stats: {
@@ -469,6 +494,7 @@ export const tools: ToolSpec[] = [
                 resolved: stats.resolved,
                 guessed: stats.guessed,
                 unresolved: stats.unresolved,
+                analyzed: stats.analyzed,
                 reads: stats.reads,
                 signals: stats.signals,
               },

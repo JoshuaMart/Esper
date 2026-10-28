@@ -24,6 +24,7 @@ export default defineConfig({
 						'reference/profiles',
 						'reference/mcp',
 						'reference/notes',
+						'reference/analyzers',
 					], },
 			],
 		}),

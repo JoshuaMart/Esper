@@ -1,5 +1,6 @@
 import { posix } from 'node:path'
 import type { Node, Tree } from 'web-tree-sitter'
+import { type Analysis, type Place, placeKey } from './analyzer.ts'
 import type { Graph, GraphEdge, GraphNode } from './graph.ts'
 import { loadQuery, parse } from './parser.ts'
 import { declRef, externalRef, fingerprint, hashText, Names } from './refs.ts'
@@ -17,6 +18,8 @@ export interface CallStats {
   resolved: number
   guessed: number
   unresolved: number
+  // Calls whose callees an analyzer named (D22).
+  analyzed: number
 }
 
 const builtins = new Set([
@@ -43,6 +46,12 @@ const builtins = new Set([
 const source = 'tree-sitter'
 const isComment = (node: Node) => node.type === 'comment'
 export const line = (node: Node) => node.startPosition.row + 1
+// Where a node starts, as an analyzer's place: tree-sitter counts columns in UTF-16 code units.
+const at = (file: { path: string }, node: Node): Place => ({
+  file: file.path,
+  line: line(node),
+  column: node.startPosition.column + 1,
+})
 
 export interface Decl {
   ref: string
@@ -379,6 +388,9 @@ export class GoProgram {
   private readonly fields = new Map<string, { type: string; file: ParsedFile }[]>()
   private readonly aliasesOf = new Map<string, Map<string, string>>()
   private readonly byPath: Map<string, ParsedFile>
+  // What an analyzer says each name refers to, and the declarations by where their name is.
+  private readonly analysis: Analysis | undefined
+  private readonly declsByPlace = new Map<string, Decl>()
 
   static async load(
     files: GoFile[],
@@ -390,6 +402,7 @@ export class GoProgram {
       returns?: Iterable<[string, string]>
       keeps?: Iterable<string>
       constants?: Iterable<[string, string]>
+      analysis?: Analysis
     } = {},
   ): Promise<GoProgram> {
     const parsed = await Promise.all(files.map(parseFile))
@@ -399,6 +412,7 @@ export class GoProgram {
       returns: new Map(options.returns ?? []),
       keeps: new Set(options.keeps ?? []),
       constants: new Map(options.constants ?? []),
+      ...(options.analysis ? { analysis: options.analysis } : {}),
     })
   }
 
@@ -410,8 +424,10 @@ export class GoProgram {
       returns: Map<string, string>
       keeps: Set<string>
       constants: Map<string, string>
+      analysis?: Analysis
     },
   ) {
+    this.analysis = library.analysis
     this.fluent = library.fluent
     this.returns = library.returns
     this.keeps = library.keeps
@@ -419,6 +435,13 @@ export class GoProgram {
     this.files = parsed.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
     this.modules = [...modules].sort((a, b) => b.path.length - a.path.length)
     this.byPath = new Map(this.files.map((file) => [file.path, file]))
+    for (const file of this.files) {
+      for (const decl of file.decls) {
+        const name = decl.node.childForFieldName('name')
+        if (name && decl.node.type !== 'func_literal')
+          this.declsByPlace.set(placeKey(at(file, name)), decl)
+      }
+    }
 
     // Several declarations under one key are build variants (`sock_unix.go`, `sock_windows.go`):
     // a call to that name is not resolved to one of them.
@@ -740,7 +763,8 @@ export class GoProgram {
 
   // What a callee expression names, as the call graph sees it: `f`, `pkg.F` or `x.m`. Each target
   // is a declaration of the module or an external reference, resolved or guessed with a reason.
-  // `undefined` means the index cannot name it.
+  // `undefined` means the index cannot name it. This is the syntax's answer alone: a router or an
+  // adapter is recognised by the names the profiles give, as the syntax states them.
   targets(fn: Node, file: ParsedFile): Target[] | undefined {
     const variants = (decls: Decl[] | undefined): Target[] | undefined => {
       const [first] = decls ?? []
@@ -801,12 +825,78 @@ export class GoProgram {
     return [{ ref: candidates[0].ref, decl: candidates[0], resolution: 'guessed', reason }]
   }
 
+  // What a callee expression calls: the analyzer's answer where it names it, the syntax's
+  // otherwise. Calls, handlers, chain members and the reads made through a call take it (D22).
+  callees(fn: Node, file: ParsedFile): Target[] | undefined {
+    const cited =
+      fn.type === 'selector_expression'
+        ? fn.childForFieldName('field')
+        : fn.type === 'identifier'
+          ? fn
+          : null
+    return (cited ? this.analyzed(cited, file) : undefined) ?? this.targets(fn, file)
+  }
+
+  // What an analyzer says a name refers to: a declaration of the module, a symbol outside it, or
+  // each method of the module that implements the interface method it names. Undefined when the
+  // analyzer says nothing of that name, or names a build variant: it type-checks one platform, so
+  // the variants of the others stay guessed, each of them.
+  analyzed(name: Node, file: ParsedFile): Target[] | undefined {
+    const found = this.analysis?.references.get(placeKey(at(file, name)))
+    if (!this.analysis || !found) return undefined
+    const source = this.analysis.source
+    const target = found.target
+    if ('external' in target) {
+      const [importPath, symbol] = target.external.split('#') as [string, string]
+      const external = symbol.includes('.') ? symbol : `${defaultPackageName(importPath)}.${symbol}`
+      return [{ ref: externalRef(importPath, symbol), external, resolution: 'resolved', source }]
+    }
+    const decl = this.declsByPlace.get(placeKey(target))
+    if (decl) {
+      return this.variant(decl)
+        ? undefined
+        : [{ ref: decl.ref, decl, resolution: 'resolved', source }]
+    }
+    const iface = this.interfaceMethod(target, found.name)
+    const implementations = (this.analysis.implementations.get(placeKey(target)) ?? [])
+      .map((impl) => this.declsByPlace.get(placeKey(impl.at)))
+      .filter((d): d is Decl => d !== undefined)
+    if (implementations.some((d) => this.variant(d))) return undefined
+    return implementations.sort(byRef).map((d) => ({
+      ref: d.ref,
+      decl: d,
+      resolution: 'resolved' as const,
+      source,
+      ...(iface ? { interface: iface } : {}),
+    }))
+  }
+
+  // Whether a declaration is one of several build variants of one name in its package.
+  private variant(decl: Decl): boolean {
+    const key = `${this.byPath.get(decl.file)?.dir}\0${decl.name}`
+    return ((this.functions.get(key) ?? this.methods.get(key))?.length ?? 0) > 1
+  }
+
+  // The interface method declared at a place, as `Routes.Match`.
+  private interfaceMethod(place: Place, name: string): string | undefined {
+    const file = this.byPath.get(place.file)
+    let node: Node | null | undefined = file?.tree.rootNode.descendantForPosition({
+      row: place.line - 1,
+      column: place.column - 1,
+    })
+    for (; node; node = node.parent) {
+      if (node.type === 'type_spec') return `${node.childForFieldName('name')?.text}.${name}`
+    }
+    return undefined
+  }
+
   // The file, declaration and call-graph nodes and edges of the program (D6).
   callGraph(): { graph: Graph; stats: CallStats } {
     const graph: Graph = { files: [], nodes: [], edges: [], facts: [], skips: [] }
-    const stats: CallStats = { calls: 0, resolved: 0, guessed: 0, unresolved: 0 }
+    const stats: CallStats = { calls: 0, resolved: 0, guessed: 0, unresolved: 0, analyzed: 0 }
     const externals = new Map<string, GraphNode>()
-    const edge = (e: Omit<GraphEdge, 'source'>) => graph.edges.push({ ...e, source })
+    const edge = (e: Omit<GraphEdge, 'source'>, from = source) =>
+      graph.edges.push({ ...e, source: from })
 
     for (const file of this.files) {
       graph.files.push({ path: file.path, hash: file.hash, language: 'go' })
@@ -870,11 +960,12 @@ export class GoProgram {
         if (fn.type !== 'identifier' && fn.type !== 'selector_expression') continue
         if (fn.type === 'identifier' && builtins.has(fn.text) && !declaredAt(fn.text, fn)) continue
         stats.calls++
-        const targets = this.targets(fn, file) ?? this.assigned(fn, file)
-        if (!targets) {
+        const targets = this.callees(fn, file) ?? this.assigned(fn, file)
+        if (!targets || targets.length === 0) {
           stats.unresolved++
           continue
         }
+        if (targets.some((t) => t.source !== undefined)) stats.analyzed++
         const citation = { file: file.path, line: line(call) }
         for (const target of targets) {
           if (target.resolution === 'resolved') stats.resolved++
@@ -885,8 +976,11 @@ export class GoProgram {
           const data =
             target.resolution === 'guessed'
               ? { resolution: 'guessed', reason: target.reason }
-              : { resolution: 'resolved' }
-          edge({ kind: 'calls', from: caller.ref, to: target.ref, citation, data })
+              : {
+                  resolution: 'resolved',
+                  ...(target.interface ? { interface: target.interface } : {}),
+                }
+          edge({ kind: 'calls', from: caller.ref, to: target.ref, citation, data }, target.source)
         }
       }
 
@@ -898,14 +992,18 @@ export class GoProgram {
         if (!returned(node)) continue
         if (node.type === 'selector_expression' && this.fieldType(node, file)) continue
         const caller = enclosing(file, node)
-        const targets = caller ? this.targets(node, file) : undefined
+        const targets = caller ? this.callees(node, file) : undefined
         if (!caller || !targets) continue
         const citation = { file: file.path, line: line(node) }
         for (const target of targets) {
           if (!target.decl || target.resolution !== 'resolved' || target.ref === caller.ref)
             continue
-          const data = { resolution: 'resolved', reference: true }
-          edge({ kind: 'calls', from: caller.ref, to: target.ref, citation, data })
+          const data = {
+            resolution: 'resolved',
+            reference: true,
+            ...(target.interface ? { interface: target.interface } : {}),
+          }
+          edge({ kind: 'calls', from: caller.ref, to: target.ref, citation, data }, target.source)
         }
       }
     }
@@ -962,11 +1060,15 @@ export interface Target {
   external?: string
   resolution: 'resolved' | 'guessed'
   reason?: string
+  // The analyzer that named it, as `<name>@<version>`; tree-sitter otherwise.
+  source?: string
+  // For a call through an interface of the module, the interface method: `Routes.Match`.
+  interface?: string
 }
 
 export async function extractGo(
   files: GoFile[],
-  options: { module?: string; modules?: GoModuleRoot[] } = {},
+  options: { module?: string; modules?: GoModuleRoot[]; analysis?: Analysis } = {},
 ): Promise<{ graph: Graph; stats: CallStats }> {
   const program = await GoProgram.load(files, options)
   try {

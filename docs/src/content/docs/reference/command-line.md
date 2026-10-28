@@ -11,7 +11,7 @@ lists those that exist. From the repository, `pnpm esper <command>` runs them fr
 | Command | Does |
 |---|---|
 | `esper add <path or git URL>` | adds a project. A path is read in place and never written; a URL is cloned into the project's folder. `--name` sets its name (by default, the folder's or the repository's), `--kind application\|framework` overrides the detection |
-| `esper index <project>` | indexes a snapshot. Without options, it reads the folder as it is. With `--ref <tag, branch or commit>`, it reads that ref from git and leaves the checkout alone. A clean commit already indexed with the same profiles is not indexed again; `--force` does it anyway |
+| `esper index <project>` | indexes a snapshot. Without options, it reads the folder as it is. With `--ref <tag, branch or commit>`, it reads that ref from git and leaves the checkout alone. `--precise` also runs the analyzer that resolves the language's call edges, in Docker ([analyzers](/reference/analyzers/)). A clean commit already indexed with the same profiles and analyzers is not indexed again; `--force` does it anyway |
 | `esper list` | the projects, and the snapshots of each |
 | `esper mcp <project>` | serves the project over MCP on stdio, for one agent ([MCP tools](/reference/mcp/)). `--read-only` exposes no tool that writes |
 
@@ -69,7 +69,9 @@ projects/<name>/checkout/      its clone, for a project added by URL
   so that no filter of the repository runs.
 - **What runs.** Nothing of the target. Git is called with the repository's hooks and file system
   monitor turned off, and only for commands that run none of its filters (`ls-files`, `ls-tree`,
-  `cat-file` without `--filters`, `rev-parse`). A clone brings no hooks.
+  `cat-file` without `--filters`, `rev-parse`). A clone brings no hooks. With `--precise`, the
+  analyzer type-checks the target in a container, without running it
+  ([analyzers](/reference/analyzers/#the-container)).
 
 Each index reads every file again, which takes about a second for a few hundred files
 ([D20](/decisions/#d20--a-reindex-reads-the-whole-target)). An error says what failed in one line;

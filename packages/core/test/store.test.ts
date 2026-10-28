@@ -30,6 +30,7 @@ test('a snapshot reads back as the graph that was written, in canonical order', 
       dirty: false,
       createdAt: '2026-10-28T00:00:00Z',
       profiles: [],
+      analyzers: [],
       indexer: null,
     },
   ])
@@ -81,7 +82,7 @@ test('a database of another schema is refused before anything is written to it',
   old.exec(`CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
     INSERT INTO meta VALUES ('schema_version', '2')`)
   old.close()
-  assert.throws(() => new Store(path), /has schema 2, and this Esper reads schema 3/)
+  assert.throws(() => new Store(path), /has schema 2, and this Esper reads schema 4/)
   const db = new DatabaseSync(path)
   const tables = db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table'`).all()
   assert.deepEqual(
@@ -89,5 +90,31 @@ test('a database of another schema is refused before anything is written to it',
     ['meta'],
   )
   db.close()
+  await rm(dir, { recursive: true })
+})
+
+test('a database of schema 3 is brought to 4: its snapshots have no analyzer', async () => {
+  const { mkdtemp, rm } = await import('node:fs/promises')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const { DatabaseSync } = await import('node:sqlite')
+  const dir = await mkdtemp(join(tmpdir(), 'esper-store-'))
+  const path = join(dir, 'esper.db')
+  const store = new Store(path)
+  const id = store.addSnapshot(await shop(), { profiles: ['p'] })
+  store.close()
+  // Schema 3, as M2 wrote it: no analyzers column.
+  const old = new DatabaseSync(path)
+  old.exec(`ALTER TABLE snapshots DROP COLUMN analyzers;
+    UPDATE meta SET value = '3' WHERE key = 'schema_version'`)
+  old.close()
+  const again = new Store(path)
+  assert.deepEqual(again.snapshot(id)?.analyzers, [])
+  assert.equal(again.db.prepare(`SELECT value FROM meta`).get()?.value, '4')
+  const next = again.addSnapshot(await shop(), { analyzers: ['scip-go@0.2.9'] })
+  assert.deepEqual(again.snapshot(next)?.analyzers, ['scip-go@0.2.9'])
+  again.close()
+  // Opened again, it is left as it is.
+  new Store(path).close()
   await rm(dir, { recursive: true })
 })

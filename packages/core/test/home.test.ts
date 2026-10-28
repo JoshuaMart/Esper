@@ -1,16 +1,19 @@
 import assert from 'node:assert/strict'
 import { execFile } from 'node:child_process'
-import { cp, mkdtemp, readdir, rm, symlink, writeFile } from 'node:fs/promises'
+import { cp, mkdtemp, readdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { promisify } from 'node:util'
 import {
+  type Analyzer,
+  type AnalyzerInput,
   classify,
   detectProfile,
   goImports,
   Home,
   loadProfiles,
+  materialise,
   parseGoMod,
   profilesDir,
   readFolder,
@@ -210,5 +213,146 @@ test('a ref is refused in one line when it looks like an option or names nothing
     })
   } finally {
     await rm(dir, { recursive: true })
+  }
+})
+
+// An analyzer that runs nowhere: what it is given, and what it answers, are the test's.
+const fake: Analyzer = {
+  name: 'fake',
+  version: '1.0',
+  languages: ['go'],
+  provides: ['edges.resolve'],
+  answers: 'snapshot',
+  image: { dockerfile: 'Dockerfile' },
+  analyze: ['analyze'],
+  dir: '/nonexistent',
+  hash: '0'.repeat(64),
+}
+
+test('a precise index runs the analyzer on the whole tree, and is a snapshot of its own', async () => {
+  const { dir, git } = await repository()
+  await writeFile(join(dir, 'go.sum'), 'sum\n')
+  await git('add', 'go.sum')
+  await git('commit', '--quiet', '-m', 'sum')
+  const seen: { input: AnalyzerInput; tree: string[]; main: string; sum: string }[] = []
+  const home = new Home(await mkdtemp(join(tmpdir(), 'esper-home-')), {
+    analyzers: [fake],
+    runner: async (analyzer, src, input) => {
+      seen.push({
+        input,
+        tree: (await readdir(src, { recursive: true })).sort(),
+        main: await readFile(join(src, 'main.go'), 'utf8'),
+        sum: await readFile(join(src, 'go.sum'), 'utf8'),
+      })
+      return `${JSON.stringify({ type: 'analyzer', format: 1, name: analyzer.name, version: analyzer.version })}\n`
+    },
+  })
+  try {
+    await home.add(dir, { name: 'shop' })
+    const plain = await home.index('shop', { ref: 'HEAD' })
+    assert.deepEqual(plain.analyzers, [])
+    // Changed in the checkout, not in the commit: the ref is what the analyzer sees.
+    await writeFile(join(dir, 'main.go'), 'package main\n')
+    const told: string[] = []
+    const precise = await home.index('shop', {
+      ref: 'HEAD',
+      precise: true,
+      progress: (m) => told.push(m),
+    })
+    assert.deepEqual(told, [
+      "fake@1.0: writing the snapshot's tree",
+      'fake@1.0: importing its output',
+    ])
+    assert.notEqual(precise.id, plain.id)
+    assert.deepEqual(precise.analyzers, ['fake@1.0'])
+    assert.equal(precise.stats?.analyzed, 0)
+    const [run] = seen
+    assert.ok(run)
+    // Every file of the commit, not only those Esper reads, but never the repository itself.
+    assert.ok(run.tree.includes('go.sum') && run.tree.includes('main_test.go'))
+    assert.ok(!run.tree.some((p) => p.startsWith('.git')))
+    assert.equal(run.sum, 'sum\n')
+    assert.notEqual(run.main, 'package main\n')
+    assert.ok(run.input.files.includes('main.go') && !run.input.files.includes('main_test.go'))
+    assert.deepEqual(run.input.modules, [{ path: 'example.com/app', dir: '.' }])
+    const again = await home.index('shop', { ref: 'HEAD', precise: true })
+    assert.deepEqual([again.id, again.unchanged, again.analyzers], [precise.id, true, ['fake@1.0']])
+    // The checkout as it is: the analyzer sees the files as Esper read them.
+    await home.index('shop', { precise: true })
+    assert.equal(seen[1]?.main, 'package main\n')
+    const store = new Store(home.database('shop'))
+    assert.deepEqual(
+      store.snapshots().map((s) => s.analyzers),
+      [[], ['fake@1.0'], ['fake@1.0']],
+    )
+    store.close()
+  } finally {
+    await rm(dir, { recursive: true })
+    await rm(home.dir, { recursive: true })
+  }
+})
+
+test("an analyzer's file that is refused fails the index, and stores no snapshot", async () => {
+  const { dir } = await repository()
+  const home = new Home(await mkdtemp(join(tmpdir(), 'esper-home-')), {
+    analyzers: [fake],
+    runner: async () =>
+      [
+        { type: 'analyzer', format: 1, name: 'fake', version: '1.0' },
+        {
+          type: 'reference',
+          at: { file: 'main.go', line: 1, column: 1 },
+          name: 'Nope',
+          target: { external: 'x#Y' },
+        },
+      ]
+        .map((l) => JSON.stringify(l))
+        .join('\n'),
+  })
+  try {
+    await home.add(dir, { name: 'shop' })
+    await assert.rejects(
+      home.index('shop', { ref: 'v1', precise: true }),
+      /fake@1.0: line 2 of its output is refused, and the file with it: main.go:1:1 does not hold Nope/,
+    )
+    const store = new Store(home.database('shop'))
+    assert.deepEqual(store.snapshots(), [])
+    store.close()
+    const none = new Home(home.dir, { analyzers: [{ ...fake, provides: ['flows'] }] })
+    await assert.rejects(
+      none.index('shop', { precise: true }),
+      /no analyzer resolves the call edges of go/,
+    )
+    const two = new Home(home.dir, { analyzers: [fake, { ...fake, name: 'other' }] })
+    await assert.rejects(
+      two.index('shop', { precise: true }),
+      /fake@1.0 and other@1.0 both resolve/,
+    )
+  } finally {
+    await rm(dir, { recursive: true })
+    await rm(home.dir, { recursive: true })
+  }
+})
+
+test("a commit's tree is written out in batches, never read whole", async () => {
+  const { dir, git } = await repository()
+  const into = await mkdtemp(join(tmpdir(), 'esper-tree-'))
+  try {
+    await writeFile(join(dir, 'asset.bin'), Buffer.alloc(4096, 7))
+    await git('add', 'asset.bin')
+    await git('commit', '--quiet', '-m', 'asset')
+    const snapshot = await readRef(dir, 'HEAD')
+    // One byte per batch: every file is read on its own, and all of them are written.
+    await materialise(dir, snapshot, into, { batch: 1 })
+    const listed = (await run('git', ['-C', dir, 'ls-files'])).stdout.trim().split('\n').sort()
+    const written = (await readdir(into, { recursive: true, withFileTypes: true }))
+      .filter((e) => e.isFile())
+      .map((e) => join(e.parentPath, e.name).slice(into.length + 1))
+      .sort()
+    assert.deepEqual(written, listed)
+    assert.deepEqual(await readFile(join(into, 'asset.bin')), Buffer.alloc(4096, 7))
+  } finally {
+    await rm(dir, { recursive: true })
+    await rm(into, { recursive: true })
   }
 })

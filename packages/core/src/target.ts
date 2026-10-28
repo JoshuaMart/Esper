@@ -1,6 +1,6 @@
 import { execFile, spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { lstat, readdir, readFile } from 'node:fs/promises'
+import { lstat, mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
 import { join, posix } from 'node:path'
 import { promisify } from 'node:util'
 import { EsperError } from './errors.ts'
@@ -181,6 +181,35 @@ export async function readFolder(dir: string): Promise<TargetSnapshot> {
   return { files, skips, dirty: false }
 }
 
+// Files of a commit, read from the object database as stored.
+async function readBlobs(
+  dir: string,
+  commit: string,
+  paths: string[],
+): Promise<{ path: string; content: Buffer }[]> {
+  const files: { path: string; content: Buffer }[] = []
+  if (paths.length === 0) return files
+  // `<commit>:./<path>` is relative to the folder git runs in, as `ls-tree` is.
+  const data = await blobs(
+    dir,
+    paths.map((p) => `${commit}:./${p}`),
+  )
+  let offset = 0
+  for (const path of paths) {
+    const end = data.indexOf(10, offset)
+    const header = data.subarray(offset, end).toString('utf8')
+    const [, type, size] = header.split(' ')
+    if (type !== 'blob' || !/^\d+$/.test(size ?? '')) {
+      throw new Error(`git could not read ${path} at ${commit}: ${header}`)
+    }
+    offset = end + 1
+    const length = Number(size)
+    files.push({ path, content: data.subarray(offset, offset + length) })
+    offset += length + 1
+  }
+  return files
+}
+
 // A git ref, read from the object database: the checkout is not touched.
 export async function readRef(dir: string, ref: string): Promise<TargetSnapshot> {
   // A ref is a name for git, never an option: `--output=…` must not reach its command line.
@@ -202,27 +231,10 @@ export async function readRef(dir: string, ref: string): Promise<TargetSnapshot>
     modes.set(path, meta.split(' ')[0] as string)
   }
   const { read, skips } = select([...modes.keys()], modes)
-  const files: TargetFile[] = []
-  if (read.length > 0) {
-    // `<commit>:./<path>` is relative to the folder git runs in, as `ls-tree` is.
-    const data = await blobs(
-      dir,
-      read.map((p) => `${commit}:./${p}`),
-    )
-    let offset = 0
-    for (const path of read) {
-      const end = data.indexOf(10, offset)
-      const header = data.subarray(offset, end).toString('utf8')
-      const [, type, size] = header.split(' ')
-      if (type !== 'blob' || !/^\d+$/.test(size ?? '')) {
-        throw new Error(`git could not read ${path} at ${commit}: ${header}`)
-      }
-      offset = end + 1
-      const length = Number(size)
-      files.push({ path, source: data.subarray(offset, offset + length).toString('utf8') })
-      offset += length + 1
-    }
-  }
+  const files = (await readBlobs(dir, commit, read)).map((f) => ({
+    path: f.path,
+    source: f.content.toString('utf8'),
+  }))
   return { files, skips, dirty: false, commit, ref }
 }
 
@@ -239,3 +251,82 @@ export async function cloneTarget(url: string, into: string): Promise<void> {
     into,
   ])
 }
+
+// How much of a commit is read from git at once when its tree is written out.
+export const batchBytes = 32 << 20
+
+// Regular files only: a link may point outside the target, a submodule is another repository.
+const regular = new Set(['100644', '100755'])
+// Folders that hold no source an analyzer needs and can be large.
+const notCopied = new Set(['.git', 'node_modules'])
+
+// The whole tree of a snapshot, written into `into` for an analyzer (D12): every regular file of
+// the commit or of the folder, not only the files Esper reads (a typed indexer needs `go.sum`,
+// embedded files, vendored code), with the files Esper read written as it read them. Links and
+// submodules are left out.
+export async function materialise(
+  dir: string,
+  snapshot: TargetSnapshot,
+  into: string,
+  options: { batch?: number } = {},
+) {
+  const batchLimit = options.batch ?? batchBytes
+  const write = async (path: string, content: string | Buffer) => {
+    if (path.split('/').some((part) => part === '..' || part === '' || part === '.')) return
+    await mkdir(join(into, posix.dirname(path)), { recursive: true })
+    await writeFile(join(into, path), content)
+  }
+  if (snapshot.ref !== undefined && snapshot.commit) {
+    // `-l` gives each blob's size: they are read in batches of a bounded size, so that a target
+    // with large assets is never held in memory whole.
+    const entries = (await git(dir, ['ls-tree', '-r', '-l', '-z', snapshot.commit]))
+      .split('\0')
+      .filter(Boolean)
+      .map((entry) => {
+        const [meta, path] = entry.split('\t') as [string, string]
+        const [mode, , , size] = meta.split(/ +/)
+        return { mode: mode as string, size: Number(size), path }
+      })
+      .filter((e) => regular.has(e.mode) && !skipped(e.path))
+      .sort((a, b) => (a.path < b.path ? -1 : 1))
+    let batch: string[] = []
+    let size = 0
+    const flush = async () => {
+      for (const file of await readBlobs(dir, snapshot.commit as string, batch)) {
+        await write(file.path, file.content)
+      }
+      batch = []
+      size = 0
+    }
+    for (const entry of entries) {
+      if (batch.length > 0 && size + entry.size > batchLimit) await flush()
+      batch.push(entry.path)
+      size += entry.size
+    }
+    await flush()
+  } else {
+    const paths: string[] = []
+    if (await isGitRepository(dir)) {
+      const listed = await git(dir, ['ls-files', '-c', '-o', '--exclude-standard', '-z'])
+      paths.push(...new Set(listed.split('\0').filter(Boolean)))
+    } else {
+      const walk = async (rel: string) => {
+        for (const entry of await readdir(join(dir, rel), { withFileTypes: true })) {
+          const path = rel ? `${rel}/${entry.name}` : entry.name
+          if (entry.isDirectory() && !notCopied.has(entry.name)) await walk(path)
+          else if (entry.isFile()) paths.push(path)
+        }
+      }
+      await walk('')
+    }
+    for (const path of paths.filter((p) => !skipped(p)).sort()) {
+      const info = await lstat(join(dir, path)).catch(() => undefined)
+      if (!info?.isFile()) continue
+      const content = await readFile(join(dir, path)).catch(() => undefined)
+      if (content) await write(path, content)
+    }
+  }
+  for (const file of snapshot.files) await write(file.path, file.source)
+}
+
+const skipped = (path: string) => path.split('/').some((part) => notCopied.has(part))

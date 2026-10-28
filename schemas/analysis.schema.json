@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/JoshuaMart/Esper/schemas/analysis.schema.json",
+  "title": "Esper analysis line",
+  "description": "One line of an analyzer's output, the JSON Lines file Esper imports (D12). The first line is the analyzer line; each other line is a reference or an implementation. Places are in the snapshot's files: a 1-based line and a 1-based column in UTF-8 bytes, where the name starts.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/analyzer"
+    },
+    {
+      "$ref": "#/$defs/reference"
+    },
+    {
+      "$ref": "#/$defs/implementation"
+    }
+  ],
+  "$defs": {
+    "analyzer": {
+      "description": "Who wrote the file, and in which format: the name and version of its manifest.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "format", "name", "version"],
+      "properties": {
+        "type": {
+          "const": "analyzer"
+        },
+        "format": {
+          "const": 1
+        },
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "reference": {
+      "description": "The name at `at` refers to the function or method defined at `target`, or to one outside the snapshot.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "at", "name", "target"],
+      "properties": {
+        "type": {
+          "const": "reference"
+        },
+        "at": {
+          "$ref": "#/$defs/place"
+        },
+        "name": {
+          "$ref": "#/$defs/name"
+        },
+        "target": {
+          "$ref": "#/$defs/target"
+        }
+      }
+    },
+    "implementation": {
+      "description": "The method defined at `at` implements the interface method `of`.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "at", "name", "of"],
+      "properties": {
+        "type": {
+          "const": "implementation"
+        },
+        "at": {
+          "$ref": "#/$defs/place"
+        },
+        "name": {
+          "$ref": "#/$defs/name"
+        },
+        "of": {
+          "$ref": "#/$defs/target"
+        }
+      }
+    },
+    "name": {
+      "description": "The name as the source writes it at each place the line cites.",
+      "type": "string",
+      "pattern": "^[\\p{L}_][\\p{L}\\p{Nd}_]*$"
+    },
+    "place": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file", "line", "column"],
+      "properties": {
+        "file": {
+          "description": "Relative to the target's root, with /.",
+          "type": "string",
+          "minLength": 1
+        },
+        "line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "column": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "target": {
+      "description": "A place in the snapshot, or a symbol outside it as <import path>#<symbol>: net/http#Request.FormValue.",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/place"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["external"],
+          "properties": {
+            "external": {
+              "type": "string",
+              "pattern": "^[^#\\s]+#[^#\\s]+$"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

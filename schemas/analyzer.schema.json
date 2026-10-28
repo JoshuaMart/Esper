@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/JoshuaMart/Esper/schemas/analyzer.schema.json",
+  "title": "Esper analyzer manifest",
+  "description": "An analyzer behind Esper's contract (D12): what it is, what it provides, and how its container is built and run. One manifest per analyzer, in analyzers/<name>/manifest.yaml.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["name", "version", "languages", "provides", "answers", "image", "analyze"],
+  "properties": {
+    "name": {
+      "description": "The analyzer's name, also the name of its folder: the facts it brings name it as their source, with its version.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$"
+    },
+    "version": {
+      "description": "The version of the tool the image runs: the facts it brings are tagged <name>@<version>. It is part of the image's tag, so it holds only what a tag may: letters, digits, '.', '_' and '-'.",
+      "type": "string",
+      "pattern": "^[0-9A-Za-z][0-9A-Za-z._-]*$",
+      "maxLength": 64
+    },
+    "description": {
+      "type": "string"
+    },
+    "languages": {
+      "description": "The languages whose files it reads.",
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "enum": ["go"]
+      }
+    },
+    "provides": {
+      "description": "What its output brings: edges.resolve, the references of call sites and the implementations of interface methods; flows, dataflow paths (not imported yet).",
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "enum": ["edges.resolve", "flows"]
+      }
+    },
+    "answers": {
+      "description": "snapshot: run while a snapshot is indexed, on the whole of it; question: run for one question about a snapshot (not run yet).",
+      "enum": ["snapshot", "question"]
+    },
+    "image": {
+      "description": "The container image: built by Esper from a Dockerfile in the analyzer's folder.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dockerfile"],
+      "properties": {
+        "dockerfile": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._-]+$"
+        }
+      }
+    },
+    "fetch": {
+      "description": "The arguments that fetch the snapshot's dependencies, given to the image's entry point: run with the network, the source read-only and the dependency cache writable. Absent when the analyzer needs no dependency.",
+      "$ref": "#/$defs/command"
+    },
+    "analyze": {
+      "description": "The arguments that analyze the snapshot, given to the image's entry point: run without network, the source and the dependency cache read-only; writes /esper/out/analysis.jsonl.",
+      "$ref": "#/$defs/command"
+    }
+  },
+  "$defs": {
+    "command": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  }
+}

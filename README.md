@@ -8,10 +8,11 @@ served to hunting agents over MCP and explorable in a web interface.
 > and bring out what nobody had seen.
 
 **Status: early development.** The documentation describes the target design.
-[M2](docs/src/content/docs/roadmap.md#m2--mcp-and-notes) is done: Go applications on chi or
-`net/http`, and chi itself, can be indexed from the command line and served to an agent over MCP
+[M3](docs/src/content/docs/roadmap.md#m3--scip-for-go) is done: Go applications on chi or
+`net/http`, and chi itself, can be indexed from the command line, with their call edges resolved by
+scip-go in Docker on request (`esper index --precise`), and served to an agent over MCP
 (`esper mcp <project>`), whose notes survive a reindex. Next is
-[M3](docs/src/content/docs/roadmap.md#m3--scip-for-go), SCIP for Go.
+[M4](docs/src/content/docs/roadmap.md#m4--typescript-and-hono), TypeScript and Hono.
 
 ## Documentation
 
@@ -25,13 +26,14 @@ served to hunting agents over MCP and explorable in a web interface.
 ## Development
 
 Node 24 or later and pnpm 10. No dependency runs an install script, and nothing is built: Node runs
-the TypeScript sources directly.
+the TypeScript sources directly. Docker is needed only for `esper index --precise` and its tests,
+which are skipped without it.
 
 ```sh
 pnpm install
 pnpm check            # type-check and lint
 pnpm test             # tests, with Node's own runner
-pnpm esper --help     # the command line, from the sources: add, index, list
+pnpm esper --help     # the command line, from the sources: add, index, list, mcp
 pnpm docs             # documentation on http://localhost:4321
 ```
 

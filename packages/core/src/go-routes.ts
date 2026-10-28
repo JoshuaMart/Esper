@@ -477,7 +477,7 @@ export class RouteInterpreter {
       node.type === 'func_literal' ||
       node.type === 'identifier' ||
       node.type === 'selector_expression'
-        ? this.program.targets(node, file)
+        ? this.program.callees(node, file)
         : undefined
     for (const target of targets ?? []) {
       if (!target.decl || target.resolution !== 'resolved') continue
@@ -507,7 +507,12 @@ export class RouteInterpreter {
       return { text, citation, targets: targets ?? [] }
     }
     if (['identifier', 'selector_expression', 'func_literal'].includes(node.type)) {
-      const targets = this.program.targets(node, file) ?? []
+      // An analyzer's answer where it names the module's code; for a method of a value from
+      // outside the module, what built the value says more than the interface method it names.
+      const analyzed = this.program.callees(node, file) ?? []
+      const targets = analyzed.some((t) => t.decl)
+        ? analyzed
+        : (this.program.targets(node, file) ?? [])
       if (targets.length > 0) return { text, citation, targets }
       // A method of a value the index cannot type, such as `fs.ServeHTTP` on a value from
       // another package: the handler is what built the value, `http.FileServer(…)`.

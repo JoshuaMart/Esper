@@ -44,9 +44,28 @@ export function createServer(connection: Connection, options: ServerOptions = {}
           openWorldHint: false,
         },
       },
-      async (input: unknown) => {
+      async (input: unknown, ctx) => {
+        // A client that asked for progress hears what a long tool is doing, which keeps its
+        // request from timing out (a precise index runs a container for minutes).
+        const token = ctx.mcpReq._meta?.progressToken
+        let step = 0
+        const progress =
+          token === undefined
+            ? undefined
+            : (message: string) => {
+                step++
+                void ctx.mcpReq
+                  .notify({
+                    method: 'notifications/progress',
+                    params: { progressToken: token, progress: step, message },
+                  })
+                  .catch(() => undefined)
+              }
         try {
-          const output = (await tool.run(connection, input as never)) as Record<string, unknown>
+          const output = (await tool.run(connection, input as never, progress)) as Record<
+            string,
+            unknown
+          >
           return {
             content: [{ type: 'text' as const, text: JSON.stringify(output) }],
             structuredContent: output,

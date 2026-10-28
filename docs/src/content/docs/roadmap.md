@@ -13,7 +13,7 @@ counted by hand, with none missing and none invented.
 | [M0](#m0--the-workspace) | The workspace | the workspace type-checks, lints and tests in CI | done |
 | [M1](#m1--the-core-on-go-and-chi) | The core, on Go and chi | chi and Wakapi pass their hand count | done |
 | [M2](#m2--mcp-and-notes) | MCP and notes | an agent hunts chi over MCP and its notes survive a reindex | done |
-| [M3](#m3--scip-for-go) | SCIP for Go | the first analyzer runs through the contract; guessed edges drop | not started |
+| [M3](#m3--scip-for-go) | SCIP for Go | the first analyzer runs through the contract; guessed edges drop | done |
 | [M4](#m4--typescript-and-hono) | TypeScript and Hono | Hono and Kaneo pass their hand count | not started |
 | [M5](#m5--the-server-and-the-web-interface) | The server and the web interface | an audit can be followed and annotated in the browser | not started |
 | [M6](#m6--enrichment-and-past-advisories) | Enrichment and past advisories | claims and advisory links measured on chi and Hono | not started |
@@ -106,6 +106,15 @@ the first analyzer built on it.
   alone, and each edge it resolves names `scip-go` as its source;
 - a file with one invalid line, or one citation that does not match the snapshot, is rejected whole.
 
+Each is a test. scip-go 0.2.9 runs in Docker on chi 5.3.2, where guessed edges fall from 30 of 540
+to 1 of 618 and every edge not already resolved the same way names `scip-go@0.2.9`, and on Wakapi,
+where they fall from 567 to none, both keeping the entry points counted by hand
+(`packages/core/test/scip-go.test.ts`). The refusals, line by line and place by place, are in
+`packages/core/test/analyzer.test.ts`. Precision runs inside the index when asked,
+`esper index --precise` or `precise` on `esper_index`
+([D22](/decisions/#d22--precision-runs-inside-the-index-when-asked)). The contract, the import format
+and scip-go are in the [analyzers reference](/reference/analyzers/), the schemas in
+`schemas/analyzer.schema.json` and `schemas/analysis.schema.json`.
 ## M4 — TypeScript and Hono
 
 The TypeScript queries, imports resolved through the target's `tsconfig` paths, the two Hono

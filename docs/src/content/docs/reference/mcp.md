@@ -84,7 +84,7 @@ The project's snapshots, newest first: the git ref and commit each was indexed f
 | Output | Type | |
 |---|---|---|
 | `latest` | integer or null | the snapshot read when none is named |
-| `snapshots` | list of object (`id`, `ref`, `commit`, `dirty`, `createdAt`, `profiles`, `counts`, `notes`) |  |
+| `snapshots` | list of object (`id`, `ref`, `commit`, `dirty`, `createdAt`, `profiles`, `analyzers`, `counts`, `notes`) |  |
 | `total` | integer |  |
 | `truncated` | boolean | whether the answer was cut |
 | `cut` | list of string | what was left out, and how to get it |
@@ -110,19 +110,21 @@ What changed between two snapshots: entry points added, removed, or changed (the
 
 ### `esper_index`
 
-Indexes a snapshot of this connection's project: a git ref of it, or its checkout as it is without one. A commit already indexed is not indexed again unless forced. Returns the counts, what was skipped and why, and how the notes stand on the new snapshot; a target no profile matches is refused, with the reason. **Writes**: not exposed by a read-only server.
+Indexes a snapshot of this connection's project: a git ref of it, or its checkout as it is without one. A commit already indexed is not indexed again unless forced. Returns the counts, what was skipped and why, and how the notes stand on the new snapshot; a target no profile matches is refused, with the reason. A precise index runs an analyzer in Docker and can take minutes: it sends progress notifications to a client that asks for them. **Writes**: not exposed by a read-only server.
 
 | Input | Type | |
 |---|---|---|
 | `ref` (optional) | string | a tag, branch or commit of the project; its checkout as it is without one |
 | `force` (optional) | boolean | index a commit already indexed; default `false` |
+| `precise` (optional) | boolean | also run the analyzer that resolves the language's call edges with its type checker, in Docker: slower, and needs Docker; default `false` |
 
 | Output | Type | |
 |---|---|---|
 | `snapshot` | object (`id`, `ref`, `commit`, `dirty`, `createdAt`) |  |
 | `unchanged` | boolean | whether the commit was already indexed |
 | `profiles` | list of string |  |
-| `stats` | object (`files`, `entries`, `resolved`, `guessed`, `unresolved`, `reads`, `signals`) |  |
+| `analyzers` | list of string | the analyzers whose facts the snapshot holds, such as scip-go@0.2.9 |
+| `stats` | object (`files`, `entries`, `resolved`, `guessed`, `unresolved`, `analyzed`, `reads`, `signals`) |  |
 | `skipped` | integer |  |
 | `skips` | list of object (`path`, `reason`) |  |
 | `notes` | object (`attached`, `moved`, `stale`, `orphaned`) |  |

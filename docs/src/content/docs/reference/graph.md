@@ -10,12 +10,13 @@ built. The source of truth is the code: `packages/core/src/graph.ts` for the mod
 ## Tables
 
 One database per project ([D9](/decisions/#d9--storage-one-sqlite-database-per-project-outside-the-target)),
-schema version **3**, recorded in `meta`. A database of another version is refused rather than
+schema version **4**, recorded in `meta`. A database of schema 3 is brought to 4 in place, since 4
+only adds the `analyzers` of each snapshot; a database of another version is refused rather than
 read.
 
 | Table | One row per | Columns |
 |---|---|---|
-| `snapshots` | indexed version of the target | `id`, `ref` (the git ref asked for), `commit_sha`, `dirty`, `created_at`, `schema_version`, `profiles` (JSON list), `indexer` (what indexed it, hashed) |
+| `snapshots` | indexed version of the target | `id`, `ref` (the git ref asked for), `commit_sha`, `dirty`, `created_at`, `schema_version`, `profiles` (JSON list), `indexer` (what indexed it, hashed), `analyzers` (JSON list, such as `["scip-go@0.2.9"]`) |
 | `files` | file read | `path`, `hash` (SHA-256 of its content), `language` |
 | `skips` | folder or file skipped | `path`, `reason` |
 | `nodes` | node | `ref`, `kind`, `name`, `file`, `start_line`, `end_line`, `fingerprint`, `data` (JSON) |
@@ -49,10 +50,13 @@ have changed since.
   reference, edges by kind, ends and citation, facts by node, kind, value and citation. The same code
   gives the same rows, whatever order its files were read in.
 - **Sources.** `tree-sitter` for what the language's queries extract, `tree-sitter:<profile>` for
-  what a profile extracts, `<analyzer>@<version>` for an analyzer's import, `osv` and `git` for
-  advisories.
+  what a profile extracts, `<analyzer>@<version>` for an analyzer's import (`scip-go@0.2.9`), `osv`
+  and `git` for advisories.
 - **Calls.** `data.resolution` is `resolved` or `guessed`; a guessed edge has `data.reason`. A call
   whose callee the index cannot name gets no edge, and is counted as unresolved in the index result.
+  A call through a method of an interface of the module, resolved by an analyzer, has
+  `data.interface` (`Routes.Match`) on its edge to each method that implements it
+  ([analyzers](/reference/analyzers/)).
 - **Function literals.** A literal is a `decl`, and the function that defines it has a `calls` edge
   to it, with `data.literal`: a handler built inside a middleware runs when the middleware's result
   is called, so it is reachable from the middleware.
@@ -108,7 +112,8 @@ Measured on chi 5.3.2, its 35 non-test files:
   is not stated.
 
 The tree-sitter prototype cited in [D12](/decisions/#d12--precision-scip-right-after-the-first-index-dataflow-later)
-guessed 262 of 486.
+guessed 262 of 486. With scip-go (`esper index --precise`), 1 of 618 is guessed and 28 calls are left
+without an edge ([analyzers](/reference/analyzers/#scip-go)).
 
 ## Entry points
 

@@ -5,7 +5,16 @@ import { SnapshotView } from '../src/index.ts'
 // A framework's entry spans the lines of its declaration; a route sits on the line that
 // registers it.
 const view = new SnapshotView(
-  { id: 1, ref: null, commit: null, dirty: false, createdAt: '', profiles: [], indexer: null },
+  {
+    id: 1,
+    ref: null,
+    commit: null,
+    dirty: false,
+    createdAt: '',
+    profiles: [],
+    analyzers: [],
+    indexer: null,
+  },
   {
     files: [{ path: 'a.go', hash: 'h', language: 'go' }],
     skips: [],

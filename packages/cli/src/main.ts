@@ -8,7 +8,9 @@ const usage = `Usage: esper <command> [options]
 Commands:
   add <path or git URL>   add a project; --name <name>, --kind application|framework
   index <project>         index a snapshot of it; --ref <git ref> reads that ref, not the checkout;
-                          --force indexes a commit already indexed
+                          --force indexes a commit already indexed; --precise also runs the
+                          analyzer that resolves call edges with the language's type checker,
+                          in Docker
   list                    the projects and their snapshots
   mcp <project>           serve the project over MCP on stdio; --read-only exposes no tool
                           that writes
@@ -26,13 +28,14 @@ const options = {
   kind: { type: 'string' },
   ref: { type: 'string' },
   force: { type: 'boolean' },
+  precise: { type: 'boolean' },
   'read-only': { type: 'boolean' },
   version: { type: 'boolean' },
   help: { type: 'boolean' },
 } as const
 const commands: Record<string, (keyof typeof options)[]> = {
   add: ['name', 'kind'],
-  index: ['ref', 'force'],
+  index: ['ref', 'force', 'precise'],
   list: [],
   mcp: ['read-only'],
 }
@@ -91,9 +94,10 @@ async function main() {
     const [name] = rest
     if (!name || rest.length > 1) fail('index takes one project name')
     const ref = values.ref
-    const { id, snapshot, stats, profiles, unchanged, notes } = await home.index(name, {
+    const { id, snapshot, stats, profiles, analyzers, unchanged, notes } = await home.index(name, {
       ...(ref ? { ref } : {}),
       ...(values.force ? { force: true } : {}),
+      ...(values.precise ? { precise: true, progress: (m: string) => console.error(m) } : {}),
     })
     const version = [
       snapshot.ref,
@@ -107,7 +111,9 @@ async function main() {
     const noteLine = `  notes        ${states.length > 0 ? states.join(', ') : 'none'}`
     if (unchanged || !stats) {
       console.log(
-        `${label} already indexes this commit with these profiles; --force indexes it again`,
+        `${label} already indexes this commit with these profiles${
+          analyzers.length > 0 ? ` and ${analyzers.join(', ')}` : ''
+        }; --force indexes it again`,
       )
       if (states.length > 0) console.log(noteLine)
       return
@@ -115,6 +121,7 @@ async function main() {
     const edges = stats.resolved + stats.guessed
     console.log(label)
     console.log(`  profiles     ${profiles.join(', ')}`)
+    if (analyzers.length > 0) console.log(`  analyzers    ${analyzers.join(', ')}`)
     console.log(
       `  files        ${snapshot.files.filter((f) => f.path.endsWith('.go')).length} read`,
     )
@@ -132,6 +139,11 @@ async function main() {
     console.log(
       `  call edges   ${edges}, ${percent(stats.resolved, edges)} % resolved; ${stats.unresolved} calls without an edge`,
     )
+    if (analyzers.length > 0) {
+      console.log(
+        `               ${stats.analyzed} of ${stats.calls} calls named by ${analyzers.join(', ')}`,
+      )
+    }
     console.log(`  reads        ${stats.reads}, signals on entry points ${stats.signals}`)
     console.log(noteLine)
     return
@@ -159,7 +171,7 @@ async function main() {
           Boolean,
         )
         console.log(
-          `  ${s.id}  ${s.createdAt}  ${version.join(', ') || 'folder'}  ${s.profiles.join(', ')}`,
+          `  ${s.id}  ${s.createdAt}  ${version.join(', ') || 'folder'}  ${[...s.profiles, ...s.analyzers].join(', ')}`,
         )
       }
     } finally {

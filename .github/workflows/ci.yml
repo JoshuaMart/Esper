@@ -27,6 +27,7 @@ jobs:
       - run: pnpm fetch-targets
         env:
           ESPER_TARGETS: ${{ runner.temp }}/targets
+      # The scip-go tests build their image and run it in Docker, which the runner has (D22).
       - run: pnpm test
         env:
           ESPER_TARGETS: ${{ runner.temp }}/targets

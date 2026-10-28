@@ -1,4 +1,26 @@
+export {
+  type Analysis,
+  AnalysisError,
+  type Analyzer,
+  analyzerSource,
+  analyzersDir,
+  hashFolder,
+  importAnalysis,
+  loadAnalyzers,
+  type Manifest,
+  type Place,
+  parseManifest,
+  type Referent,
+} from './analyzer.ts'
 export { type Detection, detectProfile, type GoModule, goImports, parseGoMod } from './detect.ts'
+export {
+  type AnalyzerInput,
+  type AnalyzerRunner,
+  analyzerImage,
+  cacheVolume,
+  dockerAvailable,
+  dockerRunner,
+} from './docker.ts'
 export { EsperError } from './errors.ts'
 export {
   type CallStats,
@@ -27,6 +49,7 @@ export {
 } from './store.ts'
 export {
   classify,
+  materialise,
   readFolder,
   readRef,
   type TargetFile,

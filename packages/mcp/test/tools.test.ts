@@ -37,8 +37,8 @@ after(async () => {
   await rm(home.dir, { recursive: true })
 })
 
-async function connect(options: { readOnly?: boolean } = {}) {
-  const connection = new Connection(home, 'shop')
+async function connect(options: { readOnly?: boolean } = {}, on: Home = home) {
+  const connection = new Connection(on, 'shop')
   const server = createServer(connection, options)
   const [a, b] = InMemoryTransport.createLinkedPair()
   await server.connect(a)
@@ -369,4 +369,60 @@ test('notes are written over MCP, and after a reindex on another version each ha
     ],
   )
   await close()
+})
+
+test('esper_index runs the analyzer when asked for precision, and the snapshot says so', async () => {
+  // An analyzer that runs nowhere: it answers a file with no reference.
+  const precise = new Home(await mkdtemp(join(tmpdir(), 'esper-mcp-home-')), {
+    analyzers: [
+      {
+        name: 'fake',
+        version: '1.0',
+        languages: ['go'],
+        provides: ['edges.resolve'],
+        answers: 'snapshot',
+        image: { dockerfile: 'Dockerfile' },
+        analyze: ['analyze'],
+        dir: '/nonexistent',
+        hash: '0'.repeat(64),
+      },
+    ],
+    runner: async (_analyzer, _src, _input, progress) => {
+      progress?.('fake@1.0: analyzing the snapshot')
+      return '{"type":"analyzer","format":1,"name":"fake","version":"1.0"}\n'
+    },
+  })
+  try {
+    await precise.add(dir, { name: 'shop' })
+    const { call, client, close } = await connect({}, precise)
+    try {
+      const plain = await call('esper_index', { ref: 'v1' })
+      assert.deepEqual(plain.analyzers, [])
+      assert.equal(plain.stats.analyzed, 0)
+      const indexed = await call('esper_index', { ref: 'v1', precise: true })
+      assert.equal(indexed.unchanged, false)
+      assert.deepEqual(indexed.analyzers, ['fake@1.0'])
+      // A client that asks for progress hears each step of a precise index.
+      const heard: string[] = []
+      const forced = await client.callTool(
+        { name: 'esper_index', arguments: { ref: 'v1', precise: true, force: true } },
+        { onprogress: (p) => heard.push(String(p.message)) },
+      )
+      assert.ok(!forced.isError)
+      assert.deepEqual(heard, [
+        "fake@1.0: writing the snapshot's tree",
+        'fake@1.0: analyzing the snapshot',
+        'fake@1.0: importing its output',
+      ])
+      const { snapshots } = await call('esper_snapshots')
+      assert.deepEqual(
+        snapshots.map((s: { analyzers: string[] }) => s.analyzers),
+        [['fake@1.0'], ['fake@1.0'], []],
+      )
+    } finally {
+      await close()
+    }
+  } finally {
+    await rm(precise.dir, { recursive: true })
+  }
 })

@@ -18,7 +18,8 @@ CREATE TABLE IF NOT EXISTS snapshots (
   created_at TEXT NOT NULL,
   schema_version INTEGER NOT NULL,
   profiles TEXT NOT NULL DEFAULT '[]',
-  indexer TEXT
+  indexer TEXT,
+  analyzers TEXT NOT NULL DEFAULT '[]'
 );
 CREATE TABLE IF NOT EXISTS files (
   snapshot_id INTEGER NOT NULL REFERENCES snapshots(id) ON DELETE CASCADE,
@@ -113,7 +114,9 @@ export interface SnapshotInfo {
   dirty: boolean
   createdAt: string
   profiles: string[]
-  // What indexed it: Esper's version, its profiles and its library data, hashed.
+  // The analyzers whose facts it holds, as `<name>@<version>` (D12).
+  analyzers: string[]
+  // What indexed it: Esper's version, its profiles, its library data and its analyzers, hashed.
   indexer: string | null
 }
 
@@ -122,6 +125,7 @@ export interface NewSnapshot {
   commit?: string
   dirty?: boolean
   profiles?: string[]
+  analyzers?: string[]
   createdAt?: string
   indexer?: string
   // The text of the graph's files, stored with the snapshot so that its code can be read back.
@@ -143,6 +147,7 @@ const snapshotInfo = (row: Record<string, unknown>): SnapshotInfo => ({
   dirty: row.dirty === 1,
   createdAt: String(row.created_at),
   profiles: JSON.parse(String(row.profiles)) as string[],
+  analyzers: JSON.parse(String(row.analyzers ?? '[]')) as string[],
   indexer: (row.indexer as string | null) ?? null,
 })
 
@@ -174,7 +179,16 @@ export class Store {
     const version = meta
       ? this.db.prepare(`SELECT value FROM meta WHERE key = 'schema_version'`).get()
       : undefined
-    if (version && Number(version.value) !== schemaVersion) {
+    // Schema 3 lacks only the analyzers of each snapshot: it is brought to 4 in place.
+    if (version && Number(version.value) === 3) {
+      // Checked again under the lock: another process may have brought it to 4 first.
+      this.transaction(() => {
+        const now = this.db.prepare(`SELECT value FROM meta WHERE key = 'schema_version'`).get()
+        if (Number(now?.value) !== 3) return
+        this.db.exec(`ALTER TABLE snapshots ADD COLUMN analyzers TEXT NOT NULL DEFAULT '[]'`)
+        this.db.exec(`UPDATE meta SET value = '4' WHERE key = 'schema_version'`)
+      })
+    } else if (version && Number(version.value) !== schemaVersion) {
       this.db.close()
       throw new EsperError(
         `${path} has schema ${String(version.value)}, and this Esper reads schema ${schemaVersion}: index the project into a new home`,
@@ -219,8 +233,8 @@ export class Store {
       }
       const { lastInsertRowid } = this.db
         .prepare(
-          `INSERT INTO snapshots (ref, commit_sha, dirty, created_at, schema_version, profiles, indexer)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO snapshots (ref, commit_sha, dirty, created_at, schema_version, profiles, indexer, analyzers)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           info.ref ?? null,
@@ -230,6 +244,7 @@ export class Store {
           schemaVersion,
           JSON.stringify(info.profiles ?? []),
           info.indexer ?? null,
+          JSON.stringify(info.analyzers ?? []),
         )
       const id = Number(lastInsertRowid)
       const file = this.db.prepare(`INSERT INTO files VALUES (?, ?, ?, ?)`)
@@ -280,7 +295,7 @@ export class Store {
   snapshots(): SnapshotInfo[] {
     return this.db
       .prepare(
-        `SELECT id, ref, commit_sha, dirty, created_at, profiles, indexer FROM snapshots ORDER BY id`,
+        `SELECT id, ref, commit_sha, dirty, created_at, profiles, analyzers, indexer FROM snapshots ORDER BY id`,
       )
       .all()
       .map(snapshotInfo)
@@ -289,7 +304,7 @@ export class Store {
   snapshot(id: number): SnapshotInfo | undefined {
     const row = this.db
       .prepare(
-        `SELECT id, ref, commit_sha, dirty, created_at, profiles, indexer FROM snapshots WHERE id = ?`,
+        `SELECT id, ref, commit_sha, dirty, created_at, profiles, analyzers, indexer FROM snapshots WHERE id = ?`,
       )
       .get(id)
     return row ? snapshotInfo(row) : undefined

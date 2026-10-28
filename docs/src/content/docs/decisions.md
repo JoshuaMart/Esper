@@ -30,6 +30,7 @@ says why. Versions and behaviours cited here were checked on 2026-10-28.
 | [D19](#d19--past-vulnerabilities-advisories-linked-to-the-code-they-touched) | Past vulnerabilities: advisories of medium severity or more, linked to the code their fix touched | settled |
 | [D20](#d20--a-reindex-reads-the-whole-target) | A reindex reads the whole target; an unchanged commit is not indexed again | settled |
 | [D21](#d21--a-declarations-fingerprint-leaves-its-name-out) | A declaration's fingerprint leaves its own name out | settled |
+| [D22](#d22--precision-runs-inside-the-index-when-asked) | Precision runs inside the index, when asked; analyzers cite places, not references | settled |
 
 ## D1 — What Esper is and is not
 
@@ -384,7 +385,8 @@ tree-sitter reads syntax: it sees that `svc.update(id)` is called, not which `up
    the call graph: 486 edges, of which 262 are guessed. More than half of the paths an agent follows
    would rest on a guess, which is too much to wait for. Esper's own index, which types what the
    syntax states, guesses 30 of 540 ([graph schema](/reference/graph/#go)); SCIP is still what
-   resolves the rest, and the calls left without an edge.
+   resolves the rest, and the calls left without an edge: with scip-go, 1 of 618
+   ([D22](#d22--precision-runs-inside-the-index-when-asked)).
 2. **Dataflow comes later, on demand**: run for a question (this read, this sink), not for every
    index, and through Joern or CodeQL depending on the language.
 
@@ -821,3 +823,77 @@ fingerprint still covers the whole file.
 
 **Rules out.** Matching a renamed function by its name or position, which would move notes onto
 code that only looks alike.
+
+## D22 — Precision runs inside the index, when asked
+
+This settles how the contract of [D12](#d12--precision-scip-right-after-the-first-index-dataflow-later)
+runs for an analyzer that answers per snapshot, and what its output states. Built in M3, with
+scip-go.
+
+**Decision.**
+
+- **When asked.** `esper index --precise`, or `precise` on `esper_index`, runs the analyzer that
+  resolves the call edges of the snapshot's language: the one that answers per snapshot and provides
+  `edges.resolve`. Without it, nothing changes: tree-sitter alone, and no Docker
+  ([D18](#d18--running-esper-one-home-many-projects)).
+- **Inside the index.** The analyzer runs after the target is read and before the call graph is
+  built, so that what an entry point reads and signals follows the resolved edges, not the guesses.
+  A precise index is a snapshot of its own: the analyzer, by its name, version and the hash of its
+  folder, is part of what indexed it ([D20](#d20--a-reindex-reads-the-whole-target)), and the
+  snapshot lists it (`analyzers`).
+- **A refused file fails the index.** Nothing is stored, and the error names the first line that
+  failed. The index never falls back to tree-sitter alone without saying so.
+- **Places, not references.** An analyzer does not know Esper's references
+  ([D7](#d7--stable-references-and-fingerprints)). It states that the name at a place refers to the
+  function or method defined at another place, or to a symbol outside the snapshot, and which
+  methods implement which interface methods. A place is a file, a line, a column in UTF-8 bytes,
+  and the name found there. Esper checks that the name is at that place in the snapshot's file, and
+  maps the place to a node with tree-sitter: the callee of a call, the name of a declaration. This is
+  what every SCIP indexer gives, so scip-typescript and scip-python will need no new line type.
+- **What it settles.** The callees of calls, of functions returned as values, of handlers and chain
+  members that are the module's own, and of the calls a profile's reads name. Routers and adapters
+  are still recognised by the names the profiles give them, as the syntax states them: a type
+  checker names a method by the type that declares it, which is not always the one a profile
+  lists. A call to a build variant (`sock_unix.go`, `sock_windows.go`) stays a guess to each, since
+  the analyzer type-checks one platform.
+- **Interfaces.** A call through a method of an interface of the module is resolved to each method of
+  the module that the type checker says implements it, and the edge names the interface method
+  (`data.interface`). The set is computed from types, not from names; which of them runs is a
+  question for dataflow ([D12](#d12--precision-scip-right-after-the-first-index-dataflow-later)). A
+  method of an interface outside the module stays a call to that external symbol, as before.
+- **The tree the analyzer sees.** Every regular file of the commit, or of the folder (tracked and
+  untracked, not ignored), not only the files Esper reads: a type checker needs `go.sum`, embedded
+  files and vendored code. The files Esper read are written as it read them; links and submodules
+  are left out. The analyzer is told which files are the snapshot's, and cites only those.
+- **The container.** Built by Esper from `analyzers/<name>/Dockerfile`, its base image pinned by
+  digest and its tool by version, and tagged by the hash of the folder. It runs twice: once to fetch
+  the dependencies, with the network, into the analyzer's cache volume, kept between runs and shared
+  by projects since Go checks every module against its checksums; once to analyze, with no network
+  and the volume read-only. Both runs have the source read-only, a read-only root, no capability, no
+  privilege escalation and a user that is not root, and only the output folder is writable. For Go,
+  the image sets `GOTOOLCHAIN=local` (a `toolchain` line cannot download a Go), the module proxy only
+  with `GOVCS=*:off` (no version control command), `-mod=readonly` and `CGO_ENABLED=0` (no C
+  compiler). Type-checking compiles the target's packages but runs none of its code, and only the
+  output file leaves the container.
+- **Schema 4.** Snapshots gain their `analyzers`; a database of schema 3 is brought to 4 in place,
+  since a column is only added. Facts and edges still take an analyzer as rows, with their source
+  ([D6](#d6--the-graph-model)).
+
+**Why.**
+
+- **Measured on chi 5.3.2.** scip-go 0.2.9 names the callees of 582 of chi's 646 calls. Guessed edges
+  fall from 30 of 540 to 1 of 618, a call through a package variable holding a function, and calls
+  left without an edge from 106 to 28. The 40 entry points are the ones counted by hand. It takes
+  about 4 seconds once the image is built.
+- **Measured on Wakapi.** Guessed edges fall from 567 of 5515 to none of 6666, and calls without an
+  edge from 1437 to 299. The 71 routes are the ones counted by hand; the signals that
+  `POST /api/plugins/errors` reached through a wrong guess go. It takes about 20 seconds, most of it
+  fetching the dependencies.
+- **Not after the fact.** Rewriting the call edges of a stored snapshot would leave its entry
+  points' reads and signals computed from the guesses, and a snapshot that changes after it is
+  written.
+- **Not by default.** The first run builds an image and fetches the dependencies, over the network;
+  an index without Docker must still work.
+
+**Rules out.** Editing a stored snapshot with an analyzer's output; a silent fallback when an
+analyzer fails or its file is refused; analyzers that write Esper's references.
