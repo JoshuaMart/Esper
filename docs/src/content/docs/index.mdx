@@ -1,9 +1,9 @@
 ---
 title: Esper
-description: An enriched graph of a codebase, annotated with notes, served to agents over MCP and explorable in a web interface.
+description: An attack-surface graph of a codebase for white-box vulnerability research, annotated as the audit goes and served to agents over MCP.
 template: splash
 hero:
-  tagline: Turn a codebase into an <strong>enriched graph</strong>, write what you learn about it as <strong>notes</strong> on that graph, and share both with agents and humans.
+  tagline: An <strong>attack-surface graph</strong> of a codebase, for white-box vulnerability research. Where a request enters, what guards it, what it reaches, computed from the code and <strong>annotated</strong> as the audit goes.
   image:
     html: '<svg class="esper-mark" viewBox="0 0 64 64" fill="none" aria-hidden="true"><path d="M6 20V6h14M58 20V6H44M6 44v14h14M58 44v14H44" stroke="#22d3ee" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M32 32 44 22M32 32 21 43" stroke="#22d3ee" stroke-width="2" stroke-linecap="round" opacity=".5"/><circle cx="44" cy="22" r="2.5" fill="#22d3ee" opacity=".6"/><circle cx="21" cy="43" r="2.5" fill="#22d3ee" opacity=".6"/><circle cx="32" cy="32" r="6" fill="#f59e0b"/></svg>'
   actions:
@@ -20,70 +20,100 @@ import { Card, CardGrid } from '@astrojs/starlight/components';
 
 <p class="esper-lede">
 	Esper is at the design stage: this page describes what it is meant to be, not what it does
-	today. It grows out of the code indexer of <a href="https://github.com/JoshuaMart/Forge">Forge</a>,
-	extracted into a tool of its own.
+	today.
 </p>
 
 ## The problem
 
-An agent that works on a codebase starts from raw files. To learn who calls a function, or how a
-request reaches a database write, it greps, reads, and guesses. It spends most of its context on
-finding its way around rather than on the question it was asked. And what it learns is lost when
-the session ends or the context is summarised: the next agent, or the human after it, starts over.
+Code graphs answer **who calls what**. An auditor, human or agent, asks something else: **how
+does an attacker's request enter the code, and where does it go?** Which routes exist, what each
+one reads from the request, which checks stand in front of it, and whether it reaches a write or a
+sink.
 
-Two things are missing: a **map** of the code that is computed rather than guessed, and a **place
-to write down** what has been understood about it.
+Without that map, an agent hunting for vulnerabilities starts from raw files. It spends its context
+finding routes instead of questioning them, misses the one route that lacks the guard its
+siblings have, and forgets what it has already ruled out as soon as its context is summarised.
 
-## The idea
+## What the graph carries
 
-**Code builds the graph. Agents and humans annotate it.**
+The call graph is the substrate. What makes it useful for an audit is what Esper puts on it, all
+computed by parsing, without a model:
+
+| On the graph | What it says |
+|---|---|
+| **Entry points** | for an application, a route: method, path, the middleware chain in front of the handler; for a framework, an exported symbol that reads the request |
+| **Reads** | what the handler takes from the request: `header`, `query`, `path`, `body`, `cookie`, `form`, `host`… |
+| **Guards** | the checks on each route's path, so that a route missing a guard its siblings have stands out |
+| **Signals** | what the code does with the request: writes persisted data, takes an object key from the client, spreads input into an object, short-circuits the stack, hands request state to code that can write to it |
+| **Sinks** | per language and per framework: interpreting, opening a resource, starting a process; and templates that render content unescaped |
+| **Edges** | each call edge is **resolved** or **guessed**, with its reason |
+| **References** | a stable `file#symbol` identity that findings cite and that survives reindexing |
+
+A route, as an agent would receive it (illustrative; the format is not settled):
+
+```yaml
+e-0042: POST /api/projects/[id]/members        # src/routes/api/projects/[id]/members/+server.ts:12
+  chain:   [handle, requireUser]               # no requireOwner, unlike its 4 sibling routes
+  reads:   [path.id, body]
+  signals: [data-write, request-key, divergent-guard]
+  reaches: db.insert (resolved) · sendInvite (guessed: untyped receiver)
+```
+
+A signal is not a defect. It says where to look, and the code answers.
+
+## Notes are the audit
+
+What an audit learns belongs on the graph, next to the code it is about. Agents and humans create,
+edit and delete notes on any node: a route, a symbol, an edge.
+
+- **Leads**: a hypothesis on a route, with the `file:line` it cites.
+- **Coverage**: this slice was hunted from this angle, and nothing came out. What has been ruled
+  out is written down, so the next agent does not redo it.
+- **Findings**: a confirmed issue attached to the code it lives in, and the path that reaches it.
+
+A note is attached to a stable reference. When the code is reindexed, a note on an unchanged node
+carries over; a note on a changed node is flagged for review rather than silently kept.
+
+## How it is used
 
 <CardGrid>
-	<Card title="An enriched graph" icon="seti:graphql">
-		Parsed with tree-sitter, across languages: declarations, imports, call edges and entry
-		points, plus signals computed from the code, such as a route that writes data or a function
-		that reaches a sink. No model is involved in building it.
-	</Card>
-	<Card title="Notes on the graph" icon="pencil">
-		Create, edit and delete notes attached to a node: a file, a symbol, an edge. Notes are what
-		has been understood, so they outlive a session and are shared by whoever reads the graph next.
+	<Card title="An index, not a model" icon="seti:graphql">
+		tree-sitter parses every language into one graph format. Languages are extraction queries,
+		frameworks are profiles. Nothing in the graph is a model's opinion.
 	</Card>
 	<Card title="Served over MCP" icon="rocket">
-		Agents query the graph through bounded tools, like callers, callees, paths and context, and
-		read or write notes through the same server.
+		Hunting agents query bounded tools: entry points, callers, callees, the paths from a route to
+		a sink, and the notes on any node. They read and write notes through the same server.
 	</Card>
 	<Card title="A web interface" icon="laptop">
-		Explore a project visually: zoom from modules to symbols, follow a call path, and read or
-		edit the notes where they sit.
+		Explore the attack surface: routes grouped by chain and signal, a path from an entry point to a
+		sink, the code beside the graph, and the notes where they sit.
+	</Card>
+	<Card title="The code is data" icon="warning">
+		The audited project is read, never built or run. What its comments and instruction files ask
+		does not apply to anything that reads the graph.
 	</Card>
 </CardGrid>
 
 ```mermaid
 flowchart LR
-    SRC[Source code] --> IDX[Indexer<br/>tree-sitter · language queries]
-    IDX --> G[(Enriched graph<br/>nodes · edges · signals)]
-    N[(Notes)] --- G
+    SRC[Audited code] --> IDX[Indexer<br/>tree-sitter · language queries]
+    PROF[Framework profiles] --> IDX
+    IDX --> G[(Attack-surface graph<br/>entry points · reads · guards<br/>signals · sinks · edges)]
+    N[(Notes<br/>leads · coverage · findings)] --- G
     G --> MCP[MCP server]
     G --> WEB[Web interface]
-    MCP <--> AG[Agents]
-    WEB <--> HU[Humans]
-    AG -. write .-> N
-    HU -. write .-> N
+    MCP <--> AG[Hunting agents]
+    WEB <--> HU[Auditor]
 ```
 
 ## Principles
 
-These come from building the indexer in Forge, where they were paid for.
-
-- **Computed, not guessed.** The graph comes from parsing. When an edge cannot be resolved (a
-  method on an untyped receiver, an interface, a name shared by two declarations), it is kept but
-  marked as **guessed**, with its reason. A guessed edge only says it is the one callee the index
-  can name.
-- **Stable identifiers.** A node keeps its identifier across reindexing as long as it has not
-  changed, so the notes attached to it survive a new version of the code.
-- **The code is data.** The indexed project is read, never built or run. What its comments and
-  instruction files ask does not apply to anything that reads the graph.
+- **Computed, not guessed.** When an edge cannot be resolved (a method on an untyped receiver, an
+  interface, a name shared by two declarations), it is kept but marked as guessed, with its reason.
+  A guessed edge only says it is the one callee the index can name.
+- **Refuse rather than return nothing.** A target the index cannot read, an unsupported language or a
+  framework without a profile, is refused. An empty list would pass for an empty attack surface.
 - **Bounded answers.** A query returns a sized result, not a dump, so an agent can afford to ask.
-- **Languages and frameworks as data.** What is specific to a language lives in its extraction
-  queries, and what is specific to a framework, like how a route is declared, lives in a profile.
-  Adding one adds no branch to the indexer.
+- **Frameworks as data.** How a framework declares a route, what it reads, what refuses a request:
+  that lives in a profile. Adding a framework adds no branch to the indexer.
