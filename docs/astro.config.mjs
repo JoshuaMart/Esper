@@ -16,7 +16,7 @@ export default defineConfig({
 			sidebar: [
 				{
 					label: 'Overview',
-					items: ['decisions', 'sources'],
+					items: ['how-it-works', 'decisions', 'sources'],
 				},
 			],
 		}),
