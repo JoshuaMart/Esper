@@ -40,6 +40,19 @@ export type ReadRule =
   | { read: ReadKind; chain: string }
   | { read: ReadKind; call: string; request?: number; name?: number }
 
+export type GuardKind =
+  | 'authn'
+  | 'authz-role'
+  | 'authz-owner'
+  | 'csrf'
+  | 'rate-limit'
+  | 'validation'
+
+export interface GuardRule {
+  call: string
+  kind: GuardKind
+}
+
 export interface Profile {
   name: string
   kind: 'application' | 'framework'
@@ -50,6 +63,7 @@ export interface Profile {
   request?: string
   handlers?: { adapters?: string[] }
   routers?: RouterSpec[]
+  guards?: GuardRule[]
   reads?: ReadRule[]
 }
 
@@ -64,6 +78,7 @@ export interface ResolvedProfile {
   request?: string
   adapters: string[]
   routers: RouterSpec[]
+  guards: GuardRule[]
   reads: ReadRule[]
 }
 
@@ -141,6 +156,7 @@ export function resolveProfile(profile: Profile, all: Profile[]): ResolvedProfil
     ...(request ? { request } : {}),
     adapters: chain.flatMap((p) => p.handlers?.adapters ?? []),
     routers: chain.flatMap((p) => p.routers ?? []),
+    guards: chain.flatMap((p) => p.guards ?? []),
     reads: chain.flatMap((p) => p.reads ?? []),
   }
 }

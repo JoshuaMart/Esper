@@ -78,8 +78,8 @@ whatever order the files are read in.
 
 Measured on chi 5.3.2, its 35 non-test files:
 - 256 declarations;
-- 537 call edges, of which 27 are guessed (5.0 %), mostly calls through an interface;
-- 109 calls left without an edge, mostly to methods of values from the standard library whose type
+- 539 call edges, of which 29 are guessed (5.4 %), mostly calls through an interface;
+- 107 calls left without an edge, mostly to methods of values from the standard library whose type
   is not stated.
 
 The tree-sitter prototype cited in [D12](/decisions/#d12--precision-scip-right-after-the-first-index-dataflow-later)
@@ -100,3 +100,42 @@ An application's routes, read with its profile ([Profiles](/reference/profiles/)
 
 Two routes with the same method and path take an ordinal, `route:GET /x~2`. An entry's fingerprint
 covers its method, path, handler and chain, and the fingerprints of the declarations they name.
+
+## Guards, sinks and signals
+
+What the facts say, and where they come from:
+
+| Fact | On | From |
+|---|---|---|
+| `guard` | an entry | a chain member that a profile's `guards` names, with its kind |
+| `sink` | the declaration that makes the call | a call that the language's `library.yaml` lists as a sink, when the argument it interprets is not a literal: `db.Query("… " + id)` is a sink, `db.Query("… = ?", id)` is not |
+| `signal` | a declaration | the rules of [D6](/decisions/#d6--the-graph-model), each at the line that triggers it |
+| `signal` | an entry | the signals of what its handler, or its chain, reaches through calls, with `data.via` and `data.from`; `sink-reachable` for a sink, with `data.sink` |
+
+- **Reachability.** An entry's signals follow resolved and guessed calls. A signal reached only
+  through a guessed call has `data.guessed`.
+- **Interfaces.** A call on a value whose type is an interface of the module is guessed to be the
+  method of each type of the module that has all of the interface's methods, with the reason
+  (`HeartbeatRepository implements IHeartbeatRepository`).
+- **Short-circuit.** A middleware short-circuits when it passes the request on in one place
+  (`next.ServeHTTP(w, r)`, or `next(w, r)` for a handler function it was given) and, inside a
+  condition, returns from a block that does not.
+- **Divergent guards.** Siblings are the routes declared on the same router, seen through `With`
+  and `Group`, when there are at least three. An entry is divergent when it lacks a guard kind, or a
+  short-circuiting chain member, that more than half of its siblings have; `data.missing` names
+  them.
+- **Library data.** `library.yaml` also states the types whose methods return themselves
+  (`gorm.DB`, so `db.Where(…).First(…)` keeps its type), and the first result type of common
+  constructors outside the module (`json.NewDecoder` gives a `Decoder`).
+
+Measured on Wakapi at `aba6a44`, the 66 routes carry:
+- `short-circuit`: 39, from its authentication middleware;
+- `sink-reachable`: 26, mostly redirects and template output;
+- `retained-mutation`: 10;
+- `data-read` and `data-write`: 3 each, through repositories behind interfaces;
+- `live-state`: 45, almost all from a template reload on the development path, which writes a
+  package variable during a request. Lazily created singletons (`if x == nil { x = … }`, or
+  `if x != nil { return x }` before it) do not count.
+
+No route is divergent: Wakapi applies its guards to whole subrouters.
+

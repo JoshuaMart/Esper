@@ -44,6 +44,7 @@ Symbols are written `<import path>#<symbol>`.
 | `request` | the request's type (`net/http#Request`), for the `chain` reads |
 | `handlers.adapters` | conversions whose first argument is the handler (`net/http#HandlerFunc`), seen through |
 | `routers` | each kind of router: its types, the functions that `create` one, the package functions that register on a `default` one, its `pattern` syntax, and what each of its methods `does` |
+| `guards` | middleware that can refuse a request, by kind: `{ call: github.com/go-chi/chi/v5/middleware#BasicAuth, kind: authn }` |
 | `reads` | what reads the request: a `chain` of fields and calls on it, or a `call` to a function given it |
 
 ### What a router method does

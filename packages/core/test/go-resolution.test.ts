@@ -150,3 +150,28 @@ test('fields of a nested struct do not belong to the outer struct', async () => 
     ['a.go#Other.Stop', 'resolved'],
   ])
 })
+
+test('a call through an interface is a guess to each type that implements it', async () => {
+  const code = go(
+    'package a',
+    'type Store interface { Get(id string) string; Put(id string) }',
+    'type Mem struct{}',
+    'func (m *Mem) Get(id string) string { return "" }',
+    'func (m *Mem) Put(id string) {}',
+    'type Disk struct{}',
+    'func (d *Disk) Get(id string) string { return "" }',
+    'func (d *Disk) Put(id string) {}',
+    'type Half struct{}',
+    'func (h *Half) Get(id string) string { return "" }',
+    'func use(s Store) { s.Get("x") }',
+  )
+  const { graph } = await extractGo([{ path: 'a.go', source: code }], { module: 'example.com/m' })
+  const edges = graph.edges
+    .filter((e) => e.kind === 'calls' && e.from === 'a.go#use')
+    .map((e) => [e.to, e.data?.reason])
+  // `Half` lacks `Put`, so it does not implement `Store`.
+  assert.deepEqual(edges, [
+    ['a.go#Disk.Get', 'Disk implements Store'],
+    ['a.go#Mem.Get', 'Mem implements Store'],
+  ])
+})

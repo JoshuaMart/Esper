@@ -199,7 +199,7 @@ facts, never from a claim:
 
 | Signal | Set when |
 |---|---|
-| `live-state` | the code reads or writes state that outlives the request: a package-level or module-level variable, a shared map or cache |
+| `live-state` | the code changes state that outlives the request: it assigns a package-level or module-level variable (not a lazy `if x == nil` initialisation), deletes from it, or calls a method on it that writes |
 | `retained-mutation` | the code modifies request state (path, headers, parameters, context) that later middleware, the handler or the framework reads again |
 | `short-circuit` | a chain member can answer or return without calling the next one, so that what follows it is skipped for some requests |
 | `data-write` | the code writes persisted data: a database, a file, a store the profile names |
@@ -316,7 +316,8 @@ Lines, for backup or for versioning in git.
 ## D10 — Frameworks as profiles
 
 **Decision.** What is specific to a **language** lives in its extraction queries (tree-sitter `.scm`
-files): declarations, calls, imports, and the library calls that are sinks. What is specific to a
+files) for declarations and imports, and in its library file (`library.yaml`) for what library calls
+do: which are sinks, which read or write persisted data, which decode a body. What is specific to a
 **framework** lives in a YAML profile, validated against a schema before use:
 
 - how a route is declared: a folder convention, a decorator, a call (`r.Get(...)`);
@@ -378,7 +379,7 @@ tree-sitter reads syntax: it sees that `svc.update(id)` is called, not which `up
    scip-go ([roadmap](/roadmap/)). Measured on chi 5.3.2 with an earlier tree-sitter prototype of
    the call graph: 486 edges, of which 262 are guessed. More than half of the paths an agent follows
    would rest on a guess, which is too much to wait for. Esper's own index, which types what the
-   syntax states, guesses 27 of 537 ([graph schema](/reference/graph/#go)); SCIP is still what
+   syntax states, guesses 29 of 539 ([graph schema](/reference/graph/#go)); SCIP is still what
    resolves the rest, and the calls left without an edge.
 2. **Dataflow comes later, on demand**: run for a question (this read, this sink), not for every
    index, and through Joern or CodeQL depending on the language.

@@ -29,6 +29,19 @@ routers:
       - { name: Group, does: group }
       - { name: Route, does: subrouter }
       - { name: Mount, does: mount }
+guards:
+  - { call: github.com/go-chi/chi/v5/middleware#BasicAuth, kind: authn }
+  - { call: github.com/go-chi/chi/v5/middleware#Throttle, kind: rate-limit }
+  - { call: github.com/go-chi/chi/v5/middleware#ThrottleBacklog, kind: rate-limit }
+  - { call: github.com/go-chi/chi/v5/middleware#ThrottleWithOpts, kind: rate-limit }
+  - { call: github.com/go-chi/chi/v5/middleware#AllowContentType, kind: validation }
+  - { call: github.com/go-chi/chi/v5/middleware#AllowContentEncoding, kind: validation }
+  - { call: github.com/go-chi/chi/v5/middleware#RequestSize, kind: validation }
+  - { call: github.com/go-chi/httprate#Limit, kind: rate-limit }
+  - { call: github.com/go-chi/httprate#LimitByIP, kind: rate-limit }
+  - { call: github.com/go-chi/httprate#LimitByRealIP, kind: rate-limit }
+  - { call: github.com/go-chi/httprate#LimitAll, kind: rate-limit }
+  - { call: github.com/go-chi/jwtauth/v5#Authenticator, kind: authn }
 reads:
   - { call: github.com/go-chi/chi/v5#URLParam, request: 0, name: 1, read: path }
   - { call: github.com/go-chi/chi/v5#URLParamFromCtx, name: 1, read: path }

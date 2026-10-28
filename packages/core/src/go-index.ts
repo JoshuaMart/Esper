@@ -10,7 +10,9 @@ import {
   present,
 } from './go.ts'
 import { type Member, type Route, RouteInterpreter } from './go-routes.ts'
+import { declFacts } from './go-signals.ts'
 import type { Fact, Graph, GraphEdge } from './graph.ts'
+import { loadLibrary } from './library.ts'
 import type { ReadKind, ReadRule, ResolvedProfile } from './profile.ts'
 import { Names } from './refs.ts'
 
@@ -20,6 +22,7 @@ import { Names } from './refs.ts'
 export interface IndexStats extends CallStats {
   entries: number
   reads: number
+  signals: number
 }
 
 interface ChainItem {
@@ -146,41 +149,63 @@ function extractReads(program: GoProgram, profile: ResolvedProfile): Fact[] {
 
 const sha256 = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex')
 
+// Signals an entry takes from what its handler reaches, and from what its chain reaches.
+const fromHandler = new Set([
+  'data-write',
+  'data-read',
+  'request-key',
+  'mass-assignment',
+  'live-state',
+  'callback-passed',
+  'retained-mutation',
+])
+const fromChain = new Set(['short-circuit', 'live-state', 'callback-passed', 'retained-mutation'])
+
 export async function indexGo(
   files: GoFile[],
   options: { module?: string; profile: ResolvedProfile },
 ): Promise<{ graph: Graph; stats: IndexStats; routes: Route[] }> {
-  const program = await GoProgram.load(files, options)
+  const library = await loadLibrary('go')
+  const program = await GoProgram.load(files, {
+    ...options,
+    fluent: library.fluent,
+    returns: library.returns,
+  })
   try {
     const { graph, stats } = program.callGraph()
     const profile = options.profile
     const source = `tree-sitter:${profile.name}`
     const routes = new RouteInterpreter(program, profile).routes()
     const reads = extractReads(program, profile)
-    graph.facts.push(...reads)
+    const signals = declFacts(program, profile, library, reads)
+    graph.facts.push(...reads, ...signals)
 
     const nodes = new Map(graph.nodes.map((n) => [n.ref, n]))
-    const calls = new Map<string, string[]>()
+    const calls = new Map<string, { to: string; guessed: boolean }[]>()
     for (const e of graph.edges) {
-      if (e.kind === 'calls' && e.data?.resolution === 'resolved') {
-        calls.set(e.from, [...(calls.get(e.from) ?? []), e.to])
-      }
+      if (e.kind !== 'calls') continue
+      const list = calls.get(e.from) ?? []
+      list.push({ to: e.to, guessed: e.data?.resolution === 'guessed' })
+      calls.set(e.from, list)
     }
-    const readsOf = new Map<string, Fact[]>()
-    for (const fact of reads) readsOf.set(fact.node, [...(readsOf.get(fact.node) ?? []), fact])
-    // The reads of everything a member reaches through resolved calls.
-    const reached = (start: string[]): Fact[] => {
-      const seen = new Set<string>()
-      const queue = [...start]
-      const found: Fact[] = []
+    const factsOf = new Map<string, Fact[]>()
+    for (const fact of [...reads, ...signals]) {
+      factsOf.set(fact.node, [...(factsOf.get(fact.node) ?? []), fact])
+    }
+    // Everything reachable through calls, each with whether the only paths to it go through a
+    // guessed edge: a signal reached that way says so.
+    const reach = (start: string[]): Map<string, boolean> => {
+      const best = new Map<string, boolean>()
+      const queue = start.map((ref) => ({ ref, guessed: false }))
       while (queue.length > 0) {
-        const ref = queue.shift() as string
-        if (seen.has(ref)) continue
-        seen.add(ref)
-        found.push(...(readsOf.get(ref) ?? []))
-        queue.push(...(calls.get(ref) ?? []))
+        const { ref, guessed } = queue.shift() as { ref: string; guessed: boolean }
+        const known = best.get(ref)
+        if (known === false || (known === true && guessed)) continue
+        best.set(ref, guessed)
+        for (const next of calls.get(ref) ?? [])
+          queue.push({ ref: next.to, guessed: guessed || next.guessed })
       }
-      return found
+      return best
     }
     const ensure = (ref: string, name: string) => {
       if (!nodes.has(ref)) {
@@ -211,6 +236,7 @@ export async function indexGo(
         })
       }
     }
+    const guardRules = new Map(profile.guards.map((g) => [`ext:${g.call}`, g.kind]))
 
     const ordered = [...routes].sort((a, b) => {
       const ka = `${a.method} ${a.path}\0${a.citation.file}\0${String(a.citation.line).padStart(9, '0')}`
@@ -218,15 +244,21 @@ export async function indexGo(
       return ka < kb ? -1 : ka > kb ? 1 : 0
     })
     const taken = new Names()
+    // What guards each entry: the guard kinds of its chain, and the chain members that can answer
+    // without calling the next handler.
+    const guarding = new Map<string, Map<string, { citation: Fact['citation']; text: string }>>()
+    const entryOf = new Map<Route, string>()
     for (const route of ordered) {
       const ref = `route:${taken.take(`${route.method} ${route.path}`)}`
-      const unresolved = [route.handler, ...route.chain]
+      entryOf.set(route, ref)
+      const members = [route.handler, ...route.chain]
+      const unresolved = members
         .map((m, i) => ({
           text: m.text,
           citation: m.citation,
           position: i === 0 ? 'handler' : i - 1,
         }))
-        .filter((_, i) => ([route.handler, ...route.chain][i]?.targets.length ?? 0) === 0)
+        .filter((_, i) => (members[i]?.targets.length ?? 0) === 0)
       const print = (m: Member) =>
         m.targets.map((t) => [t.ref, nodes.get(t.ref)?.fingerprint ?? null])
       graph.nodes.push({
@@ -259,23 +291,112 @@ export async function indexGo(
         link('chain', ref, member, { position })
       })
 
-      // An entry reads what its handler and its chain read, wherever in what they reach.
-      const seen = new Set<string>()
-      const from = (part: 'handler' | 'chain', members: Member[]) => {
-        for (const fact of reached(members.flatMap((m) => m.targets.map((t) => t.ref)))) {
-          const key = `${fact.value}\0${fact.citation.file}:${fact.citation.line}`
-          if (seen.has(key)) continue
-          seen.add(key)
-          graph.facts.push({ ...fact, node: ref, data: { via: fact.node, from: part } })
+      const guards = new Map<string, { citation: Fact['citation']; text: string }>()
+      for (const member of route.chain) {
+        for (const target of member.targets) {
+          const kind = guardRules.get(target.ref)
+          if (kind) {
+            graph.facts.push({
+              node: ref,
+              kind: 'guard',
+              value: kind,
+              citation: member.citation,
+              source,
+              data: { via: target.ref },
+            })
+            guards.set(kind, { citation: member.citation, text: member.text })
+          }
         }
       }
-      from('handler', [route.handler])
-      from('chain', route.chain)
+
+      // Reads and signals, from what the handler and the chain reach.
+      const seen = new Set<string>()
+      const take = (part: 'handler' | 'chain', members: Member[], accept: (f: Fact) => boolean) => {
+        const reached = reach(members.flatMap((m) => m.targets.map((t) => t.ref)))
+        for (const [decl, guessed] of reached) {
+          for (const fact of factsOf.get(decl) ?? []) {
+            if (!accept(fact)) continue
+            const key = `${fact.kind}\0${fact.value}\0${fact.citation.file}:${fact.citation.line}`
+            if (seen.has(key)) continue
+            seen.add(key)
+            const data = { via: fact.node, from: part, ...(guessed ? { guessed: true } : {}) }
+            const value = fact.kind === 'sink' ? 'sink-reachable' : fact.value
+            const kind = fact.kind === 'sink' ? 'signal' : fact.kind
+            graph.facts.push({
+              ...fact,
+              node: ref,
+              kind,
+              value,
+              data: { ...data, ...(fact.kind === 'sink' ? { sink: fact.value } : {}) },
+            })
+          }
+        }
+      }
+      take(
+        'handler',
+        [route.handler],
+        (f) => f.kind === 'read' || f.kind === 'sink' || fromHandler.has(f.value),
+      )
+      take(
+        'chain',
+        route.chain,
+        (f) => f.kind === 'read' || (f.kind === 'signal' && fromChain.has(f.value)),
+      )
+      // A chain member that can answer on its own guards the routes behind it, whatever its kind.
+      for (const member of route.chain) {
+        const reached = reach(member.targets.map((t) => t.ref))
+        const stops = [...reached.keys()].some((decl) =>
+          (factsOf.get(decl) ?? []).some((f) => f.value === 'short-circuit'),
+        )
+        if (stops)
+          guards.set(`member:${member.text}`, { citation: member.citation, text: member.text })
+      }
+      guarding.set(ref, guards)
+    }
+
+    // An entry that lacks a guard most of its siblings have: routes declared on the same router,
+    // seen through `With` and `Group`, of which there are at least three.
+    const groups = new Map<number, Route[]>()
+    for (const route of ordered)
+      groups.set(route.group, [...(groups.get(route.group) ?? []), route])
+    for (const siblings of groups.values()) {
+      if (siblings.length < 3) continue
+      for (const route of siblings) {
+        const ref = entryOf.get(route) as string
+        const own = guarding.get(ref) ?? new Map()
+        const others = siblings
+          .filter((s) => s !== route)
+          .map((s) => guarding.get(entryOf.get(s) as string) ?? new Map())
+        const counts = new Map<string, { n: number; text: string }>()
+        for (const guards of others) {
+          for (const [key, guard] of guards)
+            counts.set(key, { n: (counts.get(key)?.n ?? 0) + 1, text: guard.text })
+        }
+        const missing = [...counts]
+          .filter(([key, { n }]) => !own.has(key) && n * 2 > others.length)
+          .map(([key, { text }]) => (key.startsWith('member:') ? text : key))
+          .sort()
+        if (missing.length === 0) continue
+        graph.facts.push({
+          node: ref,
+          kind: 'signal',
+          value: 'divergent-guard',
+          citation: route.citation,
+          source,
+          data: { missing, siblings: others.length },
+        })
+      }
     }
 
     return {
       graph,
-      stats: { ...stats, entries: ordered.length, reads: reads.length },
+      stats: {
+        ...stats,
+        entries: ordered.length,
+        reads: reads.length,
+        signals: graph.facts.filter((f) => f.kind === 'signal' && f.node.startsWith('route:'))
+          .length,
+      },
       routes: ordered,
     }
   } finally {

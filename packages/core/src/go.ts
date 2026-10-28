@@ -73,6 +73,8 @@ export interface ParsedFile {
   // Each declaration by the id of its syntax node, to find the one that encloses a node.
   declsById: Map<number, Decl>
   structs: Map<string, Map<string, string>>
+  // The method names of each interface type of a file.
+  interfaces: Map<string, string[]>
 }
 
 // The module path that `go.mod` declares, so that an import can be told internal or external.
@@ -242,6 +244,21 @@ function structFields(root: Node): Map<string, Map<string, string>> {
   return types
 }
 
+// The methods each interface type declares by name; embedded interfaces are not followed.
+function interfaceMethods(root: Node): Map<string, string[]> {
+  const interfaces = new Map<string, string[]>()
+  for (const spec of present(root.descendantsOfType('type_spec'))) {
+    const name = spec.childForFieldName('name')?.text
+    const type = spec.childForFieldName('type')
+    if (!name || type?.type !== 'interface_type') continue
+    const methods = present(type.namedChildren)
+      .filter((n) => n.type === 'method_elem')
+      .map((n) => n.childForFieldName('name')?.text ?? '')
+    interfaces.set(name, methods.filter(Boolean))
+  }
+  return interfaces
+}
+
 async function parseFile(file: GoFile): Promise<ParsedFile> {
   const tree = await parse('go', file.source)
   const root = tree.rootNode
@@ -269,6 +286,7 @@ async function parseFile(file: GoFile): Promise<ParsedFile> {
     decls: [],
     declsById: new Map(),
     structs: structFields(root),
+    interfaces: interfaceMethods(root),
   }
   const add = (decl: Decl) => {
     parsed.decls.push(decl)
@@ -344,6 +362,11 @@ function agreed(types: (Located | undefined)[]): Located | undefined {
 export class GoProgram {
   readonly files: ParsedFile[]
   readonly module: string | undefined
+  // Types whose methods return the type itself: `db.Where(…).First(…)` keeps `*gorm.DB`.
+  private readonly fluent: Set<string>
+  // What functions outside the module return first: `encoding/json#NewDecoder` gives
+  // `encoding/json#Decoder`.
+  private readonly returns: Map<string, string>
   private readonly functions: Map<string, Decl[]>
   private readonly methods: Map<string, Decl[]>
   private readonly methodsByName: Map<string, Decl[]>
@@ -352,12 +375,28 @@ export class GoProgram {
   private readonly aliasesOf = new Map<string, Map<string, string>>()
   private readonly byPath: Map<string, ParsedFile>
 
-  static async load(files: GoFile[], options: { module?: string } = {}): Promise<GoProgram> {
+  static async load(
+    files: GoFile[],
+    options: {
+      module?: string
+      fluent?: Iterable<string>
+      returns?: Iterable<[string, string]>
+    } = {},
+  ): Promise<GoProgram> {
     const parsed = await Promise.all(files.map(parseFile))
-    return new GoProgram(parsed, options.module)
+    return new GoProgram(parsed, options.module, {
+      fluent: new Set(options.fluent ?? []),
+      returns: new Map(options.returns ?? []),
+    })
   }
 
-  private constructor(parsed: ParsedFile[], module: string | undefined) {
+  private constructor(
+    parsed: ParsedFile[],
+    module: string | undefined,
+    library: { fluent: Set<string>; returns: Map<string, string> },
+  ) {
+    this.fluent = library.fluent
+    this.returns = library.returns
     this.files = parsed.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
     this.module = module
     this.byPath = new Map(this.files.map((file) => [file.path, file]))
@@ -446,6 +485,55 @@ export class GoProgram {
     return dir === undefined ? { importPath, name: type.name } : { dir, name: type.name }
   }
 
+  // The methods named `method` of the types that implement the interface `name` of `dir`, as
+  // guesses: which one runs depends on the value, which the syntax does not state.
+  private implementations(dir: string, name: string, method: string): Target[] | undefined {
+    const required = this.filesIn(dir)
+      .map((f) => f.interfaces.get(name))
+      .find((m) => m)
+    if (!required?.includes(method)) return undefined
+    this.methodSets ??= this.buildMethodSets()
+    const found: Target[] = []
+    for (const [type, set] of this.methodSets) {
+      if (!required.every((m) => set.methods.has(m))) continue
+      const decl = set.methods.get(method)
+      if (decl) {
+        const reason = `${type.split('\0')[1]} implements ${name}`
+        found.push({ ref: decl.ref, decl, resolution: 'guessed', reason })
+      }
+    }
+    return found.length > 0 ? found.sort((a, b) => (a.ref < b.ref ? -1 : 1)) : undefined
+  }
+
+  private methodSets?: Map<string, { methods: Map<string, Decl> }>
+
+  private buildMethodSets(): Map<string, { methods: Map<string, Decl> }> {
+    const sets = new Map<string, { methods: Map<string, Decl> }>()
+    for (const file of this.files) {
+      for (const decl of file.decls) {
+        if (!decl.receiver) continue
+        const key = `${file.dir}\0${decl.receiver}`
+        const set = sets.get(key) ?? { methods: new Map() }
+        set.methods.set(decl.name.slice(decl.receiver.length + 1), decl)
+        sets.set(key, set)
+      }
+    }
+    return new Map([...sets].sort(([a], [b]) => (a < b ? -1 : 1)))
+  }
+
+  // The declared type of a field `x.f`, as written, when `x` is a struct of the module.
+  fieldType(node: Node, file: ParsedFile): string | undefined {
+    if (node.type !== 'selector_expression') return undefined
+    const inner = node.childForFieldName('operand')
+    const field = node.childForFieldName('field')?.text
+    const owner =
+      inner && field && !this.packageOf(inner, file) ? this.typeOf(inner, file) : undefined
+    if (!owner || !('dir' in owner)) return undefined
+    const declared = this.fields.get(`${owner.dir}\0${owner.name}\0${field}`) ?? []
+    const texts = new Set(declared.map((d) => d.type))
+    return texts.size === 1 ? [...texts][0] : undefined
+  }
+
   // The `index`-th type a function declares it returns, located from the function's own file.
   private resultOf(decls: Decl[] | undefined, index: number): Located | undefined {
     return agreed(
@@ -515,11 +603,19 @@ export class GoProgram {
         const importPath = this.packageOf(operand, file)
         if (importPath) {
           const dir = this.internalDir(importPath)
+          const known = this.returns.get(`${importPath}#${name}`)
+          if (dir === undefined && known && index === 0) {
+            const [path, type] = known.split('#')
+            if (path && type) return { importPath: path, name: type }
+          }
           return dir === undefined
             ? outside
             : this.resultOf(this.functions.get(`${dir}\0${name}`), index)
         }
         const receiver = this.typeOf(operand, file, 0, depth + 1)
+        if (receiver && 'importPath' in receiver && index === 0) {
+          if (this.fluent.has(`${receiver.importPath}#${receiver.name}`)) return receiver
+        }
         if (!receiver || !('dir' in receiver)) return receiver ? outside : undefined
         return this.resultOf(this.methods.get(`${receiver.dir}\0${receiver.name}.${name}`), index)
       }
@@ -578,6 +674,10 @@ export class GoProgram {
     }
     const own = type ? variants(this.methods.get(`${type.dir}\0${type.name}.${name}`)) : undefined
     if (own) return own
+    // A method of an interface of the module: each type of the module that has every method of
+    // the interface may be the one called.
+    const implementations = type ? this.implementations(type.dir, type.name, name) : undefined
+    if (implementations) return implementations
     // Otherwise, an interface, an embedded method or a value of unknown type: the only method of
     // the module with that name is a guess.
     const candidates = this.methodsByName.get(name) ?? []

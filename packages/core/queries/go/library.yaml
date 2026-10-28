@@ -1,0 +1,111 @@
+# What the Go standard library and common libraries do with what they are given: the calls that
+# are sinks, that read or write persisted data, or that decode a request body. A call is a sink
+# only when the argument it interprets is not a literal: `@1` names that argument when it is not
+# the first, `@*` means any argument.
+#
+# `fluent` types return themselves from their methods (`db.Where(…).First(…)`), so that a chain
+# of calls on them keeps its type.
+
+fluent:
+  - gorm.io/gorm#DB
+
+# The type a function outside the module returns first, for the chains that start from it:
+# `json.NewDecoder(r.Body).Decode(&v)`.
+returns:
+  encoding/json#NewDecoder: encoding/json#Decoder
+  encoding/xml#NewDecoder: encoding/xml#Decoder
+  database/sql#Open: database/sql#DB
+  gorm.io/gorm#Open: gorm.io/gorm#DB
+  net/http#NewRequest: net/http#Request
+  net/http#NewRequestWithContext: net/http#Request
+
+sinks:
+  sql:
+    - database/sql#DB.Query
+    - database/sql#DB.QueryContext@1
+    - database/sql#DB.QueryRow
+    - database/sql#DB.QueryRowContext@1
+    - database/sql#DB.Exec
+    - database/sql#DB.ExecContext@1
+    - database/sql#Tx.Query
+    - database/sql#Tx.QueryContext@1
+    - database/sql#Tx.QueryRow
+    - database/sql#Tx.QueryRowContext@1
+    - database/sql#Tx.Exec
+    - database/sql#Tx.ExecContext@1
+    - gorm.io/gorm#DB.Raw
+    - gorm.io/gorm#DB.Exec
+  process:
+    - os/exec#Command@*
+    - os/exec#CommandContext@*
+    - syscall#Exec@*
+  file:
+    - os#Open
+    - os#OpenFile
+    - os#Create
+    - os#ReadFile
+    - os#WriteFile
+    - os#Remove
+    - os#RemoveAll
+    - os#ReadDir
+    - net/http#ServeFile@2
+  fetch:
+    - net/http#Get
+    - net/http#Head
+    - net/http#Post
+    - net/http#PostForm
+    - net/http#NewRequest@1
+    - net/http#NewRequestWithContext@2
+    - net/http#Client.Get
+    - net/http#Client.Head
+    - net/http#Client.Post
+  redirect:
+    - net/http#Redirect@2
+  unescaped:
+    - html/template#HTML
+    - html/template#HTMLAttr
+    - html/template#JS
+    - html/template#URL
+    - html/template#CSS
+
+data:
+  write:
+    - database/sql#DB.Exec
+    - database/sql#DB.ExecContext
+    - database/sql#Tx.Exec
+    - database/sql#Tx.ExecContext
+    - gorm.io/gorm#DB.Create
+    - gorm.io/gorm#DB.CreateInBatches
+    - gorm.io/gorm#DB.Save
+    - gorm.io/gorm#DB.Update
+    - gorm.io/gorm#DB.Updates
+    - gorm.io/gorm#DB.UpdateColumn
+    - gorm.io/gorm#DB.UpdateColumns
+    - gorm.io/gorm#DB.Delete
+    - gorm.io/gorm#DB.Exec
+  read:
+    - database/sql#DB.Query
+    - database/sql#DB.QueryContext
+    - database/sql#DB.QueryRow
+    - database/sql#DB.QueryRowContext
+    - database/sql#Tx.Query
+    - database/sql#Tx.QueryContext
+    - database/sql#Tx.QueryRow
+    - database/sql#Tx.QueryRowContext
+    - gorm.io/gorm#DB.First
+    - gorm.io/gorm#DB.Last
+    - gorm.io/gorm#DB.Take
+    - gorm.io/gorm#DB.Find
+    - gorm.io/gorm#DB.FindInBatches
+    - gorm.io/gorm#DB.Scan
+    - gorm.io/gorm#DB.Pluck
+    - gorm.io/gorm#DB.Count
+    - gorm.io/gorm#DB.Row
+    - gorm.io/gorm#DB.Rows
+    - gorm.io/gorm#DB.Raw
+
+decoders:
+  - encoding/json#Unmarshal
+  - encoding/json#Decoder.Decode
+  - encoding/xml#Unmarshal
+  - encoding/xml#Decoder.Decode

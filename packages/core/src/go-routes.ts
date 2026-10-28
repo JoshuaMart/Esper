@@ -30,6 +30,9 @@ export interface Route {
   handler: Member
   chain: Member[]
   citation: Citation
+  // The router the route is declared on, seen through `With` and `Group`: routes of one group
+  // are siblings, whose guards can be compared.
+  group: number
 }
 
 interface Router {
@@ -41,12 +44,16 @@ interface Router {
   children: { prefix: string; router: Router; key: string }[]
   // A router reached only through another one (`With`, `Group`, a mount) is not a root.
   parents: number
+  // For `With` and `Group`: the router they add to.
+  inline?: Router
   // A router parameter that no call binds: its routes are kept under `${name}`, the prefix the
   // index could not read.
   parameter?: string
 }
 
 type Env = Map<string, Router>
+
+const groupOf = (router: Router): number => (router.inline ? groupOf(router.inline) : router.id)
 
 const routeKey = (r: Pick<Route, 'method' | 'path' | 'citation'>) =>
   `${r.method} ${r.path} ${r.citation.file}:${r.citation.line}`
@@ -373,6 +380,7 @@ export class RouteInterpreter {
           handler: this.member(handlerNode, file),
           chain: [],
           citation: site,
+          group: groupOf(router),
         }
         if (!router.routes.some((r) => routeKey(r) === routeKey(route))) router.routes.push(route)
         return undefined
@@ -388,6 +396,7 @@ export class RouteInterpreter {
         return undefined
       case 'with': {
         const derived = this.router(`${file.path}:${node.id}:${router.id}`, router.spec, site)
+        derived.inline = router
         for (const mw of args) {
           const member = this.member(mw, file)
           if (!derived.chain.some((m) => m.text === member.text)) derived.chain.push(member)
@@ -399,6 +408,7 @@ export class RouteInterpreter {
       case 'subrouter': {
         const prefix = method.does === 'subrouter' ? pathOf(this.program, arg('path'), file) : ''
         const child = this.router(`${file.path}:${node.id}:${router.id}`, router.spec, site)
+        if (method.does === 'group') child.inline = router
         this.attach(router, normalisePattern(prefix, router.spec.pattern).path, child)
         const callback = arg('callback')
         if (callback) this.callback(callback, child, file)
@@ -424,6 +434,7 @@ export class RouteInterpreter {
           handler: this.member(handlerNode, file),
           chain: [],
           citation: site,
+          group: groupOf(router),
         }
         if (!router.routes.some((r) => routeKey(r) === routeKey(route))) router.routes.push(route)
         return undefined

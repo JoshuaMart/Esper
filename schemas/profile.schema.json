@@ -7,14 +7,25 @@
   "additionalProperties": false,
   "required": ["name", "kind", "language", "detect"],
   "properties": {
-    "name": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
-    "kind": { "enum": ["application", "framework"] },
-    "language": { "enum": ["go"] },
-    "description": { "type": "string" },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$"
+    },
+    "kind": {
+      "enum": ["application", "framework"]
+    },
+    "language": {
+      "enum": ["go"]
+    },
+    "description": {
+      "type": "string"
+    },
     "extends": {
       "description": "Profiles whose request type, handler adapters, routers and reads also apply.",
       "type": "array",
-      "items": { "type": "string" }
+      "items": {
+        "type": "string"
+      }
     },
     "detect": {
       "description": "How the profile recognises its target: a module that requires a dependency (an application), a module with that path (the framework itself), or a file that imports a package.",
@@ -22,9 +33,15 @@
       "additionalProperties": false,
       "minProperties": 1,
       "properties": {
-        "dependency": { "$ref": "#/$defs/paths" },
-        "module": { "$ref": "#/$defs/paths" },
-        "import": { "$ref": "#/$defs/paths" }
+        "dependency": {
+          "$ref": "#/$defs/paths"
+        },
+        "module": {
+          "$ref": "#/$defs/paths"
+        },
+        "import": {
+          "$ref": "#/$defs/paths"
+        }
       }
     },
     "request": {
@@ -38,16 +55,44 @@
         "adapters": {
           "description": "Conversions and wrappers whose first argument is the handler: `net/http#HandlerFunc`.",
           "type": "array",
-          "items": { "$ref": "#/$defs/symbol" }
+          "items": {
+            "$ref": "#/$defs/symbol"
+          }
         }
       }
     },
-    "routers": { "type": "array", "items": { "$ref": "#/$defs/router" } },
-    "reads": { "type": "array", "items": { "$ref": "#/$defs/read" } }
+    "routers": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/router"
+      }
+    },
+    "guards": {
+      "description": "Middleware and functions that can refuse a request, by the kind of check they make.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/guard"
+      }
+    },
+    "reads": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/read"
+      }
+    }
   },
   "$defs": {
-    "paths": { "type": "array", "minItems": 1, "items": { "type": "string" } },
-    "symbol": { "type": "string", "pattern": "^[^#\\s]+#[A-Za-z_][A-Za-z0-9_.]*$" },
+    "paths": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string"
+      }
+    },
+    "symbol": {
+      "type": "string",
+      "pattern": "^[^#\\s]+#[A-Za-z_][A-Za-z0-9_.]*$"
+    },
     "router": {
       "type": "object",
       "additionalProperties": false,
@@ -56,23 +101,34 @@
         "types": {
           "description": "The types a router value has, so that a parameter of one of them receives the router passed to it.",
           "type": "array",
-          "items": { "$ref": "#/$defs/symbol" }
+          "items": {
+            "$ref": "#/$defs/symbol"
+          }
         },
         "create": {
           "description": "Functions that return a new router.",
           "type": "array",
-          "items": { "$ref": "#/$defs/symbol" }
+          "items": {
+            "$ref": "#/$defs/symbol"
+          }
         },
         "default": {
           "description": "Package functions that register on a router of the package itself, such as `http.HandleFunc` on the default mux.",
           "type": "array",
-          "items": { "$ref": "#/$defs/symbol" }
+          "items": {
+            "$ref": "#/$defs/symbol"
+          }
         },
         "pattern": {
           "description": "How a route's path is written: `braces` for `/items/{id}`, `{id:[0-9]+}` and `*`; `servemux` for `GET /items/{id}`, `{path...}` and a trailing `/` for a subtree.",
           "enum": ["braces", "servemux"]
         },
-        "methods": { "type": "array", "items": { "$ref": "#/$defs/method" } }
+        "methods": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/method"
+          }
+        }
       }
     },
     "method": {
@@ -81,7 +137,9 @@
       "additionalProperties": false,
       "required": ["name", "does"],
       "properties": {
-        "name": { "type": "string" },
+        "name": {
+          "type": "string"
+        },
         "does": {
           "description": "`route` adds a route; `use` adds middleware to the router's chain; `with` returns a router with more middleware; `group` passes a router with the same prefix to a callback; `subrouter` passes a router mounted at a prefix to a callback; `mount` attaches a router or a handler at a prefix.",
           "enum": ["route", "use", "with", "group", "subrouter", "mount"]
@@ -94,7 +152,9 @@
         "args": {
           "description": "The meaning of each argument, when it is not the default for `does`: `route` takes `[path, handler]`, `subrouter` `[path, callback]`, `group` `[callback]`, `mount` `[path, handler]`.",
           "type": "array",
-          "items": { "enum": ["method", "path", "handler", "callback", "other"] }
+          "items": {
+            "enum": ["method", "path", "handler", "callback", "other"]
+          }
         }
       }
     },
@@ -103,7 +163,14 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["read"],
-      "oneOf": [{ "required": ["chain"] }, { "required": ["call"] }],
+      "oneOf": [
+        {
+          "required": ["chain"]
+        },
+        {
+          "required": ["call"]
+        }
+      ],
       "properties": {
         "read": {
           "enum": [
@@ -124,7 +191,9 @@
           "type": "string",
           "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\((name)?\\))?(\\.[A-Za-z_][A-Za-z0-9_]*(\\((name)?\\))?)*$"
         },
-        "call": { "$ref": "#/$defs/symbol" },
+        "call": {
+          "$ref": "#/$defs/symbol"
+        },
         "request": {
           "description": "For `call`: the argument that is the request.",
           "type": "integer",
@@ -134,6 +203,19 @@
           "description": "For `call`: the argument that names what is read.",
           "type": "integer",
           "minimum": 0
+        }
+      }
+    },
+    "guard": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["call", "kind"],
+      "properties": {
+        "call": {
+          "$ref": "#/$defs/symbol"
+        },
+        "kind": {
+          "enum": ["authn", "authz-role", "authz-owner", "csrf", "rate-limit", "validation"]
         }
       }
     }
