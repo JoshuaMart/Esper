@@ -1,0 +1,13 @@
+# Hono itself: its request surface is each exported function, class method and object method that
+# reads the request, directly or through what it calls, such as the CORS middleware reading
+# `Origin`; and each of its internal handlers, the functions that take the request or the
+# context, such as the router's own dispatch.
+name: hono
+kind: framework
+language: typescript
+extends: [hono]
+detect:
+  module: [hono]
+surface:
+  exported: true
+  handlers: true

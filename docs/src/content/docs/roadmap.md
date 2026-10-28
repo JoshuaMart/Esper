@@ -14,7 +14,7 @@ counted by hand, with none missing and none invented.
 | [M1](#m1--the-core-on-go-and-chi) | The core, on Go and chi | chi and Wakapi pass their hand count | done |
 | [M2](#m2--mcp-and-notes) | MCP and notes | an agent hunts chi over MCP and its notes survive a reindex | done |
 | [M3](#m3--scip-for-go) | SCIP for Go | the first analyzer runs through the contract; guessed edges drop | done |
-| [M4](#m4--typescript-and-hono) | TypeScript and Hono | Hono and Kaneo pass their hand count | not started |
+| [M4](#m4--typescript-and-hono) | TypeScript and Hono | Hono and Kaneo pass their hand count | done |
 | [M5](#m5--the-server-and-the-web-interface) | The server and the web interface | an audit can be followed and annotated in the browser | not started |
 | [M6](#m6--enrichment-and-past-advisories) | Enrichment and past advisories | claims and advisory links measured on chi and Hono | not started |
 | [M7](#m7--dataflow-on-demand) | Dataflow, on demand | a `flows` question answered by Joern, every step cited | not started |
@@ -115,6 +115,7 @@ where they fall from 567 to none, both keeping the entry points counted by hand
 ([D22](/decisions/#d22--precision-runs-inside-the-index-when-asked)). The contract, the import format
 and scip-go are in the [analyzers reference](/reference/analyzers/), the schemas in
 `schemas/analyzer.schema.json` and `schemas/analysis.schema.json`.
+
 ## M4 — TypeScript and Hono
 
 The TypeScript queries, imports resolved through the target's `tsconfig` paths, the two Hono
@@ -122,8 +123,36 @@ profiles, and scip-typescript through the contract from M3. This is the mileston
 second language costs queries and profiles, not changes to the core.
 
 **Done when** Hono, in framework mode, and [Kaneo](https://github.com/usekaneo/kaneo)'s API, a Hono
-application, in application mode, match their hand count, recorded in `profiles/hono/counts/`, and nothing under `packages/core` had to learn about TypeScript or Hono by
-name.
+application, in application mode, match their hand count, recorded in `profiles/hono/counts/`, and
+nothing under `packages/core` had to learn about TypeScript or Hono by name.
+
+The criterion's last part is read as: the shared machinery (reading a target, detecting its profile,
+the home, the store, notes, the analyzer contract, the entry points and signals as rules) names no
+language and no framework. A language module of its own, as `go*.ts` is for Go, is expected
+([D23](/decisions/#d23--a-language-is-a-module-the-core-names-none)).
+
+Each is a test:
+
+- **Hono v4.13.14**, in framework mode: 108 entry points, the same as its hand count, from CORS
+  reading `Origin` to each adapter's `handle` (`profiles/hono/counts/hono@bac5c4a8bcd7.yaml`).
+- **Kaneo's API** at v2.48.0 (`apps/api`), in application mode: 211 routes, the same as its hand
+  count, which a script written apart from Esper listed too, every handler and chain member named,
+  and each route's middleware the one registered before it
+  ([D25](/decisions/#d25--hono-middleware-in-the-order-it-is-registered)). Both run in
+  `packages/core/test/counts.test.ts`, fetched by `pnpm fetch-targets` in CI.
+- **No name in the core**: `packages/core/test/shared.test.ts` fails on a language or a framework
+  named in the code of a shared file. Go's entry-point rules moved to the shared `entries.ts`, and
+  the Go counts still hold.
+- **scip-typescript 0.5.2** runs in Docker on both
+  ([D26](/decisions/#d26--scip-typescript-with-the-dependencies-the-lockfile-pins)): on Hono, with
+  its dependencies, guessed edges fall from 109 of 2016 to 12 of 3268; on Kaneo's API, without the
+  dependencies of its repository, calls without an edge fall from 5197 to 3927; both keep the entry
+  points counted by hand (`packages/core/test/scip-typescript.test.ts`).
+
+The module and the profiles are in [D24](/decisions/#d24--typescript-and-javascript-as-their-syntax-states-them)
+and [D25](/decisions/#d25--hono-middleware-in-the-order-it-is-registered), the
+[graph schema](/reference/graph/#typescript), [profiles](/reference/profiles/#hono) and
+[analyzers](/reference/analyzers/#scip-typescript) references.
 
 ## M5 — The server and the web interface
 

@@ -1,6 +1,6 @@
 ---
 title: Analyzers
-description: The contract every analyzer follows, the import format Esper reads from it, and scip-go, the first analyzer.
+description: The contract every analyzer follows, the import format Esper reads from it, and the analyzers built on it, scip-go and scip-typescript.
 ---
 
 An analyzer adds what tree-sitter cannot see, from a container and through one contract
@@ -64,7 +64,7 @@ analyze: [analyze]
 |---|---|
 | `name` | the folder's name; facts it brings have `<name>@<version>` as their source |
 | `version` | the version of the tool the image runs; letters, digits, `.`, `_` and `-` only, since it is part of the image's tag |
-| `languages` | the languages it reads: `go` |
+| `languages` | the languages it reads: `go`, `typescript` |
 | `provides` | `edges.resolve`, the callees of call sites; `flows`, dataflow paths, which come with [M7](/roadmap/#m7--dataflow-on-demand) |
 | `answers` | `snapshot`, run while a snapshot is indexed; `question`, run for one dataflow question (M7) |
 | `image.dockerfile` | the Dockerfile in the folder |
@@ -135,7 +135,8 @@ names the analyzer; every other line is a `reference` or an `implementation`.
 | `implementation` | the method defined at `at` implements the interface method `of`, a place or an external symbol; one of an external symbol is checked and not kept, since a call through such an interface stays a call to that symbol |
 
 A **place** is a `file`, relative to the target's root with `/`, a 1-based `line`, and a 1-based
-`column` in UTF-8 bytes, where the line's `name` starts. Places are positions, not Esper's
+`column` in UTF-8 bytes, where the line's `name` starts. A name is an identifier: letters, digits,
+`_` and `$`, not starting with a digit. Places are positions, not Esper's
 references: an analyzer needs to know nothing of [D7](/decisions/#d7--stable-references-and-fingerprints).
 
 ### What Esper checks
@@ -205,11 +206,58 @@ conversion (`string(b)`), or a method of an interface of the module that only ty
 implement. chi's one guess left is `DefaultLogger(next)`, a call through a package variable that
 `init` assigns, which a type checker cannot name either.
 
+## scip-typescript
+
+[scip-typescript](https://github.com/sourcegraph/scip-typescript) 0.5.2, its latest release, runs
+the TypeScript compiler (6.0.3) over the snapshot and writes a SCIP index
+([D26](/decisions/#d26--scip-typescript-with-the-dependencies-the-lockfile-pins)). The image
+(`analyzers/scip-typescript/`) is built on Node 24.22.1, pinned by digest; scip-typescript and pnpm
+10.34.9 are pinned by the lockfile of its program, `esper-scip-typescript`, and installed without
+scripts. The program does both runs:
+
+- **fetch** reads the lockfile at the root of the snapshot's tree: `pnpm fetch` for `pnpm-lock.yaml`,
+  `npm ci` for `package-lock.json`, with every `package.json` of the tree for a workspace's
+  packages, from npm's registry whatever the target's `.npmrc` says, with
+  scripts disabled, into the cache volume. pnpm stays at its own version whatever the target's
+  `packageManager` names. A tree without a lockfile fetches nothing.
+- **analyze** copies the tree into `/tmp`, installs the dependencies from the cache without the
+  network (`--offline`, the volume read-only), and runs `scip-typescript index` on each folder with a
+  `tsconfig.json` that holds files of the snapshot, or on the root with an inferred configuration
+  when there is none. A `tsconfig.json` that extends one neither in the tree nor in a package the
+  install brought is read without it, and says so.
+
+It writes a `reference` for each name whose symbol the index defines, in a file of the snapshot or
+outside it, and an `implementation` for each method that implements an interface method of the
+snapshot. Left out: a name that refers to several symbols, such as a member of a union type, and a
+name renamed by its import (`import { a as b }`), since the line holds one name for both places.
+Outside the snapshot, a symbol is named by its package and its names (`drizzle-orm#PgDatabase.select`),
+the TypeScript library's by `globalThis` and `@types/node`'s by `node:<module>`. Where the syntax
+names the same call outside the target too, its own name is kept: it is the module the code imports
+it from, which profiles and `library.yaml` name (`hono/cors#cors`), while SCIP names the package
+that declares it. Columns are converted to UTF-8 bytes from the index's UTF-16 code units.
+
+Measured at the counted commits:
+
+| | Hono v4.13.14 | Kaneo v2.48.0, `apps/api` |
+|---|---|---|
+| dependencies | installed from `pnpm-lock.yaml` | none: the lockfile is at the repository's root |
+| calls named by scip-typescript | 2190 of 3646 | 4584 of 15171 |
+| guessed edges, tree-sitter alone | 109 of 2016 | 103 of 9980 |
+| guessed edges, with scip-typescript | 12 of 3268 | 103 of 11250 |
+| calls without an edge, tree-sitter alone | 1716 | 5197 |
+| calls without an edge, with scip-typescript | 432 | 3927 |
+| entry points, as counted by hand | 108 | 211 |
+| time, image and dependencies there | about 12 s | about 7 s |
+
+Without the dependencies, scip-typescript still names the calls between the target's own modules;
+calls on values from outside it, and the guesses on them, stay as tree-sitter left them.
+
 ## Tests
 
 `packages/core/test/analyzer.test.ts` checks the manifests and the import: a file with one invalid
 line, or one place that does not match the snapshot, is refused whole. `packages/core/test/scip-go.test.ts`
 runs scip-go in Docker on chi 5.3.2 and Wakapi at their counted commits, and on a folder that is not
-a git checkout. Without Docker these tests are skipped and say so; without the targets of
-`pnpm fetch-targets`, the ones on chi and Wakapi are. GitHub's Ubuntu runners have Docker, so CI
+a git checkout; `packages/core/test/scip-typescript.test.ts` runs scip-typescript on Hono and
+Kaneo's API at theirs, and on a folder without a lockfile. Without Docker these tests are skipped and say so; without the targets of
+`pnpm fetch-targets`, the ones on the counted targets are. GitHub's Ubuntu runners have Docker, so CI
 runs them.

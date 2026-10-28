@@ -1,0 +1,11 @@
+{
+  "name": "honoapp",
+  "private": true,
+  "type": "module",
+  "workspaces": ["packages/*"],
+  "dependencies": {
+    "@app/db": "workspace:*",
+    "@hono/zod-openapi": "^1.0.0",
+    "hono": "^4.13.0"
+  }
+}

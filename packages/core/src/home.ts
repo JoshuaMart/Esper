@@ -13,7 +13,8 @@ import {
 import { detectProfile } from './detect.ts'
 import { type AnalyzerRunner, dockerAvailable, dockerRunner } from './docker.ts'
 import { EsperError } from './errors.ts'
-import { type IndexStats, indexGo } from './go-index.ts'
+import type { IndexStats } from './language.ts'
+import { languageNamed } from './languages.ts'
 import { type AnchorState, Notes } from './notes.ts'
 import { loadProfiles } from './profile.ts'
 import { Store } from './store.ts'
@@ -168,8 +169,12 @@ export class Home {
       ...(project.kind ? { kind: project.kind } : {}),
     })
     if ('refused' in detection) throw new EsperError(`refused: ${detection.refused}`)
-    const library = await readFile(new URL('../queries/go/library.yaml', import.meta.url), 'utf8')
-    const analyzers = options.precise ? await this.analyzersFor(detection.profile.language) : []
+    const language = languageNamed(detection.profile.language)
+    const library = await readFile(
+      new URL(`../queries/${language.name}/library.yaml`, import.meta.url),
+      'utf8',
+    )
+    const analyzers = options.precise ? await this.analyzersFor(language.name) : []
     const sources = analyzers.map(analyzerSource)
     const indexer = createHash('sha256')
       .update(
@@ -209,12 +214,11 @@ export class Home {
         store.close()
       }
     }
-    const goFiles = snapshot.files.filter((f) => f.path.endsWith('.go'))
     const [analyzer] = analyzers
     const analysis = analyzer
       ? await this.analyze(analyzer, dir, snapshot, detection.modules, options.progress)
       : undefined
-    const { graph, stats } = await indexGo(goFiles, {
+    const { graph, stats } = await language.index(snapshot.files, {
       modules: detection.modules,
       profile: detection.profile,
       ...(analysis ? { analysis } : {}),
@@ -229,7 +233,7 @@ export class Home {
         profiles: detection.profile.sources,
         analyzers: sources,
         indexer,
-        sources: goFiles,
+        sources: snapshot.files.filter((f) => language.source(f.path)),
       }
       const { id, existed } = options.force
         ? { id: store.addSnapshot(graph, info), existed: false }
@@ -253,7 +257,7 @@ export class Home {
       (a) =>
         a.answers === 'snapshot' &&
         a.provides.includes('edges.resolve') &&
-        (a.languages as string[]).includes(language),
+        a.languages.includes(language),
     )
     if (found.length === 0)
       throw new EsperError(`no analyzer resolves the call edges of ${language}`)

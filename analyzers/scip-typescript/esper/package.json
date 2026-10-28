@@ -1,0 +1,10 @@
+{
+  "name": "esper-scip-typescript",
+  "private": true,
+  "type": "module",
+  "description": "scip-typescript inside Esper's analyzer contract, with the package managers it installs a target's dependencies with.",
+  "dependencies": {
+    "@sourcegraph/scip-typescript": "0.5.2",
+    "pnpm": "10.34.9"
+  }
+}

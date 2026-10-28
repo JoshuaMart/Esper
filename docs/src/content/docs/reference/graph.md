@@ -115,6 +115,61 @@ The tree-sitter prototype cited in [D12](/decisions/#d12--precision-scip-right-a
 guessed 262 of 486. With scip-go (`esper index --precise`), 1 of 618 is guessed and 28 calls are left
 without an edge ([analyzers](/reference/analyzers/#scip-go)).
 
+## TypeScript
+
+What the TypeScript and JavaScript extraction states, from syntax alone
+([D24](/decisions/#d24--typescript-and-javascript-as-their-syntax-states-them)):
+
+| Construct | Becomes |
+|---|---|
+| `function f()`, `const f = () => …` | `decl` `path#f` |
+| `class Service { update() {} }` | `decl` `path#Service`, and `path#Service.update` |
+| `#dispatch()`, a private method | `decl` `path#Hono.#dispatch` |
+| `const actions = { create() {} }` | `decl` `path#actions.create` |
+| `export default async (c) => …` | `decl` `path#default` |
+| `const auth = createMiddleware(async (c, next) => …)` | `decl` `path#auth/fn1`, exported with `auth` |
+| `(c) => …` inside `createApp`, held by no name | `decl` `path#createApp/fn1`, a literal, called by `path#createApp` |
+| `import { find } from '@app/db'` (a package of the target) | `imports` edges to the file its entry point is |
+| `import { cors } from 'hono/cors'` | an `imports` edge to `ext:hono/cors` |
+
+A declaration is `exported` (`data.exported`) when an `export` names it, with the public methods of
+an exported class, the functions of an exported object, and the functions given to the call an
+exported name holds. Imports resolve through relative paths (`./find.js` is `find.ts`), the `paths`
+of the nearest `tsconfig.json` or `jsconfig.json`, and the target's own packages by their name and
+`exports`; Node's built-in modules are `ext:node:<module>`, the runtime's globals `ext:globalThis`.
+
+A call `x.m()` is **resolved** when the syntax states the type of `x`: an annotation, `new C()`, the
+result type a function declares or the one expression it returns, a field, a getter's result, a
+constructor's parameter property, `Promise<T>` once awaited, `ReturnType<typeof f>`, `x as T`. A
+function literal's parameters take their types from a function type that the variable holding it,
+the function returning it, or the parameter it is passed to declares; a handler's first parameter,
+when nothing states it, is the profile's context ([profiles](/reference/profiles/#hono)). A getter
+of the target's own classes is called when its property is read (`data.getter`). Calls are
+**guessed**, with the reason:
+
+- through an interface or an abstract class: each class of the target that implements it;
+- through a class field the class's own code assigns (`getPath is assigned …`);
+- through a computed key of an object of functions (`detectors[name] is one of the functions
+  detectors holds`);
+- on a value no syntax types, when the target has one member of that name, unless values of any type
+  have it (`map`, `then`, `get`), which `library.yaml` lists as `builtins`.
+
+`library.yaml` also states the runtime's `globals`, what functions outside the target return
+(`drizzle()` gives a `NodePgDatabase`, a `Proxy` the type of what it wraps), and the sinks and data
+calls of common libraries.
+
+Measured on Hono v4.13.14, 238 files, and on Kaneo's API at v2.48.0, 687 files:
+
+| | Hono | Kaneo's API |
+|---|---|---|
+| declarations | 1392 | 3059 |
+| call edges | 2016, of which 109 guessed (5.4 %) | 9980, of which 103 guessed (1.0 %) |
+| calls without an edge | 1716 | 5197 |
+| with scip-typescript | 12 guessed of 3268, 432 without an edge | 103 guessed of 11250, 3927 without an edge |
+
+Most calls left without an edge are methods of values from outside the target whose type the
+syntax does not state (`res.headers.get`, a query builder's `.where`), as for Go.
+
 ## Entry points
 
 An application's routes, read with its profile ([Profiles](/reference/profiles/)):
@@ -150,10 +205,16 @@ What the facts say, and where they come from:
 - **Short-circuit.** A middleware short-circuits when it passes the request on in one place
   (`next.ServeHTTP(w, r)`, or `next(w, r)` for a handler function it was given) and, inside a
   condition, returns from a block that does not.
+- **Short-circuit**, in TypeScript: a middleware, a function whose first parameter is the request
+  or the context, as stated or as the profile gives it, that passes the request on, calling a
+  function it was given after it (`next()`), and that returns or throws, inside a condition, from a
+  block that does not.
 - **Divergent guards.** Siblings are the routes declared on the same router, seen through `With`
   and `Group`, when there are at least three. An entry is divergent when it lacks a guard kind, or a
   short-circuiting chain member, that more than half of its siblings have; `data.missing` names
-  them.
+  them. A short-circuiting member is known by the declarations that refuse, the ones it reaches
+  that carry `short-circuit`, so that two factories of the same check are one guard
+  ([D27](/decisions/#d27--a-guarding-chain-member-is-known-by-the-code-that-refuses)).
 - **Library data.** `library.yaml` also states the types whose methods return themselves
   (`gorm.DB`, so `db.Where(…).First(…)` keeps its type), and the first result type of common
   constructors outside the module (`json.NewDecoder` gives a `Decoder`).
@@ -168,4 +229,10 @@ Measured on Wakapi at `aba6a44`, the 71 routes carry:
   `if x != nil { return x }` before it) do not count.
 
 No route is divergent: Wakapi applies its guards to whole subrouters.
+
+Measured on Kaneo's API at v2.48.0, the 211 routes carry `short-circuit` 209 times, from its
+authentication and access middleware, `retained-mutation` 211 (`c.set` in the middleware every
+route has), `data-read` 117, `data-write` 83, `request-key` 21, `mass-assignment` 8,
+`sink-reachable` 18, and `divergent-guard` 10, routes that lack a check their siblings make, such as
+the billing webhook. Kaneo uses none of Hono's own guards: its checks are its own middleware.
 

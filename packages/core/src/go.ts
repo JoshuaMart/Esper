@@ -1,8 +1,10 @@
 import { posix } from 'node:path'
 import type { Node, Tree } from 'web-tree-sitter'
 import { type Analysis, type Place, placeKey } from './analyzer.ts'
+import type { Callee } from './entries.ts'
 import type { Graph, GraphEdge, GraphNode } from './graph.ts'
-import { loadQuery, parse } from './parser.ts'
+import type { CallStats } from './language.ts'
+import { defineGrammar, loadQuery, parse } from './parser.ts'
 import { declRef, externalRef, fingerprint, hashText, Names } from './refs.ts'
 
 // The Go call graph: declarations, imports and calls, resolved within the module where Go's
@@ -11,15 +13,6 @@ import { declRef, externalRef, fingerprint, hashText, Names } from './refs.ts'
 export interface GoFile {
   path: string
   source: string
-}
-
-export interface CallStats {
-  calls: number
-  resolved: number
-  guessed: number
-  unresolved: number
-  // Calls whose callees an analyzer named (D22).
-  analyzed: number
 }
 
 const builtins = new Set([
@@ -42,6 +35,8 @@ const builtins = new Set([
   'real',
   'recover',
 ])
+
+defineGrammar('go', 'tree-sitter-go/tree-sitter-go.wasm')
 
 const source = 'tree-sitter'
 const isComment = (node: Node) => node.type === 'comment'
@@ -1053,17 +1048,9 @@ export interface GoModuleRoot {
   dir: string
 }
 
-export interface Target {
-  ref: string
-  // The declaration of the module, or the external symbol's name as written (`chi.NewRouter`).
+// A callee, with the declaration of the module it names.
+export interface Target extends Callee {
   decl?: Decl
-  external?: string
-  resolution: 'resolved' | 'guessed'
-  reason?: string
-  // The analyzer that named it, as `<name>@<version>`; tree-sitter otherwise.
-  source?: string
-  // For a call through an interface of the module, the interface method: `Routes.Match`.
-  interface?: string
 }
 
 export async function extractGo(

@@ -489,7 +489,7 @@ export const tools: ToolSpec[] = [
         ...(stats
           ? {
               stats: {
-                files: result.snapshot.files.filter((f) => f.path.endsWith('.go')).length,
+                files: stats.files,
                 entries: stats.entries,
                 resolved: stats.resolved,
                 guessed: stats.guessed,

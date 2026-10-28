@@ -1,0 +1,13 @@
+# scip-typescript (https://github.com/sourcegraph/scip-typescript): the TypeScript compiler over the
+# snapshot, as SCIP, turned into the references of each call site and the methods that implement
+# each interface method.
+name: scip-typescript
+version: 0.5.2
+description: Resolves TypeScript and JavaScript call edges with the TypeScript compiler.
+languages: [typescript]
+provides: [edges.resolve]
+answers: snapshot
+image:
+  dockerfile: Dockerfile
+fetch: [fetch]
+analyze: [analyze]

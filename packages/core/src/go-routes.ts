@@ -1,4 +1,5 @@
 import type { Node } from 'web-tree-sitter'
+import { joinPath, type Member, normalisePattern, type Route } from './entries.ts'
 import {
   type Decl,
   declaredAt,
@@ -7,7 +8,6 @@ import {
   line,
   type ParsedFile,
   present,
-  type Target,
 } from './go.ts'
 import type { Citation } from './graph.ts'
 import type { ArgRole, ResolvedProfile, RouterMethod, RouterSpec } from './profile.ts'
@@ -16,24 +16,6 @@ import type { ArgRole, ResolvedProfile, RouterMethod, RouterSpec } from './profi
 // followed through variables, the callbacks of groups and subrouters, the arguments of calls
 // (`RegisterRoutes(router)`) and the results of functions that build one, so that a route gets the
 // full path of the routers it is mounted under, and the middleware of each.
-
-export interface Member {
-  text: string
-  citation: Citation
-  targets: Target[]
-}
-
-export interface Route {
-  method: string
-  path: string
-  pattern: string
-  handler: Member
-  chain: Member[]
-  citation: Citation
-  // The router the route is declared on, seen through `With` and `Group`: routes of one group
-  // are siblings, whose guards can be compared.
-  group: number
-}
 
 interface Router {
   id: number
@@ -65,6 +47,7 @@ const defaultArgs: Record<RouterMethod['does'], ArgRole[]> = {
   group: ['callback'],
   subrouter: ['path', 'callback'],
   mount: ['path', 'handler'],
+  prefix: ['path'],
 }
 
 // A path as written: a string literal, a constant of the package, or, when neither, the expression
@@ -72,38 +55,6 @@ const defaultArgs: Record<RouterMethod['does'], ArgRole[]> = {
 function pathOf(program: GoProgram, node: Node | undefined, file: ParsedFile): string {
   if (!node) return `\${?}`
   return program.stringValue(node, file) ?? `\${${node.text}}`
-}
-
-// A route pattern, normalised (D7): parameters as `{name}`, catch-alls as `{name...}`, no trailing
-// slash but on the root. `servemux` patterns may carry a method and end in `/` for a subtree.
-export function normalisePattern(
-  pattern: string,
-  syntax: RouterSpec['pattern'],
-): { method?: string; path: string } {
-  let text = pattern.trim()
-  let method: string | undefined
-  const withMethod = /^([A-Z]+)\s+(\S.*)$/.exec(text)
-  if (withMethod?.[1] && withMethod[2]) {
-    method = withMethod[1]
-    text = withMethod[2]
-  }
-  let path = text
-  if (syntax === 'braces') {
-    path = path.replace(/\{([A-Za-z_][\w-]*)(:[^}]*)?\}/g, '{$1}').replace(/\*$/, '{rest...}')
-  } else if (path.endsWith('/{$}')) {
-    // `/{$}` matches the path exactly.
-    path = path.slice(0, -3)
-  } else if (path.endsWith('/')) {
-    // A trailing slash, the root included, matches the whole subtree.
-    path += '{rest...}'
-  }
-  return { ...(method ? { method } : {}), path }
-}
-
-export function joinPath(prefix: string, path: string): string {
-  const joined = `${prefix.replace(/\/+$/, '')}/${path.replace(/^\/+/, '')}`
-  const clean = joined.replace(/\/{2,}/g, '/')
-  return clean.length > 1 ? clean.replace(/\/$/, '') : '/'
 }
 
 export class RouteInterpreter {
@@ -393,7 +344,7 @@ export class RouteInterpreter {
     switch (method.does) {
       case 'route': {
         const raw = pathOf(this.program, arg('path'), file)
-        const pattern = normalisePattern(raw, router.spec.pattern)
+        const pattern = normalisePattern(raw, method.pattern ?? router.spec.pattern)
         const explicit = arg('method')
         let verb = method.method ?? 'ANY'
         // A method that cannot be read stays the expression, as written.
@@ -434,8 +385,9 @@ export class RouteInterpreter {
         return derived
       }
       case 'group':
-      case 'subrouter': {
-        const prefix = method.does === 'subrouter' ? pathOf(this.program, arg('path'), file) : ''
+      case 'subrouter':
+      case 'prefix': {
+        const prefix = method.does !== 'group' ? pathOf(this.program, arg('path'), file) : ''
         const child = this.router(`${file.path}:${node.id}:${router.id}`, router.spec, site)
         if (method.does === 'group') child.inline = router
         this.attach(router, normalisePattern(prefix, router.spec.pattern).path, child)

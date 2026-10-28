@@ -122,9 +122,7 @@ async function main() {
     console.log(label)
     console.log(`  profiles     ${profiles.join(', ')}`)
     if (analyzers.length > 0) console.log(`  analyzers    ${analyzers.join(', ')}`)
-    console.log(
-      `  files        ${snapshot.files.filter((f) => f.path.endsWith('.go')).length} read`,
-    )
+    console.log(`  files        ${stats.files} read`)
     console.log(
       `  skipped      ${snapshot.skips.length}${
         snapshot.skips.length > 0

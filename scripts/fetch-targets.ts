@@ -11,7 +11,11 @@ const root = process.env.ESPER_TARGETS
 if (!root) throw new Error('set ESPER_TARGETS to the folder the targets go in')
 
 for await (const path of glob('profiles/*/counts/*.yaml')) {
-  const count = parse(await readFile(path, 'utf8')) as { target: string; commit: string }
+  const count = parse(await readFile(path, 'utf8')) as {
+    target: string
+    commit: string
+    dir?: string
+  }
   const name = count.target
     .replace(/\.git$/, '')
     .split('/')
@@ -28,5 +32,8 @@ for await (const path of glob('profiles/*/counts/*.yaml')) {
     () => false,
   )
   if (!have) await git('fetch', '--quiet', '--depth', '1', count.target, count.commit)
+  // A target that is a folder of the repository is read from git in that folder, which must exist;
+  // nothing is checked out.
+  if (count.dir) await mkdir(join(dir, count.dir), { recursive: true })
   console.log(`${name} at ${count.commit.slice(0, 12)}`)
 }

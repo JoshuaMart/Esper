@@ -15,7 +15,8 @@
       "enum": ["application", "framework"]
     },
     "language": {
-      "enum": ["go"]
+      "description": "The language of the code the profile reads.",
+      "enum": ["go", "typescript"]
     },
     "description": {
       "type": "string"
@@ -45,11 +46,15 @@
       }
     },
     "request": {
-      "description": "The type of the incoming request, as `<import path>#<Type>`.",
+      "description": "The type of the incoming request, as `<import path>#<Type>`; for TypeScript, a global type is `globalThis#<Type>` and a type of the target is named by its package (`hono#Context` in Hono's own code).",
       "$ref": "#/$defs/symbol"
     },
     "response": {
       "description": "The type a handler writes its response to, as `<import path>#<Type>`.",
+      "$ref": "#/$defs/symbol"
+    },
+    "context": {
+      "description": "What a handler or a middleware receives first when its code does not state a type: Hono's `hono#Context`.",
       "$ref": "#/$defs/symbol"
     },
     "handlers": {
@@ -58,6 +63,13 @@
       "properties": {
         "adapters": {
           "description": "Conversions and wrappers whose first argument is the handler: `net/http#HandlerFunc`.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/symbol"
+          }
+        },
+        "types": {
+          "description": "Types of functions that are handlers or middleware (`hono#MiddlewareHandler`): a function typed so receives the `context` first.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/symbol"
@@ -96,6 +108,72 @@
       "items": {
         "$ref": "#/$defs/read"
       }
+    },
+    "mutations": {
+      "description": "What changes request state that later middleware or the handler reads again: chains of fields and calls, as for reads (`set()` on `hono#Context`).",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["chain"],
+        "properties": {
+          "chain": {
+            "$ref": "#/$defs/read/properties/chain"
+          },
+          "on": {
+            "$ref": "#/$defs/symbol"
+          }
+        }
+      }
+    },
+    "sinks": {
+      "description": "Framework calls that are sinks, by kind, as in a language's library: `<symbol>@<n>` names the argument that is interpreted when it is not the first, `@*` any argument.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "sql": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$.]*(@([0-9]+|\\*))?$"
+          }
+        },
+        "process": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$.]*(@([0-9]+|\\*))?$"
+          }
+        },
+        "file": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$.]*(@([0-9]+|\\*))?$"
+          }
+        },
+        "fetch": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$.]*(@([0-9]+|\\*))?$"
+          }
+        },
+        "redirect": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$.]*(@([0-9]+|\\*))?$"
+          }
+        },
+        "unescaped": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$.]*(@([0-9]+|\\*))?$"
+          }
+        }
+      }
     }
   },
   "$defs": {
@@ -108,7 +186,7 @@
     },
     "symbol": {
       "type": "string",
-      "pattern": "^[^#\\s]+#[A-Za-z_][A-Za-z0-9_.]*$"
+      "pattern": "^[^#\\s]+#[A-Za-z_$][A-Za-z0-9_$.]*$"
     },
     "router": {
       "type": "object",
@@ -137,8 +215,16 @@
           }
         },
         "pattern": {
-          "description": "How a route's path is written: `braces` for `/items/{id}`, `{id:[0-9]+}` and `*`; `servemux` for `GET /items/{id}`, `{path...}` and a trailing `/` for a subtree.",
-          "enum": ["braces", "servemux"]
+          "description": "How a route's path is written: `braces` for `/items/{id}`, `{id:[0-9]+}` and `*`; `servemux` for `GET /items/{id}`, `{path...}` and a trailing `/` for a subtree; `colon` for `/items/:id`, `:id{[0-9]+}`, `:id?` and `*`.",
+          "enum": ["braces", "servemux", "colon"]
+        },
+        "ordered": {
+          "description": "Middleware applies only to the routes registered after it, and only to those its own path matches (`use('/admin/*', auth)`), as Hono's does; otherwise to every route of the router.",
+          "type": "boolean"
+        },
+        "chained": {
+          "description": "Its methods return the router, so that registrations chain: `app.get(…).post(…)`.",
+          "type": "boolean"
         },
         "methods": {
           "type": "array",
@@ -188,8 +274,8 @@
           "type": "string"
         },
         "does": {
-          "description": "`route` adds a route; `use` adds middleware to the router's chain; `with` returns a router with more middleware; `group` passes a router with the same prefix to a callback; `subrouter` passes a router mounted at a prefix to a callback; `mount` attaches a router or a handler at a prefix.",
-          "enum": ["route", "use", "with", "group", "subrouter", "mount"]
+          "description": "`route` adds a route; `use` adds middleware to the router's chain, after a path when the first argument is one; `with` returns a router with more middleware; `group` passes a router with the same prefix to a callback; `subrouter` passes a router mounted at a prefix to a callback; `mount` attaches a router or a handler at a prefix; `prefix` returns a router whose registrations go to this one under a prefix (Hono's `basePath`).",
+          "enum": ["route", "use", "with", "group", "subrouter", "mount", "prefix"]
         },
         "method": {
           "description": "For `route`: the HTTP method, `ANY`, or `pattern` when the path carries it (`GET /items`).",
@@ -197,11 +283,29 @@
           "pattern": "^([A-Z]+|pattern)$"
         },
         "args": {
-          "description": "The meaning of each argument, when it is not the default for `does`: `route` takes `[path, handler]`, `subrouter` `[path, callback]`, `group` `[callback]`, `mount` `[path, handler]`.",
+          "description": "The meaning of each argument, when it is not the default for `does`: `route` takes `[path, handler]`, `subrouter` `[path, callback]`, `group` `[callback]`, `mount` `[path, handler]`, `prefix` `[path]`. `chain` stands for every argument between the ones before it and the last, middleware in front of the handler; `config` for an object whose properties say what `config` maps them to.",
           "type": "array",
           "items": {
-            "enum": ["method", "path", "handler", "callback", "other"]
+            "enum": ["method", "path", "handler", "callback", "chain", "config", "other"]
           }
+        },
+        "config": {
+          "description": "For a `config` argument: the role of each property of the object (`{ method: method, path: path, middleware: chain }`).",
+          "type": "object",
+          "additionalProperties": {
+            "enum": ["method", "path", "chain"]
+          }
+        },
+        "through": {
+          "description": "Functions that return the configuration they are given (`@hono/zod-openapi#createRoute`), seen through.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/symbol"
+          }
+        },
+        "pattern": {
+          "description": "How this method's paths are written, when not as the router's.",
+          "enum": ["braces", "servemux", "colon"]
         }
       }
     },
@@ -236,7 +340,7 @@
         "chain": {
           "description": "Fields and calls on the request, in order. `(name)` marks the argument that names what is read; `()` a call whose arguments do not matter.",
           "type": "string",
-          "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\((name)?\\))?(\\.[A-Za-z_][A-Za-z0-9_]*(\\((name)?\\))?)*$"
+          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*(\\((name)?\\))?(\\.[A-Za-z_$][A-Za-z0-9_$]*(\\((name)?\\))?)*$"
         },
         "call": {
           "$ref": "#/$defs/symbol"
@@ -254,6 +358,24 @@
         "on": {
           "description": "For `chain`: the type the chain starts from, when it is not the request: `context#Context` for `ctx.Value(key)`.",
           "$ref": "#/$defs/symbol"
+        },
+        "by": {
+          "description": "For `chain`: the kind of read named by the string its `(name)` argument holds, rather than `read` with that name: `req.valid(name)` reads the body for `json` and a path parameter for `param`.",
+          "type": "object",
+          "additionalProperties": {
+            "enum": [
+              "header",
+              "query",
+              "path",
+              "body",
+              "cookie",
+              "form",
+              "host",
+              "remoteaddr",
+              "method",
+              "context"
+            ]
+          }
         }
       }
     },

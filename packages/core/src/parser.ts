@@ -1,29 +1,32 @@
 import { readFile } from 'node:fs/promises'
 import { Language, Parser, Query, type Tree } from 'web-tree-sitter'
 
-export type LanguageName = 'go'
+// Grammars, by name, each loaded from the .wasm file its official package ships (D3). A language
+// module declares the grammars it parses with.
+const grammars = new Map<string, string>()
 
-// Each grammar is loaded from the .wasm file its official package ships (D3).
-const grammars: Record<LanguageName, string> = {
-  go: 'tree-sitter-go/tree-sitter-go.wasm',
+export function defineGrammar(name: string, wasm: string) {
+  grammars.set(name, wasm)
 }
 
 let ready: Promise<void> | undefined
-const languages = new Map<LanguageName, Promise<Language>>()
+const languages = new Map<string, Promise<Language>>()
 
-export async function loadLanguage(name: LanguageName): Promise<Language> {
+export async function loadLanguage(name: string): Promise<Language> {
   ready ??= Parser.init()
   await ready
   let language = languages.get(name)
   if (!language) {
-    const url = new URL(import.meta.resolve(grammars[name]))
+    const wasm = grammars.get(name)
+    if (!wasm) throw new Error(`no grammar named ${name}`)
+    const url = new URL(import.meta.resolve(wasm))
     language = readFile(url).then((bytes) => Language.load(bytes))
     languages.set(name, language)
   }
   return language
 }
 
-export async function parse(name: LanguageName, source: string): Promise<Tree> {
+export async function parse(name: string, source: string): Promise<Tree> {
   const language = await loadLanguage(name)
   const parser = new Parser()
   try {
@@ -38,13 +41,18 @@ export async function parse(name: LanguageName, source: string): Promise<Tree> {
 
 const queries = new Map<string, Promise<Query>>()
 
-// Loads one of a language's extraction queries, from `queries/<language>/<name>.scm` (D10).
-export function loadQuery(name: LanguageName, query: string): Promise<Query> {
-  const key = `${name}/${query}`
+// Loads one of a language's extraction queries, from `queries/<folder>/<name>.scm` (D10), for one
+// of its grammars: the folder is the grammar's own name unless several grammars share it.
+export function loadQuery(
+  grammar: string,
+  query: string,
+  folder: string = grammar,
+): Promise<Query> {
+  const key = `${grammar}\0${folder}/${query}`
   let loaded = queries.get(key)
   if (!loaded) {
-    const url = new URL(`../queries/${key}.scm`, import.meta.url)
-    loaded = Promise.all([loadLanguage(name), readFile(url, 'utf8')]).then(
+    const url = new URL(`../queries/${folder}/${query}.scm`, import.meta.url)
+    loaded = Promise.all([loadLanguage(grammar), readFile(url, 'utf8')]).then(
       ([language, source]) => new Query(language, source),
     )
     queries.set(key, loaded)

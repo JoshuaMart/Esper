@@ -1,0 +1,307 @@
+# Hono itself, counted by hand (D16). An entry point is a declaration that is exported (a function,
+# a public method of an exported class, a function an exported object holds, or a function given to
+# the call whose result an exported name holds), or a function that takes the request or the
+# context, and that reads the request in its own code or in what it calls: `c.req`, the standard
+# `Request`, a cookie, or a value earlier middleware set on the context (`c.get`). Every file
+# under src/ and adapters/ that touches the request was read; the entries below are all that
+# qualify. What they read, and what is not counted:
+# - The adapters (`handle` of AWS Lambda, Lambda@Edge, Netlify, Vercel, Cloudflare Pages, the
+#   service worker) read the platform's event to build a `Request`; they are entry points
+#   because they call `app.fetch`, which reads the path through `getPath`, a guess through the
+#   field `Hono.getPath` that the constructor assigns.
+# - Not counted: `getConnInfo` of Bun, Deno, Lambda@Edge and Netlify, which take the client's
+#   address from the server or the platform's environment rather than the request;
+#   `ipRestriction`, which takes it from a function the caller gives; and `HonoRequest.param`,
+#   which reads the router's match rather than the request.
+# - `HonoRequest.json`, `text` and the other body readers read the body through `raw[key]()`,
+#   which no rule names: they are entry points through the `Content-Type` they read.
+target: https://github.com/honojs/hono
+ref: v4.13.14
+commit: bac5c4a8bcd76b165428ce757e1185753c7935bd
+kind: framework
+entries:
+  - {
+      ref: "entry:adapters/aws-lambda/src/conninfo.ts#getConnInfo",
+      at: "adapters/aws-lambda/src/conninfo.ts:45",
+    }
+  - {
+      ref: "entry:adapters/aws-lambda/src/handler.ts#handle",
+      at: "adapters/aws-lambda/src/handler.ts:243",
+    }
+  - {
+      ref: "entry:adapters/aws-lambda/src/handler.ts#streamHandle",
+      at: "adapters/aws-lambda/src/handler.ts:142",
+    }
+  - {
+      ref: "entry:adapters/bun/src/serve-static.ts#serveStatic",
+      at: "adapters/bun/src/serve-static.ts:8",
+    }
+  - { ref: "entry:adapters/bun/src/ssg.ts#toSSG", at: "adapters/bun/src/ssg.ts:25" }
+  - {
+      ref: "entry:adapters/bun/src/websocket.ts#upgradeWebSocket/fn1",
+      at: "adapters/bun/src/websocket.ts:48",
+    }
+  - {
+      ref: "entry:adapters/cloudflare-workers/src/conninfo.ts#getConnInfo",
+      at: "adapters/cloudflare-workers/src/conninfo.ts:3",
+    }
+  - {
+      ref: "entry:adapters/cloudflare-workers/src/serve-static-module.ts#module",
+      at: "adapters/cloudflare-workers/src/serve-static-module.ts:6",
+    }
+  - {
+      ref: "entry:adapters/cloudflare-workers/src/serve-static.ts#serveStatic",
+      at: "adapters/cloudflare-workers/src/serve-static.ts:21",
+    }
+  - {
+      ref: "entry:adapters/cloudflare-workers/src/websocket.ts#upgradeWebSocket/fn1",
+      at: "adapters/cloudflare-workers/src/websocket.ts:10",
+    }
+  - {
+      ref: "entry:adapters/deno/src/serve-static.ts#serveStatic",
+      at: "adapters/deno/src/serve-static.ts:8",
+    }
+  - { ref: "entry:adapters/deno/src/ssg.ts#toSSG", at: "adapters/deno/src/ssg.ts:25" }
+  - {
+      ref: "entry:adapters/deno/src/websocket.ts#upgradeWebSocket/fn1",
+      at: "adapters/deno/src/websocket.ts:5",
+    }
+  - {
+      ref: "entry:adapters/lambda-edge/src/handler.ts#handle",
+      at: "adapters/lambda-edge/src/handler.ts:115",
+    }
+  - { ref: "entry:adapters/netlify/src/handler.ts#handle", at: "adapters/netlify/src/handler.ts:4" }
+  - {
+      ref: "entry:adapters/service-worker/src/handler.ts#handle",
+      at: "adapters/service-worker/src/handler.ts:18",
+    }
+  - {
+      ref: "entry:adapters/service-worker/src/index.ts#fire",
+      at: "adapters/service-worker/src/index.ts:28",
+    }
+  - {
+      ref: "entry:adapters/vercel/src/conninfo.ts#getConnInfo",
+      at: "adapters/vercel/src/conninfo.ts:3",
+    }
+  - { ref: "entry:adapters/vercel/src/handler.ts#handle", at: "adapters/vercel/src/handler.ts:5" }
+  - {
+      ref: "entry:src/adapter/aws-lambda/conninfo.ts#getConnInfo",
+      at: "src/adapter/aws-lambda/conninfo.ts:46",
+    }
+  - {
+      ref: "entry:src/adapter/aws-lambda/handler.ts#handle",
+      at: "src/adapter/aws-lambda/handler.ts:265",
+    }
+  - {
+      ref: "entry:src/adapter/aws-lambda/handler.ts#streamHandle",
+      at: "src/adapter/aws-lambda/handler.ts:163",
+    }
+  - {
+      ref: "entry:src/adapter/bun/serve-static.ts#serveStatic",
+      at: "src/adapter/bun/serve-static.ts:11",
+    }
+  - { ref: "entry:src/adapter/bun/ssg.ts#toSSG", at: "src/adapter/bun/ssg.ts:27" }
+  - {
+      ref: "entry:src/adapter/bun/websocket.ts#upgradeWebSocket/fn1",
+      at: "src/adapter/bun/websocket.ts:59",
+    }
+  - {
+      ref: "entry:src/adapter/cloudflare-pages/conninfo.ts#getConnInfo",
+      at: "src/adapter/cloudflare-pages/conninfo.ts:23",
+    }
+  - {
+      ref: "entry:src/adapter/cloudflare-pages/handler.ts#handle",
+      at: "src/adapter/cloudflare-pages/handler.ts:39",
+    }
+  - {
+      ref: "entry:src/adapter/cloudflare-workers/conninfo.ts#getConnInfo",
+      at: "src/adapter/cloudflare-workers/conninfo.ts:6",
+    }
+  - {
+      ref: "entry:src/adapter/cloudflare-workers/serve-static-module.ts#module",
+      at: "src/adapter/cloudflare-workers/serve-static-module.ts:6",
+    }
+  - {
+      ref: "entry:src/adapter/cloudflare-workers/serve-static.ts#serveStatic",
+      at: "src/adapter/cloudflare-workers/serve-static.ts:24",
+    }
+  - {
+      ref: "entry:src/adapter/cloudflare-workers/websocket.ts#upgradeWebSocket/fn1",
+      at: "src/adapter/cloudflare-workers/websocket.ts:13",
+    }
+  - {
+      ref: "entry:src/adapter/deno/serve-static.ts#serveStatic",
+      at: "src/adapter/deno/serve-static.ts:11",
+    }
+  - { ref: "entry:src/adapter/deno/ssg.ts#toSSG", at: "src/adapter/deno/ssg.ts:27" }
+  - {
+      ref: "entry:src/adapter/deno/websocket.ts#upgradeWebSocket/fn1",
+      at: "src/adapter/deno/websocket.ts:8",
+    }
+  - {
+      ref: "entry:src/adapter/lambda-edge/handler.ts#handle",
+      at: "src/adapter/lambda-edge/handler.ts:133",
+    }
+  - { ref: "entry:src/adapter/netlify/handler.ts#handle", at: "src/adapter/netlify/handler.ts:7" }
+  - {
+      ref: "entry:src/adapter/service-worker/handler.ts#handle",
+      at: "src/adapter/service-worker/handler.ts:22",
+    }
+  - {
+      ref: "entry:src/adapter/service-worker/index.ts#fire",
+      at: "src/adapter/service-worker/index.ts:32",
+    }
+  - {
+      ref: "entry:src/adapter/vercel/conninfo.ts#getConnInfo",
+      at: "src/adapter/vercel/conninfo.ts:6",
+    }
+  - { ref: "entry:src/adapter/vercel/handler.ts#handle", at: "src/adapter/vercel/handler.ts:8" }
+  - { ref: "entry:src/helper/accepts/accepts.ts#accepts", at: "src/helper/accepts/accepts.ts:87" }
+  - { ref: "entry:src/helper/cookie/index.ts#deleteCookie", at: "src/helper/cookie/index.ts:141" }
+  - { ref: "entry:src/helper/cookie/index.ts#getCookie", at: "src/helper/cookie/index.ts:27" }
+  - { ref: "entry:src/helper/cookie/index.ts#getSignedCookie", at: "src/helper/cookie/index.ts:50" }
+  - {
+      ref: "entry:src/helper/proxy/index.ts#buildRequestInitFromRequest",
+      at: "src/helper/proxy/index.ts:50",
+    }
+  - { ref: "entry:src/helper/proxy/index.ts#proxy", at: "src/helper/proxy/index.ts:160" }
+  - { ref: "entry:src/helper/route/index.ts#basePath", at: "src/helper/route/index.ts:107" }
+  - { ref: "entry:src/helper/ssg/middleware.ts#ssgParams", at: "src/helper/ssg/middleware.ts:43" }
+  - { ref: "entry:src/helper/ssg/ssg.ts#fetchRoutesContent", at: "src/helper/ssg/ssg.ts:205" }
+  - { ref: "entry:src/helper/ssg/ssg.ts#toSSG", at: "src/helper/ssg/ssg.ts:369" }
+  - { ref: "entry:src/helper/testing/index.ts#testClient", at: "src/helper/testing/index.ts:17" }
+  - { ref: "entry:src/hono-base.ts#Hono.#dispatch", at: "src/hono-base.ts:425" }
+  - { ref: "entry:src/hono-base.ts#Hono.fetch", at: "src/hono-base.ts:502" }
+  - { ref: "entry:src/hono-base.ts#Hono.fire", at: "src/hono-base.ts:555" }
+  - { ref: "entry:src/hono-base.ts#Hono.mount", at: "src/hono-base.ts:348" }
+  - { ref: "entry:src/hono-base.ts#Hono.request", at: "src/hono-base.ts:518" }
+  - {
+      ref: "entry:src/middleware/basic-auth/index.ts#basicAuth",
+      at: "src/middleware/basic-auth/index.ts:80",
+    }
+  - {
+      ref: "entry:src/middleware/bearer-auth/index.ts#bearerAuth",
+      at: "src/middleware/bearer-auth/index.ts:105",
+    }
+  - {
+      ref: "entry:src/middleware/body-limit/index.ts#bodyLimit",
+      at: "src/middleware/body-limit/index.ts:50",
+    }
+  - { ref: "entry:src/middleware/cache/index.ts#cache", at: "src/middleware/cache/index.ts:183" }
+  - {
+      ref: "entry:src/middleware/cache/index.ts#createQueryDigest",
+      at: "src/middleware/cache/index.ts:95",
+    }
+  - {
+      ref: "entry:src/middleware/combine/index.ts#except",
+      at: "src/middleware/combine/index.ts:147",
+    }
+  - {
+      ref: "entry:src/middleware/compress/index.ts#compress",
+      at: "src/middleware/compress/index.ts:72",
+    }
+  - { ref: "entry:src/middleware/cors/index.ts#cors", at: "src/middleware/cors/index.ts:63" }
+  - { ref: "entry:src/middleware/csrf/index.ts#csrf", at: "src/middleware/csrf/index.ts:94" }
+  - { ref: "entry:src/middleware/etag/index.ts#etag", at: "src/middleware/etag/index.ts:80" }
+  - { ref: "entry:src/middleware/jwk/jwk.ts#jwk", at: "src/middleware/jwk/jwk.ts:49" }
+  - { ref: "entry:src/middleware/jwt/jwt.ts#jwt", at: "src/middleware/jwt/jwt.ts:54" }
+  - {
+      ref: "entry:src/middleware/language/language.ts#detectFromCookie",
+      at: "src/middleware/language/language.ts:145",
+    }
+  - {
+      ref: "entry:src/middleware/language/language.ts#detectFromHeader",
+      at: "src/middleware/language/language.ts:153",
+    }
+  - {
+      ref: "entry:src/middleware/language/language.ts#detectFromPath",
+      at: "src/middleware/language/language.ts:181",
+    }
+  - {
+      ref: "entry:src/middleware/language/language.ts#detectFromQuery",
+      at: "src/middleware/language/language.ts:137",
+    }
+  - {
+      ref: "entry:src/middleware/language/language.ts#detectLanguage",
+      at: "src/middleware/language/language.ts:243",
+    }
+  - {
+      ref: "entry:src/middleware/language/language.ts#languageDetector",
+      at: "src/middleware/language/language.ts:297",
+    }
+  - { ref: "entry:src/middleware/logger/index.ts#logger", at: "src/middleware/logger/index.ts:81" }
+  - {
+      ref: "entry:src/middleware/method-not-allowed/index.ts#methodNotAllowed",
+      at: "src/middleware/method-not-allowed/index.ts:59",
+    }
+  - {
+      ref: "entry:src/middleware/method-override/index.ts#methodOverride",
+      at: "src/middleware/method-override/index.ts:60",
+    }
+  - {
+      ref: "entry:src/middleware/mount/index.ts#defaultReplaceRequest",
+      at: "src/middleware/mount/index.ts:21",
+    }
+  - { ref: "entry:src/middleware/mount/index.ts#mount", at: "src/middleware/mount/index.ts:69" }
+  - {
+      ref: "entry:src/middleware/pretty-json/index.ts#prettyJSON",
+      at: "src/middleware/pretty-json/index.ts:48",
+    }
+  - {
+      ref: "entry:src/middleware/request-id/request-id.ts#requestId",
+      at: "src/middleware/request-id/request-id.ts:41",
+    }
+  - {
+      ref: "entry:src/middleware/secure-headers/secure-headers.ts#NONCE",
+      at: "src/middleware/secure-headers/secure-headers.ts:137",
+    }
+  - {
+      ref: "entry:src/middleware/serve-static/index.ts#serveStatic",
+      at: "src/middleware/serve-static/index.ts:38",
+    }
+  - {
+      ref: "entry:src/middleware/timing/timing.ts#endTime",
+      at: "src/middleware/timing/timing.ts:208",
+    }
+  - {
+      ref: "entry:src/middleware/timing/timing.ts#setMetric",
+      at: "src/middleware/timing/timing.ts:149",
+    }
+  - {
+      ref: "entry:src/middleware/timing/timing.ts#startTime",
+      at: "src/middleware/timing/timing.ts:187",
+    }
+  - {
+      ref: "entry:src/middleware/timing/timing.ts#timing",
+      at: "src/middleware/timing/timing.ts:76",
+    }
+  - {
+      ref: "entry:src/middleware/timing/timing.ts#wrapTime",
+      at: "src/middleware/timing/timing.ts:244",
+    }
+  - {
+      ref: "entry:src/middleware/trailing-slash/index.ts#appendTrailingSlash",
+      at: "src/middleware/trailing-slash/index.ts:128",
+    }
+  - {
+      ref: "entry:src/middleware/trailing-slash/index.ts#trimTrailingSlash",
+      at: "src/middleware/trailing-slash/index.ts:44",
+    }
+  - { ref: "entry:src/request.ts#HonoRequest.arrayBuffer", at: "src/request.ts:290" }
+  - { ref: "entry:src/request.ts#HonoRequest.blob", at: "src/request.ts:320" }
+  - { ref: "entry:src/request.ts#HonoRequest.bytes", at: "src/request.ts:306" }
+  - { ref: "entry:src/request.ts#HonoRequest.formData", at: "src/request.ts:334" }
+  - { ref: "entry:src/request.ts#HonoRequest.header", at: "src/request.ts:185" }
+  - { ref: "entry:src/request.ts#HonoRequest.json", at: "src/request.ts:258" }
+  - { ref: "entry:src/request.ts#HonoRequest.method", at: "src/request.ts:390" }
+  - { ref: "entry:src/request.ts#HonoRequest.parseBody", at: "src/request.ts:213" }
+  - { ref: "entry:src/request.ts#HonoRequest.queries", at: "src/request.ts:166" }
+  - { ref: "entry:src/request.ts#HonoRequest.query", at: "src/request.ts:147" }
+  - { ref: "entry:src/request.ts#HonoRequest.text", at: "src/request.ts:274" }
+  - { ref: "entry:src/request.ts#HonoRequest.url", at: "src/request.ts:374" }
+  - { ref: "entry:src/request.ts#cloneRawRequest", at: "src/request.ts:481" }
+  - { ref: "entry:src/utils/basic-auth.ts#auth", at: "src/utils/basic-auth.ts:9" }
+  - { ref: "entry:src/utils/body.ts#parseBody", at: "src/utils/body.ts:100" }
+  - { ref: "entry:src/utils/url.ts#getPath", at: "src/utils/url.ts:106" }
+  - { ref: "entry:src/utils/url.ts#getPathNoStrict", at: "src/utils/url.ts:154" }
+  - { ref: "entry:src/validator/validator.ts#validator", at: "src/validator/validator.ts:46" }

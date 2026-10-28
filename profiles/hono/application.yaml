@@ -1,0 +1,148 @@
+# Hono, for an application built on it: routes, `route()` and `basePath()` mounts, the middleware
+# each route inherits in the order it was registered, the request reads of `c.req`, and the routes
+# that `@hono/zod-openapi` declares with `createRoute`.
+name: hono
+kind: application
+language: typescript
+detect:
+  dependency: [hono]
+  import: [hono]
+request: globalThis#Request
+# A handler or a middleware receives the context first: `(c) => c.json(…)`, `(c, next) => …`.
+context: hono#Context
+handlers:
+  adapters: [hono/factory#createMiddleware, hono/factory#createHandlers]
+  types:
+    - hono#Handler
+    - hono#MiddlewareHandler
+    - hono#ErrorHandler
+    - hono#NotFoundHandler
+    - hono/types#Handler
+    - hono/types#MiddlewareHandler
+routers:
+  - types: [hono#Hono, hono/tiny#Hono, hono/quick#Hono, "@hono/zod-openapi#OpenAPIHono"]
+    create: [hono#Hono, hono/tiny#Hono, hono/quick#Hono, "@hono/zod-openapi#OpenAPIHono"]
+    pattern: colon
+    ordered: true
+    chained: true
+    methods:
+      - { name: get, does: route, method: GET, args: [path, chain, handler] }
+      - { name: post, does: route, method: POST, args: [path, chain, handler] }
+      - { name: put, does: route, method: PUT, args: [path, chain, handler] }
+      - { name: delete, does: route, method: DELETE, args: [path, chain, handler] }
+      - { name: patch, does: route, method: PATCH, args: [path, chain, handler] }
+      - { name: options, does: route, method: OPTIONS, args: [path, chain, handler] }
+      - { name: all, does: route, method: ANY, args: [path, chain, handler] }
+      - { name: on, does: route, args: [method, path, chain, handler] }
+      - { name: use, does: use, args: [path, chain] }
+      - { name: route, does: mount }
+      - { name: mount, does: mount }
+      - { name: basePath, does: prefix }
+      # `@hono/zod-openapi`: the route's method, path and middleware are its configuration.
+      - name: openapi
+        does: route
+        args: [config, handler, other]
+        config: { method: method, path: path, middleware: chain }
+        through: ["@hono/zod-openapi#createRoute"]
+        pattern: braces
+guards:
+  - { call: hono/basic-auth#basicAuth, kind: authn }
+  - { call: hono/bearer-auth#bearerAuth, kind: authn }
+  - { call: hono/jwt#jwt, kind: authn }
+  - { call: hono/jwk#jwk, kind: authn }
+  - { call: hono/csrf#csrf, kind: csrf }
+  - { call: hono/ip-restriction#ipRestriction, kind: authz-role }
+  - { call: hono/body-limit#bodyLimit, kind: validation }
+  - { call: hono/validator#validator, kind: validation }
+  - { call: "@hono/zod-validator#zValidator", kind: validation }
+  - { call: "@hono/valibot-validator#vValidator", kind: validation }
+  - { call: "@hono/standard-validator#sValidator", kind: validation }
+  - { call: "@hono/typebox-validator#tbValidator", kind: validation }
+  - { call: "@hono/arktype-validator#arktypeValidator", kind: validation }
+  - { call: hono-rate-limiter#rateLimiter, kind: rate-limit }
+  - { call: hono-rate-limiter#webSocketLimiter, kind: rate-limit }
+reads:
+  # The context's request.
+  - { on: hono#Context, chain: req.param(name), read: path }
+  - { on: hono#Context, chain: req.param(), read: path }
+  - { on: hono#Context, chain: req.query(name), read: query }
+  - { on: hono#Context, chain: req.query(), read: query }
+  - { on: hono#Context, chain: req.queries(name), read: query }
+  - { on: hono#Context, chain: req.queries(), read: query }
+  - { on: hono#Context, chain: req.header(name), read: header }
+  - { on: hono#Context, chain: req.header(), read: header }
+  - { on: hono#Context, chain: req.json(), read: body }
+  - { on: hono#Context, chain: req.text(), read: body }
+  - { on: hono#Context, chain: req.arrayBuffer(), read: body }
+  - { on: hono#Context, chain: req.blob(), read: body }
+  - { on: hono#Context, chain: req.bytes(), read: body }
+  - { on: hono#Context, chain: req.formData(), read: form }
+  - { on: hono#Context, chain: req.parseBody(), read: form }
+  - on: hono#Context
+    chain: req.valid(name)
+    read: body
+    by: { param: path, query: query, header: header, cookie: cookie, form: form, json: body }
+  - { on: hono#Context, chain: req.path, read: path }
+  - { on: hono#Context, chain: req.url, read: path }
+  - { on: hono#Context, chain: req.method, read: method }
+  - { on: hono#Context, chain: req.raw.headers.get(name), read: header }
+  - { on: hono#Context, chain: req.raw.headers, read: header }
+  - { on: hono#Context, chain: req.raw.url, read: path }
+  - { on: hono#Context, chain: req.raw.method, read: method }
+  - { on: hono#Context, chain: req.raw.body, read: body }
+  - { on: hono#Context, chain: req.raw.json(), read: body }
+  - { on: hono#Context, chain: req.raw.text(), read: body }
+  - { on: hono#Context, chain: req.raw.formData(), read: form }
+  # Values earlier middleware set on the context.
+  - { on: hono#Context, chain: get(name), read: context }
+  - { on: hono#Context, chain: var, read: context }
+  # The same request, given as Hono's request object.
+  - { on: hono#HonoRequest, chain: param(name), read: path }
+  - { on: hono#HonoRequest, chain: param(), read: path }
+  - { on: hono#HonoRequest, chain: query(name), read: query }
+  - { on: hono#HonoRequest, chain: query(), read: query }
+  - { on: hono#HonoRequest, chain: queries(name), read: query }
+  - { on: hono#HonoRequest, chain: header(name), read: header }
+  - { on: hono#HonoRequest, chain: header(), read: header }
+  - { on: hono#HonoRequest, chain: json(), read: body }
+  - { on: hono#HonoRequest, chain: text(), read: body }
+  - { on: hono#HonoRequest, chain: formData(), read: form }
+  - { on: hono#HonoRequest, chain: parseBody(), read: form }
+  - { on: hono#HonoRequest, chain: path, read: path }
+  - { on: hono#HonoRequest, chain: url, read: path }
+  - { on: hono#HonoRequest, chain: method, read: method }
+  # The standard request.
+  - { chain: headers.get(name), read: header }
+  - { chain: headers, read: header }
+  - { chain: url, read: path }
+  - { chain: method, read: method }
+  - { chain: body, read: body }
+  - { chain: json(), read: body }
+  - { chain: text(), read: body }
+  - { chain: arrayBuffer(), read: body }
+  - { chain: blob(), read: body }
+  - { chain: bytes(), read: body }
+  - { chain: formData(), read: form }
+  # Helpers given the context.
+  - { call: hono/cookie#getCookie, request: 0, name: 1, read: cookie }
+  - { call: hono/cookie#getSignedCookie, request: 0, name: 2, read: cookie }
+  - { call: hono/accepts#accepts, request: 0, read: header }
+  - { call: hono/conninfo#getConnInfo, request: 0, read: remoteaddr }
+  - { call: hono/bun#getConnInfo, request: 0, read: remoteaddr }
+  - { call: hono/deno#getConnInfo, request: 0, read: remoteaddr }
+  - { call: hono/cloudflare-workers#getConnInfo, request: 0, read: remoteaddr }
+  - { call: hono/aws-lambda#getConnInfo, request: 0, read: remoteaddr }
+  - { call: hono/lambda-edge#getConnInfo, request: 0, read: remoteaddr }
+  - { call: hono/netlify#getConnInfo, request: 0, read: remoteaddr }
+  - { call: hono/vercel#getConnInfo, request: 0, read: remoteaddr }
+  - { call: "@hono/node-server/conninfo#getConnInfo", request: 0, read: remoteaddr }
+mutations:
+  # A value set on the context, which later middleware and the handler read.
+  - { on: hono#Context, chain: set() }
+  - { chain: headers.set() }
+  - { chain: headers.append() }
+  - { chain: headers.delete() }
+sinks:
+  redirect: [hono#Context.redirect]
+  unescaped: [hono/html#raw]
+  fetch: [hono/proxy#proxy]

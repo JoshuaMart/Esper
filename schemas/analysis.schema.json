@@ -80,7 +80,7 @@
     "name": {
       "description": "The name as the source writes it at each place the line cites.",
       "type": "string",
-      "pattern": "^[\\p{L}_][\\p{L}\\p{Nd}_]*$"
+      "pattern": "^[\\p{L}_$][\\p{L}\\p{Nd}_$]*$"
     },
     "place": {
       "type": "object",

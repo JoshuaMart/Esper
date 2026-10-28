@@ -27,7 +27,7 @@
       "minItems": 1,
       "uniqueItems": true,
       "items": {
-        "enum": ["go"]
+        "enum": ["go", "typescript"]
       }
     },
     "provides": {

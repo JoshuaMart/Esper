@@ -1,11 +1,12 @@
 import { readFile } from 'node:fs/promises'
 import { parse as parseYaml } from 'yaml'
-import type { LanguageName } from './parser.ts'
 
 // What a language's libraries do with what they are given (`queries/<language>/library.yaml`):
 // sinks, persisted data reads and writes, decoders, and the types whose methods return themselves.
 
-export type SinkKind = 'sql' | 'process' | 'file' | 'fetch' | 'redirect' | 'unescaped'
+import type { SinkKind } from './profile.ts'
+
+export type { SinkKind }
 
 export interface Sink {
   kind: SinkKind
@@ -23,6 +24,11 @@ export interface Library {
   writes: Set<string>
   reads: Set<string>
   decoders: Set<string>
+  // Names a program uses without declaring them: `fetch`, `Request`.
+  globals: Set<string>
+  // Members that values of the language's own types have (`map`, `then`): a call of one on a value
+  // of unknown type is not guessed to be the target's.
+  builtins: Set<string>
 }
 
 interface LibraryFile {
@@ -33,11 +39,22 @@ interface LibraryFile {
   sinks?: Partial<Record<SinkKind, string[]>>
   data?: { write?: string[]; read?: string[] }
   decoders?: string[]
+  globals?: string[]
+  builtins?: string[]
 }
 
-const libraries = new Map<LanguageName, Promise<Library>>()
+// `symbol@n` names the argument that is interpreted, `symbol@*` any argument; a module's own `@`
+// (`@aws-sdk/client-s3#…`) comes before its `#`.
+export function parseSink(entry: string): { symbol: string; argument: number | '*' } {
+  const at = entry.indexOf('@', entry.indexOf('#'))
+  if (at < 0) return { symbol: entry, argument: 0 }
+  const argument = entry.slice(at + 1)
+  return { symbol: entry.slice(0, at), argument: argument === '*' ? '*' : Number(argument) }
+}
 
-export function loadLibrary(language: LanguageName): Promise<Library> {
+const libraries = new Map<string, Promise<Library>>()
+
+export function loadLibrary(language: string): Promise<Library> {
   let library = libraries.get(language)
   if (!library) {
     const url = new URL(`../queries/${language}/library.yaml`, import.meta.url)
@@ -47,12 +64,8 @@ export function loadLibrary(language: LanguageName): Promise<Library> {
       const sinks = new Map<string, Sink>()
       for (const [kind, symbols] of Object.entries(file.sinks ?? {})) {
         for (const entry of symbols ?? []) {
-          const [symbol, at] = entry.split('@')
-          if (!symbol) continue
-          sinks.set(ext(symbol), {
-            kind: kind as SinkKind,
-            argument: at === '*' ? '*' : Number(at ?? 0),
-          })
+          const { symbol, argument } = parseSink(entry)
+          if (symbol) sinks.set(ext(symbol), { kind: kind as SinkKind, argument })
         }
       }
       return {
@@ -64,6 +77,8 @@ export function loadLibrary(language: LanguageName): Promise<Library> {
         writes: new Set((file.data?.write ?? []).map(ext)),
         reads: new Set((file.data?.read ?? []).map(ext)),
         decoders: new Set((file.decoders ?? []).map(ext)),
+        globals: new Set(file.globals ?? []),
+        builtins: new Set(file.builtins ?? []),
       }
     })
     libraries.set(language, library)

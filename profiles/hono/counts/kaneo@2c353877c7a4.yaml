@@ -1,0 +1,409 @@
+# Kaneo's API (apps/api), a Hono application, counted by hand (D16): every registration on the
+# routers of src/index.ts and of the module each `api.route()` mounts, each `openapi()` route with
+# the method and path of its `createRoute` configuration. The routes were listed by a script
+# written apart from Esper, from the text of each router module, and the five routes of
+# src/integration-sync/index.ts, whose path is a constant the script does not read, by reading
+# them; both lists match the index, route for route and line for line.
+# - `app.route("/", mcpWellKnownRoutes(…))` serves the OAuth discovery documents at the root, and
+#   the MCP router mounted at /api serves them again under /api.
+# - `api.on([…], "/auth/*", …)` is one route per method, five in all.
+target: https://github.com/usekaneo/kaneo
+ref: v2.48.0
+commit: 2c353877c7a491c5be3ba133897002c299ad47a0
+dir: apps/api
+kind: application
+entries:
+  - { ref: "route:ANY /api/mcp", at: "src/mcp/index.ts:300" }
+  - { ref: "route:DELETE /api/activity/comment", at: "src/activity/index.ts:230" }
+  - {
+      ref: "route:DELETE /api/admin/workspaces/{workspaceId}/members/{userId}",
+      at: "src/admin/index.ts:247",
+    }
+  - { ref: "route:DELETE /api/auth/{rest...}", at: "src/index.ts:769" }
+  - {
+      ref: "route:DELETE /api/calendar-feed/project/{projectId}/{id}",
+      at: "src/calendar-feed/index.ts:135",
+    }
+  - { ref: "route:DELETE /api/column/{id}", at: "src/column/index.ts:176" }
+  - { ref: "route:DELETE /api/comment/{id}", at: "src/comment/index.ts:153" }
+  - { ref: "route:DELETE /api/custom-field/{id}", at: "src/custom-field/index.ts:313" }
+  - {
+      ref: "route:DELETE /api/discord-integration/project/{projectId}",
+      at: "src/discord-integration/index.ts:285",
+    }
+  - {
+      ref: "route:DELETE /api/external-link/task/{taskId}/{id}",
+      at: "src/external-link/index.ts:122",
+    }
+  - {
+      ref: "route:DELETE /api/generic-webhook-integration/project/{projectId}",
+      at: "src/generic-webhook-integration/index.ts:289",
+    }
+  - {
+      ref: "route:DELETE /api/gitea-integration/project/{projectId}",
+      at: "src/gitea-integration/index.ts:340",
+    }
+  - {
+      ref: "route:DELETE /api/github-integration/project/{projectId}",
+      at: "src/github-integration/index.ts:391",
+    }
+  - {
+      ref: "route:DELETE /api/gitlab-integration/project/{projectId}",
+      at: "src/gitlab-integration/index.ts:351",
+    }
+  - { ref: "route:DELETE /api/label/{id}", at: "src/label/index.ts:261" }
+  - { ref: "route:DELETE /api/label/{id}/task", at: "src/label/index.ts:251" }
+  - {
+      ref: "route:DELETE /api/mattermost-integration/project/{projectId}",
+      at: "src/mattermost-integration/index.ts:296",
+    }
+  - {
+      ref: "route:DELETE /api/notification-preferences/workspaces/{workspaceId}",
+      at: "src/notification-preferences/index.ts:125",
+    }
+  - { ref: "route:DELETE /api/notification/clear-all", at: "src/notification/index.ts:217" }
+  - { ref: "route:DELETE /api/notification/clear-read", at: "src/notification/index.ts:228" }
+  - { ref: "route:DELETE /api/notification/{id}", at: "src/notification/index.ts:239" }
+  - { ref: "route:DELETE /api/project/{id}", at: "src/project/index.ts:554" }
+  - { ref: "route:DELETE /api/project/{id}/background", at: "src/project/index.ts:699" }
+  - {
+      ref: "route:DELETE /api/slack-integration/project/{projectId}",
+      at: "src/slack-integration/index.ts:291",
+    }
+  - { ref: "route:DELETE /api/task-relation/{id}", at: "src/task-relation/index.ts:201" }
+  - { ref: "route:DELETE /api/task/{id}", at: "src/task/index.ts:1084" }
+  - {
+      ref: "route:DELETE /api/telegram-integration/project/{projectId}",
+      at: "src/telegram-integration/index.ts:290",
+    }
+  - { ref: "route:DELETE /api/user/avatar", at: "src/user/index.ts:105" }
+  - { ref: "route:DELETE /api/workflow-rule/{id}", at: "src/workflow-rule/index.ts:106" }
+  - { ref: "route:GET /.well-known/oauth-authorization-server/api", at: "src/mcp/index.ts:360" }
+  - { ref: "route:GET /.well-known/oauth-protected-resource/api/mcp", at: "src/mcp/index.ts:353" }
+  - { ref: "route:GET /api/.well-known/oauth-authorization-server/api", at: "src/mcp/index.ts:287" }
+  - {
+      ref: "route:GET /api/.well-known/oauth-protected-resource/api/mcp",
+      at: "src/mcp/index.ts:280",
+    }
+  - { ref: "route:GET /api/activity/workspace/{workspaceId}", at: "src/activity/index.ts:188" }
+  - { ref: "route:GET /api/activity/{taskId}", at: "src/activity/index.ts:197" }
+  - { ref: "route:GET /api/admin/users", at: "src/admin/index.ts:217" }
+  - { ref: "route:GET /api/admin/workspaces", at: "src/admin/index.ts:220" }
+  - { ref: "route:GET /api/admin/workspaces/{workspaceId}/members", at: "src/admin/index.ts:223" }
+  - { ref: "route:GET /api/admin/workspaces/{workspaceId}/roles", at: "src/admin/index.ts:226" }
+  - { ref: "route:GET /api/asset/{id}", at: "src/index.ts:509" }
+  - { ref: "route:GET /api/auth/device", at: "src/index.ts:730" }
+  - { ref: "route:GET /api/auth/get-session", at: "src/index.ts:489" }
+  - { ref: "route:GET /api/auth/{rest...}", at: "src/index.ts:769" }
+  - { ref: "route:GET /api/billing/{workspaceId}", at: "src/billing/index.ts:165" }
+  - { ref: "route:GET /api/calendar-feed/project/{projectId}", at: "src/calendar-feed/index.ts:71" }
+  - {
+      ref: "route:GET /api/calendar-feed/{token}/calendar.ics",
+      at: "src/calendar-feed/index.ts:41",
+    }
+  - { ref: "route:GET /api/column/{projectId}", at: "src/column/index.ts:154" }
+  - { ref: "route:GET /api/comment/{taskId}", at: "src/comment/index.ts:121" }
+  - { ref: "route:GET /api/config", at: "src/config/index.ts:21" }
+  - { ref: "route:GET /api/custom-field/project/{projectId}", at: "src/custom-field/index.ts:268" }
+  - {
+      ref: "route:GET /api/custom-field/project/{projectId}/filter-values",
+      at: "src/custom-field/index.ts:280",
+    }
+  - {
+      ref: "route:GET /api/custom-field/project/{projectId}/values",
+      at: "src/custom-field/index.ts:271",
+    }
+  - { ref: "route:GET /api/custom-field/task/{taskId}", at: "src/custom-field/index.ts:277" }
+  - {
+      ref: "route:GET /api/discord-integration/project/{projectId}",
+      at: "src/discord-integration/index.ts:189",
+    }
+  - { ref: "route:GET /api/external-link/task/{taskId}", at: "src/external-link/index.ts:129" }
+  - {
+      ref: "route:GET /api/generic-webhook-integration/project/{projectId}",
+      at: "src/generic-webhook-integration/index.ts:184",
+    }
+  - {
+      ref: "route:GET /api/gitea-integration/project/{projectId}",
+      at: "src/gitea-integration/index.ts:237",
+    }
+  - { ref: "route:GET /api/github-integration/app-info", at: "src/github-integration/index.ts:262" }
+  - {
+      ref: "route:GET /api/github-integration/project/{projectId}",
+      at: "src/github-integration/index.ts:303",
+    }
+  - {
+      ref: "route:GET /api/github-integration/repositories/{projectId}",
+      at: "src/github-integration/index.ts:279",
+    }
+  - {
+      ref: "route:GET /api/gitlab-integration/project/{projectId}",
+      at: "src/gitlab-integration/index.ts:251",
+    }
+  - { ref: "route:GET /api/health", at: "src/index.ts:311" }
+  - { ref: "route:GET /api/import/runs/{workspaceId}", at: "src/import/index.ts:190" }
+  - { ref: "route:GET /api/import/runs/{workspaceId}/{runId}", at: "src/import/index.ts:196" }
+  - {
+      ref: "route:GET /api/import/trello/authorize-url/{workspaceId}",
+      at: "src/import/index.ts:193",
+    }
+  - { ref: "route:GET /api/instance/status", at: "src/index.ts:315" }
+  - {
+      ref: "route:GET /api/integration-sync/project/{projectId}/{provider}",
+      at: "src/integration-sync/index.ts:139",
+    }
+  - {
+      ref: "route:GET /api/integration-sync/project/{projectId}/{provider}/links/{linkId}/review",
+      at: "src/integration-sync/index.ts:193",
+    }
+  - { ref: "route:GET /api/invitation/pending", at: "src/invitation/index.ts:41" }
+  - { ref: "route:GET /api/invitation/public/{id}", at: "src/index.ts:462" }
+  - { ref: "route:GET /api/invitation/{id}", at: "src/invitation/index.ts:48" }
+  - { ref: "route:GET /api/label/task/{taskId}", at: "src/label/index.ts:222" }
+  - { ref: "route:GET /api/label/workspace/{workspaceId}", at: "src/label/index.ts:226" }
+  - { ref: "route:GET /api/label/{id}", at: "src/label/index.ts:241" }
+  - {
+      ref: "route:GET /api/mattermost-integration/project/{projectId}",
+      at: "src/mattermost-integration/index.ts:189",
+    }
+  - { ref: "route:GET /api/mcp/authorize", at: "src/mcp/index.ts:196" }
+  - { ref: "route:GET /api/mcp/authorize/request/{requestId}", at: "src/mcp/index.ts:201" }
+  - { ref: "route:GET /api/notification", at: "src/notification/index.ts:153" }
+  - {
+      ref: "route:GET /api/notification-preferences",
+      at: "src/notification-preferences/index.ts:95",
+    }
+  - { ref: "route:GET /api/oauth/id-token", at: "src/oauth/index.ts:20" }
+  - { ref: "route:GET /api/openapi", at: "src/index.ts:653" }
+  - { ref: "route:GET /api/project", at: "src/project/index.ts:435" }
+  - { ref: "route:GET /api/project/{id}", at: "src/project/index.ts:457" }
+  - { ref: "route:GET /api/project/{id}/background", at: "src/project/index.ts:463" }
+  - { ref: "route:GET /api/public-project/{id}", at: "src/index.ts:338" }
+  - { ref: "route:GET /api/public-project/{id}/description", at: "src/index.ts:372" }
+  - { ref: "route:GET /api/public-project/{id}/task/{taskId}/description", at: "src/index.ts:405" }
+  - { ref: "route:GET /api/search", at: "src/search/index.ts:33" }
+  - {
+      ref: "route:GET /api/slack-integration/project/{projectId}",
+      at: "src/slack-integration/index.ts:187",
+    }
+  - { ref: "route:GET /api/task-relation/{taskId}", at: "src/task-relation/index.ts:178" }
+  - { ref: "route:GET /api/task/assigned", at: "src/task/index.ts:858" }
+  - { ref: "route:GET /api/task/by-ticket-id/{ticketId}", at: "src/task/index.ts:988" }
+  - { ref: "route:GET /api/task/description-matches/{projectId}", at: "src/task/index.ts:846" }
+  - { ref: "route:GET /api/task/export/{projectId}", at: "src/task/index.ts:1068" }
+  - { ref: "route:GET /api/task/tasks/{projectId}", at: "src/task/index.ts:869" }
+  - { ref: "route:GET /api/task/{id}", at: "src/task/index.ts:1000" }
+  - { ref: "route:GET /api/task/{id}/description", at: "src/task/index.ts:840" }
+  - {
+      ref: "route:GET /api/telegram-integration/project/{projectId}",
+      at: "src/telegram-integration/index.ts:155",
+    }
+  - { ref: "route:GET /api/time-entry/task/{taskId}", at: "src/time-entry/index.ts:117" }
+  - { ref: "route:GET /api/time-entry/{id}", at: "src/time-entry/index.ts:120" }
+  - { ref: "route:GET /api/user/avatar/{id}", at: "src/index.ts:595" }
+  - { ref: "route:GET /api/user/me", at: "src/user/index.ts:88" }
+  - { ref: "route:GET /api/workflow-rule/{projectId}", at: "src/workflow-rule/index.ts:90" }
+  - { ref: "route:GET /api/workspace", at: "src/workspace/index.ts:184" }
+  - { ref: "route:GET /api/workspace/{workspaceId}", at: "src/workspace/index.ts:187" }
+  - { ref: "route:GET /api/workspace/{workspaceId}/capabilities", at: "src/workspace/index.ts:209" }
+  - { ref: "route:GET /api/workspace/{workspaceId}/members", at: "src/workspace/index.ts:193" }
+  - {
+      ref: "route:GET /api/workspace/{workspaceId}/project-access",
+      at: "src/workspace/index.ts:212",
+    }
+  - {
+      ref: "route:GET /api/workspace/{workspaceId}/project-access/me",
+      at: "src/workspace/index.ts:203",
+    }
+  - { ref: "route:GET /api/ws/user", at: "src/index.ts:872" }
+  - { ref: "route:GET /api/ws/{projectId}", at: "src/index.ts:898" }
+  - { ref: "route:PATCH /api/auth/{rest...}", at: "src/index.ts:769" }
+  - {
+      ref: "route:PATCH /api/discord-integration/project/{projectId}",
+      at: "src/discord-integration/index.ts:231",
+    }
+  - {
+      ref: "route:PATCH /api/generic-webhook-integration/project/{projectId}",
+      at: "src/generic-webhook-integration/index.ts:233",
+    }
+  - {
+      ref: "route:PATCH /api/gitea-integration/project/{projectId}",
+      at: "src/gitea-integration/index.ts:272",
+    }
+  - {
+      ref: "route:PATCH /api/github-integration/project/{projectId}",
+      at: "src/github-integration/index.ts:326",
+    }
+  - {
+      ref: "route:PATCH /api/gitlab-integration/project/{projectId}",
+      at: "src/gitlab-integration/index.ts:283",
+    }
+  - {
+      ref: "route:PATCH /api/integration-sync/project/{projectId}/{provider}",
+      at: "src/integration-sync/index.ts:179",
+    }
+  - {
+      ref: "route:PATCH /api/mattermost-integration/project/{projectId}",
+      at: "src/mattermost-integration/index.ts:239",
+    }
+  - { ref: "route:PATCH /api/notification/read-all", at: "src/notification/index.ts:207" }
+  - { ref: "route:PATCH /api/notification/{id}/read", at: "src/notification/index.ts:185" }
+  - { ref: "route:PATCH /api/notification/{id}/unread", at: "src/notification/index.ts:196" }
+  - {
+      ref: "route:PATCH /api/slack-integration/project/{projectId}",
+      at: "src/slack-integration/index.ts:237",
+    }
+  - { ref: "route:PATCH /api/task/bulk", at: "src/task/index.ts:877" }
+  - {
+      ref: "route:PATCH /api/telegram-integration/project/{projectId}",
+      at: "src/telegram-integration/index.ts:224",
+    }
+  - { ref: "route:POST /api/activity/comment", at: "src/activity/index.ts:219" }
+  - { ref: "route:POST /api/activity/create", at: "src/activity/index.ts:207" }
+  - { ref: "route:POST /api/admin/workspaces/{workspaceId}/members", at: "src/admin/index.ts:229" }
+  - { ref: "route:POST /api/auth/oauth2/backchannel-logout/custom", at: "src/index.ts:455" }
+  - { ref: "route:POST /api/auth/{rest...}", at: "src/index.ts:769" }
+  - { ref: "route:POST /api/billing/webhook", at: "src/billing/index.ts:140" }
+  - { ref: "route:POST /api/billing/{workspaceId}/checkout", at: "src/billing/index.ts:170" }
+  - { ref: "route:POST /api/billing/{workspaceId}/portal", at: "src/billing/index.ts:185" }
+  - {
+      ref: "route:POST /api/calendar-feed/project/{projectId}",
+      at: "src/calendar-feed/index.ts:95",
+    }
+  - { ref: "route:POST /api/column/{projectId}", at: "src/column/index.ts:157" }
+  - { ref: "route:POST /api/comment/{taskId}", at: "src/comment/index.ts:124" }
+  - { ref: "route:POST /api/custom-field", at: "src/custom-field/index.ts:286" }
+  - {
+      ref: "route:POST /api/discord-integration/project/{projectId}",
+      at: "src/discord-integration/index.ts:194",
+    }
+  - { ref: "route:POST /api/external-link/task/{taskId}", at: "src/external-link/index.ts:103" }
+  - {
+      ref: "route:POST /api/generic-webhook-integration/project/{projectId}",
+      at: "src/generic-webhook-integration/index.ts:188",
+    }
+  - {
+      ref: "route:POST /api/gitea-integration/import-issues",
+      at: "src/gitea-integration/index.ts:345",
+    }
+  - {
+      ref: "route:POST /api/gitea-integration/project/{projectId}",
+      at: "src/gitea-integration/index.ts:251",
+    }
+  - {
+      ref: "route:POST /api/gitea-integration/repositories",
+      at: "src/gitea-integration/index.ts:226",
+    }
+  - { ref: "route:POST /api/gitea-integration/verify", at: "src/gitea-integration/index.ts:231" }
+  - { ref: "route:POST /api/gitea-integration/webhook/{integrationId}", at: "src/index.ts:445" }
+  - {
+      ref: "route:POST /api/github-integration/import-issues",
+      at: "src/github-integration/index.ts:396",
+    }
+  - {
+      ref: "route:POST /api/github-integration/project/{projectId}",
+      at: "src/github-integration/index.ts:308",
+    }
+  - { ref: "route:POST /api/github-integration/verify", at: "src/github-integration/index.ts:288" }
+  - { ref: "route:POST /api/github-integration/webhook", at: "src/index.ts:443" }
+  - {
+      ref: "route:POST /api/gitlab-integration/import-issues",
+      at: "src/gitlab-integration/index.ts:356",
+    }
+  - {
+      ref: "route:POST /api/gitlab-integration/project/{projectId}",
+      at: "src/gitlab-integration/index.ts:262",
+    }
+  - {
+      ref: "route:POST /api/gitlab-integration/projects",
+      at: "src/gitlab-integration/index.ts:234",
+    }
+  - { ref: "route:POST /api/gitlab-integration/verify", at: "src/gitlab-integration/index.ts:243" }
+  - { ref: "route:POST /api/gitlab-integration/webhook/{integrationId}", at: "src/index.ts:450" }
+  - { ref: "route:POST /api/import/projects", at: "src/import/index.ts:175" }
+  - { ref: "route:POST /api/import/runs", at: "src/import/index.ts:179" }
+  - {
+      ref: "route:POST /api/integration-sync/project/{projectId}/{provider}/links/{linkId}/resume",
+      at: "src/integration-sync/index.ts:215",
+    }
+  - {
+      ref: "route:POST /api/integration-sync/project/{projectId}/{provider}/preview",
+      at: "src/integration-sync/index.ts:160",
+    }
+  - { ref: "route:POST /api/label", at: "src/label/index.ts:233" }
+  - {
+      ref: "route:POST /api/mattermost-integration/project/{projectId}",
+      at: "src/mattermost-integration/index.ts:194",
+    }
+  - { ref: "route:POST /api/mcp/authorize/request/{requestId}", at: "src/mcp/index.ts:210" }
+  - { ref: "route:POST /api/mcp/register", at: "src/mcp/index.ts:191" }
+  - { ref: "route:POST /api/mcp/token", at: "src/mcp/index.ts:224" }
+  - { ref: "route:POST /api/notification", at: "src/notification/index.ts:163" }
+  - { ref: "route:POST /api/project", at: "src/project/index.ts:445" }
+  - {
+      ref: "route:POST /api/project/{id}/background-upload/finalize",
+      at: "src/project/index.ts:617",
+    }
+  - {
+      ref: "route:POST /api/slack-integration/project/{projectId}",
+      at: "src/slack-integration/index.ts:192",
+    }
+  - { ref: "route:POST /api/task-relation", at: "src/task-relation/index.ts:188" }
+  - { ref: "route:POST /api/task/draft-upload/{projectId}", at: "src/task/index.ts:904" }
+  - { ref: "route:POST /api/task/draft-upload/{projectId}/finalize", at: "src/task/index.ts:914" }
+  - { ref: "route:POST /api/task/duplicate/{id}", at: "src/task/index.ts:975" }
+  - { ref: "route:POST /api/task/image-upload/{id}/finalize", at: "src/task/index.ts:1205" }
+  - { ref: "route:POST /api/task/import/{projectId}", at: "src/task/index.ts:1075" }
+  - { ref: "route:POST /api/task/reorder", at: "src/task/index.ts:925" }
+  - { ref: "route:POST /api/task/{projectId}", at: "src/task/index.ts:932" }
+  - {
+      ref: "route:POST /api/telegram-integration/project/{projectId}",
+      at: "src/telegram-integration/index.ts:160",
+    }
+  - { ref: "route:POST /api/time-entry", at: "src/time-entry/index.ts:123" }
+  - { ref: "route:PUT /api/activity/comment", at: "src/activity/index.ts:223" }
+  - {
+      ref: "route:PUT /api/admin/workspaces/{workspaceId}/members/{userId}/role",
+      at: "src/admin/index.ts:238",
+    }
+  - { ref: "route:PUT /api/admin/workspaces/{workspaceId}/owner", at: "src/admin/index.ts:250" }
+  - { ref: "route:PUT /api/auth/{rest...}", at: "src/index.ts:769" }
+  - { ref: "route:PUT /api/column/reorder/{projectId}", at: "src/column/index.ts:165" }
+  - { ref: "route:PUT /api/column/{id}", at: "src/column/index.ts:170" }
+  - { ref: "route:PUT /api/comment/{id}", at: "src/comment/index.ts:148" }
+  - { ref: "route:PUT /api/custom-field/reorder/{projectId}", at: "src/custom-field/index.ts:302" }
+  - { ref: "route:PUT /api/custom-field/value", at: "src/custom-field/index.ts:308" }
+  - { ref: "route:PUT /api/custom-field/{id}", at: "src/custom-field/index.ts:316" }
+  - { ref: "route:PUT /api/label/{id}", at: "src/label/index.ts:256" }
+  - { ref: "route:PUT /api/label/{id}/task", at: "src/label/index.ts:245" }
+  - {
+      ref: "route:PUT /api/notification-preferences",
+      at: "src/notification-preferences/index.ts:104",
+    }
+  - {
+      ref: "route:PUT /api/notification-preferences/workspaces/{workspaceId}",
+      at: "src/notification-preferences/index.ts:114",
+    }
+  - { ref: "route:PUT /api/project/reorder", at: "src/project/index.ts:528" }
+  - { ref: "route:PUT /api/project/{id}", at: "src/project/index.ts:538" }
+  - { ref: "route:PUT /api/project/{id}/archive", at: "src/project/index.ts:560" }
+  - { ref: "route:PUT /api/project/{id}/background-upload", at: "src/project/index.ts:572" }
+  - { ref: "route:PUT /api/project/{id}/move", at: "src/project/index.ts:406" }
+  - { ref: "route:PUT /api/project/{id}/unarchive", at: "src/project/index.ts:566" }
+  - { ref: "route:PUT /api/task/assignee/{id}", at: "src/task/index.ts:1110" }
+  - { ref: "route:PUT /api/task/description/{id}", at: "src/task/index.ts:1342" }
+  - { ref: "route:PUT /api/task/due-date/{id}", at: "src/task/index.ts:1119" }
+  - { ref: "route:PUT /api/task/image-upload/{id}", at: "src/task/index.ts:1150" }
+  - { ref: "route:PUT /api/task/move/{id}", at: "src/task/index.ts:1011" }
+  - { ref: "route:PUT /api/task/priority/{id}", at: "src/task/index.ts:1101" }
+  - { ref: "route:PUT /api/task/recurrence/{id}", at: "src/task/index.ts:1132" }
+  - { ref: "route:PUT /api/task/status/{id}", at: "src/task/index.ts:1092" }
+  - { ref: "route:PUT /api/task/title/{id}", at: "src/task/index.ts:1141" }
+  - { ref: "route:PUT /api/task/{id}", at: "src/task/index.ts:1025" }
+  - { ref: "route:PUT /api/time-entry/{id}", at: "src/time-entry/index.ts:136" }
+  - { ref: "route:PUT /api/user/avatar", at: "src/user/index.ts:91" }
+  - { ref: "route:PUT /api/workflow-rule/{projectId}", at: "src/workflow-rule/index.ts:93" }
+  - {
+      ref: "route:PUT /api/workspace/{workspaceId}/members/{userId}/project-access",
+      at: "src/workspace/index.ts:218",
+    }

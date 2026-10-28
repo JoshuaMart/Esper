@@ -3,7 +3,7 @@ import { glob, readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { parse } from 'yaml'
-import { detectProfile, indexGo, loadProfiles, profilesDir, readRef } from '../src/index.ts'
+import { detectProfile, languageNamed, loadProfiles, profilesDir, readRef } from '../src/index.ts'
 
 // Each profile against the targets counted by hand (D16): no entry point missing, none
 // invented. The targets are fetched by `pnpm fetch-targets` into $ESPER_TARGETS; without them,
@@ -12,6 +12,8 @@ import { detectProfile, indexGo, loadProfiles, profilesDir, readRef } from '../s
 interface Count {
   target: string
   commit: string
+  // The folder of the repository the target is, when it is not the whole of it.
+  dir?: string
   kind: 'application' | 'framework'
   entries: { ref: string; at: string }[]
 }
@@ -32,17 +34,14 @@ for (const [path, count] of counts.sort(([a], [b]) => (a < b ? -1 : 1))) {
   test(`${path}: every entry point counted by hand, and no other`, {
     skip: present ? false : 'set ESPER_TARGETS and run pnpm fetch-targets',
   }, async () => {
-    const snapshot = await readRef(dir as string, count.commit)
+    const snapshot = await readRef(join(dir as string, count.dir ?? ''), count.commit)
     const detection = detectProfile(snapshot.files, await loadProfiles(profilesDir))
     assert.ok('profile' in detection, 'refused' in detection ? detection.refused : '')
     assert.equal(detection.profile.kind, count.kind)
-    const { graph } = await indexGo(
-      snapshot.files.filter((f) => f.path.endsWith('.go')),
-      {
-        modules: detection.modules,
-        profile: detection.profile,
-      },
-    )
+    const { graph } = await languageNamed(detection.profile.language).index(snapshot.files, {
+      modules: detection.modules,
+      profile: detection.profile,
+    })
     const found = graph.nodes
       .filter((n) => n.kind === 'entry')
       .map((n) => ({ ref: n.ref, at: `${n.file}:${n.startLine}` }))

@@ -5,6 +5,7 @@ import { join, posix } from 'node:path'
 import { promisify } from 'node:util'
 import { EsperError } from './errors.ts'
 import type { Skip } from './graph.ts'
+import { languages } from './languages.ts'
 
 // Reading a target (D11): its files, from a folder as it is or from a git ref, and what is skipped.
 // The target is data: only git plumbing that runs none of the repository's hooks, filters or
@@ -36,12 +37,19 @@ const skippedDirs: Record<string, string> = {
   _examples: 'examples',
   example: 'examples',
   mocks: 'tests',
+  __mocks__: 'tests',
+  __tests__: 'tests',
+  test: 'tests',
+  tests: 'tests',
+  e2e: 'tests',
+  benchmarks: 'benchmarks',
+  bench: 'benchmarks',
+  dist: 'generated',
 }
 
-const languages: Record<string, string> = { '.go': 'go' }
-
+// The language whose source file a path is.
 export function languageOf(path: string): string | undefined {
-  return languages[posix.extname(path)]
+  return languages.find((l) => l.source(path))?.name
 }
 
 // Whether a path is read, or the reason it is skipped. A skipped folder is reported once.
@@ -49,12 +57,14 @@ export function classify(path: string): { skip?: Skip; read: boolean } {
   const parts = path.split('/')
   for (let i = 0; i < parts.length - 1; i++) {
     const dir = parts[i] as string
-    const reason = skippedDirs[dir] ?? (dir.startsWith('.') ? 'hidden' : undefined)
+    const reason =
+      skippedDirs[dir] ??
+      (dir.startsWith('.') ? 'hidden' : /[-_]tests?$/.test(dir) ? 'tests' : undefined)
     if (reason)
       return { skip: { path: `${parts.slice(0, i + 1).join('/')}/`, reason }, read: false }
   }
-  if (path.endsWith('_test.go')) return { skip: { path, reason: 'tests' }, read: false }
-  return { read: languageOf(path) !== undefined || posix.basename(path) === 'go.mod' }
+  if (languages.some((l) => l.test(path))) return { skip: { path, reason: 'tests' }, read: false }
+  return { read: languages.some((l) => l.reads(path)) }
 }
 
 // Git, with every option that could run something of the repository's turned off.

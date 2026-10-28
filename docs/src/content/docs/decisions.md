@@ -31,6 +31,11 @@ says why. Versions and behaviours cited here were checked on 2026-10-28.
 | [D20](#d20--a-reindex-reads-the-whole-target) | A reindex reads the whole target; an unchanged commit is not indexed again | settled |
 | [D21](#d21--a-declarations-fingerprint-leaves-its-name-out) | A declaration's fingerprint leaves its own name out | settled |
 | [D22](#d22--precision-runs-inside-the-index-when-asked) | Precision runs inside the index, when asked; analyzers cite places, not references | settled |
+| [D23](#d23--a-language-is-a-module-the-core-names-none) | A language is a module of its own; the shared core names no language and no framework | settled |
+| [D24](#d24--typescript-and-javascript-as-their-syntax-states-them) | TypeScript and JavaScript as their syntax states them, imports resolved through the target's own configuration | settled |
+| [D25](#d25--hono-middleware-in-the-order-it-is-registered) | Hono: middleware in the order it is registered; a framework's own types named by its package | settled |
+| [D26](#d26--scip-typescript-with-the-dependencies-the-lockfile-pins) | scip-typescript, with the dependencies the target's lockfile pins, installed without scripts | settled |
+| [D27](#d27--a-guarding-chain-member-is-known-by-the-code-that-refuses) | A guarding chain member is known by the code that refuses, not by how it is written | settled |
 
 ## D1 — What Esper is and is not
 
@@ -897,3 +902,190 @@ scip-go.
 
 **Rules out.** Editing a stored snapshot with an analyzer's output; a silent fallback when an
 analyzer fails or its file is refused; analyzers that write Esper's references.
+
+## D23 — A language is a module; the core names none
+
+This settles how the second language of [D5](#d5--two-kinds-of-target-applications-and-the-frameworks-themselves)
+joins the core built for Go in M1, and how the roadmap's M4 criterion, "nothing under
+`packages/core` had to learn about TypeScript or Hono by name", is read. Built in M4.
+
+**Decision.**
+
+- **A language module** says, for one language: which files it reads (sources and manifests), which
+  are tests, the modules a target declares and their dependencies (`go.mod`; each `package.json`),
+  what its files import, and how its files are indexed with a profile. Go's is `go*.ts`,
+  TypeScript's `ts*.ts`, each beside its queries and `library.yaml`
+  ([D10](#d10--frameworks-as-profiles)). `languages.ts` lists them; it is the one place that does.
+- **The shared machinery names neither a language nor a framework**: reading a target, detecting its
+  profile, the home, the store, notes, the analyzer contract, and the entry points. What every
+  language did the same way moved out of Go's module into `entries.ts`: routes and their chains
+  become entry nodes, guards come from the profile, reads and signals follow the calls, and
+  divergent guards are found among siblings. A language module hands it routes, the facts of its
+  declarations, and, for a framework, which declarations are its surface.
+- **One language per snapshot.** A target whose matching profiles are of two languages is refused,
+  with the folder of each part to add as its own project
+  ([D11](#d11--indexing-rules)).
+- **Checked by a test.** `packages/core/test/shared.test.ts` reads the code of every shared file,
+  comments left out, and fails on the name of a language or a framework.
+
+**Why.** D10 put framework knowledge in profiles; the same split for languages is what makes the
+next one (Python, D5) a module and a profile, as M4 set out to show. The entry-point rules are the
+attack surface's own, not Go's: had they stayed in Go's module, TypeScript would have copied them,
+and the two would have drifted.
+
+**Rules out.** A language named in shared code; a snapshot read in two languages at once.
+
+## D24 — TypeScript and JavaScript, as their syntax states them
+
+How the TypeScript module reads a target, with the grammars of
+[D3](#d3--one-parser-tree-sitter-in-webassembly) (`tree-sitter-typescript` 0.23.2 for `.ts` and
+`.tsx`, `tree-sitter-javascript` 0.25.0 for `.js`, `.mjs`, `.cjs` and `.jsx`). Built in M4.
+
+**Decision.**
+
+- **References** ([D7](#d7--stable-references-and-fingerprints)) name a function by what holds it,
+  since TypeScript declares most functions as values: `const helper = () => …` is `#helper`, a
+  method `#Service.update`, a function an object holds `#actions.create`, a private method
+  `#Hono.#dispatch`, `export default` `#default`. A function literal given to the call whose result
+  a top-level name holds is named after the name, `#auth/fn1` for
+  `const auth = createMiddleware(async (c, next) => …)`. Only a literal no name holds is anonymous
+  (`#createApp/fn3`), and only an anonymous literal is a literal in the graph.
+- **Exported** is what an `export` names, with what callers reach through it: the public methods of
+  an exported class, the functions of an exported object, and the functions given to the call an
+  exported name holds.
+- **Imports** resolve within the target: relative paths, with `.js` naming its `.ts` source and a
+  folder its index; the `paths` of the nearest `tsconfig.json` or `jsconfig.json`, through its
+  `extends` within the target; and the target's own packages, by the name each `package.json`
+  declares, through `exports`, `types`, `module` and `main`, a built file (`dist/index.js`) looked
+  for as its source (`src/index.ts`). Anything else is outside the target, named by its specifier
+  (`ext:hono/cors#cors`), Node's built-in modules always with `node:`.
+- **Types are what the syntax states**: a type annotation; a class constructed with `new`; the
+  result type a function declares, or the one expression it returns; a field, a getter's result,
+  a constructor's parameter property; `Promise<T>` as what awaiting gives, `ReturnType<typeof f>`,
+  and `x as T`. A function literal takes its parameters' types from where it sits: a variable
+  annotated with a function type, a function whose result type is one, a parameter declared as
+  one, or an interface's call signature. What the syntax does not state, a profile may: a
+  handler's first parameter is the profile's context ([D25](#d25--hono-middleware-in-the-order-it-is-registered)).
+- **Calls** are resolved from those types; guessed, with the reason, through an interface or an
+  abstract class (each class of the target that implements it), a class field the class's own code
+  assigns (`this.getPath = strict ? getPath : getPathNoStrict`), a function taken from an object by
+  a computed key (`detectors[name](c)`), and a member no type names when the target has one member
+  of that name, unless values of any type have it (`map`, `then`, which `library.yaml` lists). A
+  getter of the target's own classes is called when its property is read.
+- **Measured** on Hono v4.13.14, 238 files: 2016 call edges, 109 guessed (5.4 %), and 1716 calls
+  without an edge, most of them methods of values from outside the target (`res.headers.get`,
+  `[].map`). On Kaneo's API, 687 files: 9980 edges, 103 guessed, 5197 calls without one. Indexing
+  takes about a second for Hono, three for Kaneo.
+
+**Why.** An index that names functions by their declarations only would name none of Hono's
+middleware, which are `const` arrows; references must survive the same edits as Go's. Resolving
+imports through the target's own configuration is what makes `@/users` and `@app/db` internal, as
+`go.mod` does for Go; nothing outside the target is read (D11). Typing what the syntax states, as
+Go does, keeps the guesses few and each one said; the type checker's answer comes from an analyzer
+([D26](#d26--scip-typescript-with-the-dependencies-the-lockfile-pins)).
+
+**Rules out.** Reading `node_modules` or a configuration outside the target; running the
+TypeScript compiler on the host.
+
+## D25 — Hono: middleware in the order it is registered
+
+The two Hono profiles of [D5](#d5--two-kinds-of-target-applications-and-the-frameworks-themselves),
+and what the profile format had to say for them. Built in M4.
+
+**Decision.**
+
+- **Order.** A Hono router applies a middleware to the routes registered after it whose path its
+  own matches: `app.use('/admin/*', auth)` guards `/admin/stats` registered after it, and no route
+  registered before. A profile says so with `ordered`; `app.route('/users', users)` places the
+  sub-app's registrations where it is mounted, and `basePath('/api')` registers on the same router
+  under a prefix (`does: prefix`). A path pattern matches a route when every request to the route
+  matches it: a parameter matches any segment, `*` the rest of the path or nothing.
+- **What a route is.** `get`, `post`, `all`, `on([…], …)` and the rest, the middleware between the
+  path and the handler (`args: [path, chain, handler]`), and `@hono/zod-openapi`'s
+  `openapi(createRoute({ method, path, middleware }), handler)`, whose configuration object gives
+  the method, the path, written with braces, and the chain (`config`, `through`). A router a
+  function builds and returns is one per call: each `apiRouter()` is a router of its own.
+- **What a handler receives.** Its first parameter, when its code states no type, is the profile's
+  `context`, `hono#Context`; so is a function typed by one of the handler types the profile lists
+  (`hono#MiddlewareHandler`). The reads of `c.req` are rules on that context, and
+  `c.req.valid('json')` reads the body, `valid('param')` a path parameter (`by`). A destructured
+  read is named by its properties: `const { id } = c.req.valid('param')` reads `path.id`.
+- **Guards** are Hono's basic auth, bearer auth, JWT and JWK, CSRF, body limit, IP restriction, the
+  validators and `hono-rate-limiter`; **sinks** of the framework (`c.redirect`, `raw`, `proxy`) and
+  **mutations** of request state (`c.set`) are in the profile, beside the language's in
+  `library.yaml`.
+- **The framework itself.** Hono's request surface is each exported declaration, and each function
+  that takes the request or the context, that reads the request through what it reaches. A type
+  of the target is named by its package and its name, so that the framework's own `Context`,
+  declared in `src/context.ts` of the package `hono`, is `hono#Context`, and the application
+  profile's read rules apply to Hono's own middleware unchanged.
+- **Measured.** Kaneo's API at v2.48.0: 211 routes, as counted by hand, every handler and chain
+  member named. Hono v4.13.14: 108 entry points, as counted by hand, from CORS reading `Origin` to
+  each adapter's `handle`.
+
+**Why.** Kaneo registers its public routes, its webhooks among them, before `api.use("*", …)`
+authenticates the rest: an index that applied every middleware to every route of a router, as is
+right for chi, would show those webhooks as authenticated. Naming a framework's own types by its
+package is what lets one set of rules serve both profiles, as `net-http` serves chi's.
+
+**Rules out.** A route interpreter per framework; read rules written twice, once per mode.
+
+## D26 — scip-typescript, with the dependencies the lockfile pins
+
+The second analyzer on the contract of [D12](#d12--precision-scip-right-after-the-first-index-dataflow-later)
+and [D22](#d22--precision-runs-inside-the-index-when-asked). Built in M4.
+
+**Decision.**
+
+- **The tool.** [scip-typescript](https://github.com/sourcegraph/scip-typescript) 0.5.2, its latest
+  release (2026-10-22), with TypeScript 6.0.3, and pnpm 10.34.9 to install a target's
+  dependencies, all pinned by the lockfile of `analyzers/scip-typescript/esper/` and installed
+  without scripts, on Node 24.22.1, its image pinned by digest.
+- **Fetching** reads the lockfile at the root of the snapshot's tree: `pnpm fetch` for
+  `pnpm-lock.yaml`, `npm ci` for `package-lock.json` with the manifests of its workspace, from npm's
+  registry whatever the target's `.npmrc` says, with scripts disabled and pnpm kept at its own
+  version whatever `packageManager` names, into the analyzer's cache volume. What it writes is checked against the lockfile's
+  integrity hashes.
+- **Analyzing** copies the tree into the container's memory, installs from the cache without the
+  network, the volume read-only, and indexes each TypeScript project that holds files of the
+  snapshot, by its `tsconfig.json`; a `tsconfig` that extends one neither in the tree nor in an
+  installed package is read without it. A target without a lockfile, such as a folder whose lockfile is in the repository above it,
+  is analyzed without its dependencies.
+- **What it states.** A reference for each name whose symbol the index defines in the snapshot or
+  outside it, and an implementation for each method that implements an interface method of the
+  snapshot. A name that refers to several symbols (a member of a union type) and a name renamed by
+  an import are left out, since a place refers to one target and both places hold the same name
+  (D22). Outside the snapshot, a symbol is named by its package and its names
+  (`drizzle-orm#PgDatabase.select`), the runtime's own by `globalThis` and Node's by `node:`; where
+  the syntax names the same call outside the target too, its name is kept, since it is the module
+  the code imports and the one profiles and `library.yaml` name (`hono/cors#cors`).
+- **Measured.** Hono v4.13.14: guessed edges fall from 109 of 2016 to 12 of 3268, calls without an
+  edge from 1716 to 432, in about 12 seconds once its image and dependencies are there. Kaneo's
+  API, without the dependencies of its repository: calls without an edge fall from 5197 to 3927.
+  Both keep the entry points counted by hand.
+
+**Why.** A type checker needs the target's dependencies to name what their calls are, and
+installing them is where a target's code could run; a lockfile with integrity hashes, scripts off
+and the network only while fetching is what D12 asked. The import name is kept for symbols outside
+the target because SCIP names the package that declares a symbol, which is not always the module
+the code imports it from.
+
+**Rules out.** Installing with scripts, or from a registry the target names; an analysis that falls
+back silently when an install fails (it fails the index, D22).
+
+## D27 — A guarding chain member is known by the code that refuses
+
+This amends how divergent guards compare chain members ([D6](#d6--the-graph-model)): a member that
+can answer on its own was known by what it names.
+
+**Decision.** A chain member that short-circuits is known by the declarations that refuse, the ones
+it reaches that carry `short-circuit`, rather than by the function it names.
+`workspaceAccess.fromTask()` and `workspaceAccess.fromProject()` build the same middleware, so a
+route with one is not missing the other.
+
+**Why.** Measured on Kaneo: comparing members by the factory they name flagged 48 of its 211 routes
+as divergent, nearly all of them routes that check workspace access through another factory of the
+same check. Compared by the code that refuses, 10 are, each lacking a check its siblings make: the
+billing webhook, GitHub's application information, imports that take their project from the body.
+
+**Rules out.** Two guards told apart by how they are written or which factory builds them.

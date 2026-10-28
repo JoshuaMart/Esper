@@ -1,0 +1,7 @@
+{
+  // Imports under `@/` are the app's own sources.
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": { "@/*": ["src/*"] },
+  },
+}

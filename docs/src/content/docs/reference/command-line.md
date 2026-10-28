@@ -50,20 +50,27 @@ projects/<name>/checkout/      its clone, for a project added by URL
 ## How a target is read
 
 - **What is read.** Go files and every `go.mod`: a module in a subfolder, or several modules, are
-  each known by their folder, so that their imports of each other are internal. A folder that is a
-  git checkout is listed by git, so that ignored files stay out; any other folder is walked.
-- **What is skipped.** Tests (`*_test.go`), examples (`examples/`, `_examples/`, `example/`), fixtures
-  (`testdata/`, `fixtures/`), mocks (`mocks/`), vendored code (`vendor/`, `third_party/`,
+  each known by their folder, so that their imports of each other are internal. TypeScript and
+  JavaScript files (`.ts`, `.tsx`, `.mts`, `.cts`, `.js`, `.jsx`, `.mjs`, `.cjs`, not `.d.ts`), every
+  `package.json`, whose name makes a package of the target, and every `tsconfig.json` and
+  `jsconfig.json`, whose `paths` imports resolve through. A folder that is a git checkout is listed
+  by git, so that ignored files stay out; any other folder is walked.
+- **What is skipped.** Tests (`*_test.go`, `*.test.ts`, `*.spec.js` and the like, `test/`, `tests/`,
+  `__tests__/`, `e2e/`, and folders named `…-tests`), benchmarks (`benchmarks/`, `bench/`), examples
+  (`examples/`, `_examples/`, `example/`), fixtures (`testdata/`, `fixtures/`), mocks (`mocks/`,
+  `__mocks__/`), generated code (`dist/`), vendored code (`vendor/`, `third_party/`,
   `node_modules/`) and hidden folders. Symbolic links are never followed, so that a link in the
   target cannot read a file outside it, and submodules are not read. Each skipped folder, and each
   skipped file, is stored with the snapshot and its reason.
-- **Which profile.** A target whose `go.mod` declares a framework's module is that framework, read
-  with its `framework` profile. Otherwise, the `application` profiles of the frameworks it requires
-  directly (not `// indirect`) or imports in an import declaration apply, together when there are
-  several. A profile that another matching one extends,
-  such as `net-http` under `chi`, is not applied twice.
-- **What is refused.** A target with no Go file, or that no profile matches, is refused with the
-  reason, rather than indexed into an empty attack surface.
+- **Which profile.** A target whose `go.mod`, or one of whose `package.json`, declares a framework's
+  module is that framework, read with its `framework` profile. Otherwise, the `application`
+  profiles of the frameworks it requires (in Go directly, not `// indirect`; in a `package.json`, as
+  a dependency, peer or optional one) or imports apply, together when there are several. A profile
+  that another matching one extends, such as `net-http` under `chi`, is not applied twice. A
+  snapshot is read in one language: a target whose matching profiles are of two languages is
+  refused, and the folder of each part is added as its own project.
+- **What is refused.** A target with no file in a language Esper reads, or that no profile matches,
+  is refused with the reason, rather than indexed into an empty attack surface.
 - **Which version.** A snapshot records the commit, the ref asked for, and whether the folder had
   changes. Changes are found by hashing each file the way git does and comparing it with the index,
   so that no filter of the repository runs.
@@ -72,6 +79,9 @@ projects/<name>/checkout/      its clone, for a project added by URL
   `cat-file` without `--filters`, `rev-parse`). A clone brings no hooks. With `--precise`, the
   analyzer type-checks the target in a container, without running it
   ([analyzers](/reference/analyzers/#the-container)).
+
+A project may be a folder of a repository (`esper add ~/code/kaneo/apps/api`): `--ref` then reads
+that folder of the commit.
 
 Each index reads every file again, which takes about a second for a few hundred files
 ([D20](/decisions/#d20--a-reindex-reads-the-whole-target)). An error says what failed in one line;

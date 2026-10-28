@@ -15,7 +15,7 @@ export interface Manifest {
   name: string
   version: string
   description?: string
-  languages: 'go'[]
+  languages: string[]
   provides: ('edges.resolve' | 'flows')[]
   answers: 'snapshot' | 'question'
   image: { dockerfile: string }
@@ -128,7 +128,7 @@ export interface Analysis {
   implementations: Map<string, { name: string; at: Place }[]>
 }
 
-const identifierPart = /^[\p{L}\p{Nd}_]$/u
+const identifierPart = /^[\p{L}\p{Nd}_$]$/u
 
 // A file refused whole: the first line that failed, and why.
 export class AnalysisError extends EsperError {}

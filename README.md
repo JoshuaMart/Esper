@@ -8,11 +8,12 @@ served to hunting agents over MCP and explorable in a web interface.
 > and bring out what nobody had seen.
 
 **Status: early development.** The documentation describes the target design.
-[M3](docs/src/content/docs/roadmap.md#m3--scip-for-go) is done: Go applications on chi or
-`net/http`, and chi itself, can be indexed from the command line, with their call edges resolved by
-scip-go in Docker on request (`esper index --precise`), and served to an agent over MCP
-(`esper mcp <project>`), whose notes survive a reindex. Next is
-[M4](docs/src/content/docs/roadmap.md#m4--typescript-and-hono), TypeScript and Hono.
+[M4](docs/src/content/docs/roadmap.md#m4--typescript-and-hono) is done: Go applications on chi or
+`net/http` and chi itself, and TypeScript applications on Hono and Hono itself, can be indexed from
+the command line, with their call edges resolved by scip-go or scip-typescript in Docker on request
+(`esper index --precise`), and served to an agent over MCP (`esper mcp <project>`), whose notes
+survive a reindex. Next is [M5](docs/src/content/docs/roadmap.md#m5--the-server-and-the-web-interface),
+the server and the web interface.
 
 ## Documentation
 
