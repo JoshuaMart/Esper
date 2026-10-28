@@ -25,7 +25,7 @@ says why. Versions and behaviours cited here were checked on 2026-10-28.
 | [D14](#d14--one-server-for-the-api-mcp-and-the-web-interface) | One local server for the API, MCP and the web interface | settled |
 | [D15](#d15--repository-layout-and-licence) | A pnpm monorepo, under Apache-2.0 | settled |
 | [D16](#d16--measured-against-hand-counted-targets) | Each profile measured against hand-counted targets | settled |
-| [D17](#d17--model-enrichment-claims-beside-the-facts) | Model enrichment: claims beside the facts, never mixed with them | settled |
+| [D17](#d17--model-enrichment-claims-beside-the-facts) | Model enrichment: claims beside the facts, bounded first, exploring when needed | settled |
 | [D18](#d18--running-esper-one-home-many-projects) | Running Esper: one home, many projects, one project per MCP connection | settled |
 
 ## D1 — What Esper is and is not
@@ -353,6 +353,7 @@ Streamable HTTP for the rest. Tools:
 | `esper_callers`, `esper_callees` | one hop or more, up to a depth |
 | `esper_paths` | the paths from one node to another, up to a depth and a count |
 | `esper_search` | find a node by name, reference or `file:line` |
+| `esper_read` | a range of lines from a file of the snapshot, and nothing outside it |
 | `esper_notes` | list notes by node, kind, status or author |
 | `esper_note_create`, `esper_note_update`, `esper_note_delete` | write notes |
 | `esper_claims` | the model claims on a node, apart from its facts ([D17](#d17--model-enrichment-claims-beside-the-facts)) |
@@ -419,29 +420,71 @@ ZeroPath enriches its call graph with what parsing cannot see, and part of that 
 an application's authentication procedure, and the role of a function. Esper does the same, without
 letting a model's answer pass for a parsed fact.
 
-**Decision.** A model adds **claims**, a layer kept apart from the facts.
+**Decision.** A model adds **claims**, a layer kept apart from the facts, in two tiers: a bounded
+call for most questions, and an agent that explores the code for the rest.
 
-- **Closed questions, on nodes that matter.** Only nodes reachable from an entry point are asked
-  about. The questions have closed answers:
-  - is this function a **guard**, and of which kind (`authn`, `authz-role`, `authz-owner`, `csrf`,
-    `rate-limit`, `validation`)? This is how a custom helper such as `assertCanEdit` becomes a guard
-    that no profile could name;
-  - does this call **write or read persisted data**, or act as a **sink**, when the profile does not
-    say;
-  - for a framework target, does this code **trust a value from the request** (a header, a
-    parameter) to take a decision;
-  - what is the function's **intent**, in one line.
+### The questions
+
+Closed questions, asked only about nodes reachable from an entry point, plus a few about the whole
+repository:
+
+| Question | Scope | Tier |
+|---|---|---|
+| is this function a **guard**, and of which kind (`authn`, `authz-role`, `authz-owner`, `csrf`, `rate-limit`, `validation`)? This is how a custom helper such as `assertCanEdit` becomes a guard that no profile could name | a node | bounded first |
+| does this call **write or read persisted data**, or act as a **sink**, when the profile does not say? | a node | bounded first |
+| what is the function's **intent**, in one line? | a node | bounded first |
+| for a framework target, where does a value from the request (a header, a parameter) become **trusted** to take a decision? | a read and what it reaches | exploring |
+| which **applications** does the repository hold, and where are their boundaries? | the repository | exploring |
+| what is each application's **authentication procedure**, and where is it configured? | an application | exploring |
+
+Every closed answer has an `insufficient-context` value: a bounded call that cannot answer says so,
+and the question moves to the exploring tier.
+
+### The two tiers
+
+1. **Bounded.** One call, no tools. The question carries its context: the node's code, the
+   signatures it calls, the facts already on it. Cheap, parallel, and the same answer for the same
+   code. Most questions should end here.
+2. **Exploring.** An agent that reads what it needs, through Esper's MCP tools in **read-only**
+   mode, and nothing else:
+   - `esper_search`, `esper_node`, `esper_callers`, `esper_callees`, `esper_paths` to move through the
+     graph;
+   - `esper_read` to read a range of lines from a file of the snapshot.
+
+   It has no shell, no network, no write access, and no file outside the snapshot. Every read it
+   makes is logged with the claim it produces. It runs on a turn cap, and answers with the same
+   schema as the bounded tier.
+
+Exploring through Esper rather than through the file system gives the same reach as reading,
+searching and listing files, with three differences. The agent is **confined** to the target: an
+injection in the audited code can at worst produce a wrong claim, which the checks below catch or
+mark. Its reads are **traced**, so a claim says what it rests on. And the graph answers in one call
+what an agent would grep for, slowly and incompletely: who calls this, by where does this route
+reach that sink.
+
+Why not explore everything: OpenAnt has an agent explore every reachable function, and reports on
+OpenSSL a median of 9 iterations per function, about $0.13 per iteration, and a cap of 20
+iterations, about $10.92 ([article](https://knostic.ai/blog/openant)); 390 functions put that in
+the hundreds of dollars per target, or a large share of a plan's limits. Two tiers spend that only
+where it is needed. The share of questions that reach the exploring tier is measured on the first
+targets: if it is high, the bounded tier is not paying for itself and is dropped.
+
+### The checks
+
 - **Each claim is checked and dated.** It names its node, its question and its answer, cites
-  `file:line`, and records the model, the prompt version and the node's fingerprint. Code checks the
-  citation: the line must exist and contain the identifier the claim names, or the claim is
-  rejected. A claim is reused until its node's fingerprint changes.
+  `file:line`, and records the model, the tier, the prompt version and the fingerprints of the
+  nodes it rests on: the node asked about, and for an exploring claim every node it read. Code
+  checks each citation: the line must exist and contain the identifier the claim names, or the claim
+  is rejected. A claim is reused until one of those fingerprints changes.
 - **A claim never becomes a fact.** It never sets a signal on its own, is shown as *claimed by a
   model* in the interface and returned apart from facts over MCP, and can be confirmed or contested
   by a note. The index works without any claim.
 - **Profile drafting.** A model drafts a framework's profiles from its sources and documentation; a
   human reviews them before use ([D10](#d10--frameworks-as-profiles)).
 
-**How it runs.** Esper calls a model through a **provider**, and ships two:
+### How it runs
+
+Esper calls a model through a **provider**, and ships two.
 
 1. **`claude-code`, the default: the auditor's own Claude Code and its plan.** Esper runs the
    `claude` binary already installed and signed in on the machine, headless (`claude -p`). It uses
@@ -450,7 +493,8 @@ letting a model's answer pass for a parsed fact.
    that the Agent SDK, `claude -p` and third-party app usage draw from the plan's limits when signed
    in with a Claude plan; the separate credit announced for 2026-06-15 was paused
    ([Claude support](https://support.claude.com/en/articles/15036540-use-the-claude-agent-sdk-with-your-claude-plan)).
-   Each run is a single question batch, with no tools at all:
+
+   A bounded run answers a batch of nodes, with no tools and no MCP server:
 
    ```sh
    claude -p --tools "" --disallowedTools "*" --strict-mcp-config \
@@ -458,42 +502,59 @@ letting a model's answer pass for a parsed fact.
      --output-format json --json-schema claims.schema.json < batch.txt
    ```
 
+   An exploring run answers one question, with no built-in tool and only Esper's read-only server:
+
+   ```sh
+   claude -p --tools "" --strict-mcp-config --mcp-config esper-readonly.json \
+     --allowedTools "mcp__esper__*" --permission-mode dontAsk \
+     --model opus --effort medium --max-turns 20 --no-session-persistence \
+     --output-format json --json-schema claims.schema.json < question.txt
+   ```
+
    - **Started from Esper's home, never from the audited repository.** A `claude -p` run loads the
      hooks and MCP servers of its working directory without a trust prompt
      ([headless mode](https://code.claude.com/docs/en/headless)).
-   - **No tools.** `--tools ""` and `--disallowedTools "*"` remove every tool, and
-     `--strict-mcp-config` with no config connects no MCP server: the batch carries the code, so
-     the model needs nothing else, and code it reads cannot steer it into an action.
+   - **Only what the tier needs.** `--tools ""` removes every built-in tool, and
+     `--strict-mcp-config` ignores every MCP server but the one Esper passes: none for a bounded
+     run, the read-only server scoped to the project for an exploring run. `dontAsk` denies
+     anything else.
    - **Structured answers.** `--json-schema` returns the claims in Esper's schema; a run without
-     valid output is retried once, then its questions are left unanswered. The claims then go
-     through the checks above.
-   - **Batched and bounded.** One run answers a batch of nodes (about 10 to 20), a few runs go in
-     parallel, and Esper stops when the plan's limit is reached rather than retrying in a loop.
+     valid output is retried once, then its questions are left unanswered.
+   - **Bounded spend.** A few runs go in parallel, and Esper stops when the plan's limit is reached
+     rather than retrying in a loop.
 
 2. **`anthropic-api`: an API key, unattended.** `esper enrich --provider anthropic-api` calls the
-   Claude API through the official TypeScript SDK and the Message Batches API (half price,
-   asynchronous), with the shared context (profile, vocabulary, instructions) cached.
+   Claude API through the official TypeScript SDK. Bounded questions go through the Message
+   Batches API (half price, asynchronous), with the shared context (profile, vocabulary,
+   instructions) cached. Exploring questions run through the SDK's tool runner, with the same
+   read-only tools called in-process.
 
-The same questions are also exposed over MCP (`esper_enrich_next`, `esper_claim_submit`), so an
-agent already working on the target can answer them in its own session.
+The questions are also exposed over MCP (`esper_enrich_next`, `esper_claim_submit`), so an agent
+already working on the target can answer them in its own session.
 
 The provider is an interface: another model provider is one more implementation, and nothing else
 in Esper knows which one answered, beyond the model name recorded on each claim.
 
+### Which model
 
-**Which model.** Not a crowd of agents: enrichment is many independent calls on bounded context (a
-function and the signatures it calls), not an exploration. Start with **Claude Opus 5.5 at low
-effort** for every question, with one model and one cache, and measure it against a hand-labelled
-set of guards from the first targets. Move the per-node questions to **Claude Sonnet 5.5** only if
-it matches on that set. Profile drafting stays on Opus 5.5 at high effort.
-
-At audit scale, price does not decide. For 1,000 reachable nodes at about 3,000 input and 500
-output tokens each, before thinking tokens: Opus 5.5 ($4 and $20 per million tokens) costs about
-$22, or $11 in batch; Sonnet 5.5 ($2 and $10) about $11, or $5.50 in batch. Prices as of
-2026-10-28.
+- **Bounded tier: Claude Opus 5.5 at low effort to start**, measured against a hand-labelled set of
+  guards from the first targets. Taking a non-guard for a guard hides an unprotected route, the
+  worst mistake the layer can make, so the measure starts from the most reliable model. Move this
+  tier to **Claude Sonnet 5.5** if it matches on that set. With an API key the difference is small:
+  for 1,000 nodes at about 3,000 input and 500 output tokens each, before thinking tokens, about
+  $11 for Opus 5.5 and $5.50 for Sonnet 5.5 in batch ($4 and $20, against $2 and $10, per million
+  tokens, as of 2026-10-28). On a plan, the cost is the plan's limits, which Opus uses faster, so the
+  move is worth more there.
+- **Exploring tier: Claude Opus 5.5 at medium effort**, capped at 20 turns. These are the hard
+  questions, and there are few of them.
+- **Profile drafting: Claude Opus 5.5 at high effort.**
+- **Parallel runs, driven by code, not a crowd of agents.** Esper knows the questions in advance and
+  hands them out; a model orchestrating subagents would spend tokens on what a loop does, and give
+  a different split on each run.
 
 **Rules out.** Model output stored as facts or signals; Esper handling a credential or a sign-in;
-an enrichment run with any tool, or started from the audited repository.
+an enrichment run with a shell, file or network tool, with any MCP server but Esper's read-only one,
+or started from the audited repository; exploring every node by default.
 
 ## D18 — Running Esper: one home, many projects
 
