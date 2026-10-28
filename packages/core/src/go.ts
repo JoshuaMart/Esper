@@ -42,9 +42,9 @@ const builtins = new Set([
 
 const source = 'tree-sitter'
 const isComment = (node: Node) => node.type === 'comment'
-const line = (node: Node) => node.startPosition.row + 1
+export const line = (node: Node) => node.startPosition.row + 1
 
-interface Decl {
+export interface Decl {
   ref: string
   name: string
   file: string
@@ -62,7 +62,7 @@ interface Import {
   node: Node
 }
 
-interface ParsedFile {
+export interface ParsedFile {
   path: string
   dir: string
   hash: string
@@ -121,7 +121,7 @@ function namedType(text: string): { qualifier?: string; name: string } | undefin
 
 // What the syntax states about a variable: its type, the value it was assigned (the `index`-th
 // result when several names take the results of one call), or only that it is declared.
-type Declared = { type: string } | { value: Node; index: number } | { untyped: true }
+export type Declared = { type: string } | { value: Node; index: number } | { untyped: true }
 
 function fromValues(declared: string[], index: number, values: Node[]): Declared {
   if (values.length === declared.length && values[index]) return { value: values[index], index: 0 }
@@ -129,7 +129,7 @@ function fromValues(declared: string[], index: number, values: Node[]): Declared
   return { untyped: true }
 }
 
-const present = (nodes: (Node | null)[]) => nodes.filter((n): n is Node => n !== null)
+export const present = (nodes: (Node | null)[]) => nodes.filter((n): n is Node => n !== null)
 
 // Whether `statement` declares `name`, and what it states about it.
 function declares(statement: Node, name: string): Declared | undefined {
@@ -191,7 +191,7 @@ const functionLike = new Set(['function_declaration', 'method_declaration', 'fun
 // outward: the statements before it in each block, the initializers of `if`, `for` and
 // `switch`, then the parameters, results and receiver of each enclosing function. The nearest
 // declaration wins, so a shadowing variable hides the outer one even when its type is unknown.
-function declaredAt(name: string, at: Node): Declared | undefined {
+export function declaredAt(name: string, at: Node): Declared | undefined {
   let child: Node = at
   for (let scope = at.parent; scope; child = scope, scope = scope.parent) {
     let candidates: Node[] = []
@@ -328,104 +328,130 @@ function group(entries: [string, Decl][]): Map<string, Decl[]> {
   return groups
 }
 
-export async function extractGo(
-  files: GoFile[],
-  options: { module?: string } = {},
-): Promise<{ graph: Graph; stats: CallStats }> {
-  const parsed = (await Promise.all(files.map(parseFile))).sort((a, b) =>
-    a.path < b.path ? -1 : a.path > b.path ? 1 : 0,
-  )
-  const calls = await loadQuery('go', 'calls')
-  const graph: Graph = { files: [], nodes: [], edges: [], facts: [], skips: [] }
-  const stats: CallStats = { calls: 0, resolved: 0, guessed: 0, unresolved: 0 }
-  const externals = new Map<string, GraphNode>()
-  const external = (ref: string, name: string) => {
-    if (!externals.has(ref)) externals.set(ref, { ref, kind: 'external', name })
-    return ref
+export type Located = { dir: string; name: string } | { importPath: string; name: string }
+export type Outside = { outside: true }
+const outside: Outside = { outside: true }
+
+// One type when every candidate agrees on it, none otherwise.
+function agreed(types: (Located | undefined)[]): Located | undefined {
+  const first = JSON.stringify(types[0])
+  return types.length > 0 && types.every((t) => JSON.stringify(t) === first) ? types[0] : undefined
+}
+
+// The parsed files of a Go module, and what the syntax states about them: the call graph, the
+// types of expressions, and the declarations an expression names. Profiles read the program
+// through it; `dispose` frees the syntax trees.
+export class GoProgram {
+  readonly files: ParsedFile[]
+  readonly module: string | undefined
+  private readonly functions: Map<string, Decl[]>
+  private readonly methods: Map<string, Decl[]>
+  private readonly methodsByName: Map<string, Decl[]>
+  private readonly filesByDir = new Map<string, ParsedFile[]>()
+  private readonly fields = new Map<string, { type: string; file: ParsedFile }[]>()
+  private readonly aliasesOf = new Map<string, Map<string, string>>()
+  private readonly byPath: Map<string, ParsedFile>
+
+  static async load(files: GoFile[], options: { module?: string } = {}): Promise<GoProgram> {
+    const parsed = await Promise.all(files.map(parseFile))
+    return new GoProgram(parsed, options.module)
   }
 
-  const internalDir = (importPath: string): string | undefined => {
-    const module = options.module
-    if (!module) return undefined
-    if (importPath === module) return '.'
-    return importPath.startsWith(`${module}/`) ? importPath.slice(module.length + 1) : undefined
-  }
+  private constructor(parsed: ParsedFile[], module: string | undefined) {
+    this.files = parsed.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
+    this.module = module
+    this.byPath = new Map(this.files.map((file) => [file.path, file]))
 
-  // Lookups. Several declarations under one key are build variants (`sock_unix.go`,
-  // `sock_windows.go`): a call to that name is not resolved to one of them.
-  const all = parsed.flatMap((file) => file.decls.map((decl) => ({ file, decl })))
-  const functions = group(
-    all
-      .filter(({ decl }) => decl.node.type === 'function_declaration')
-      .map(({ file, decl }): [string, Decl] => [`${file.dir}\0${decl.name}`, decl]),
-  )
-  const methods = group(
-    all
-      .filter(({ decl }) => decl.receiver)
-      .map(({ file, decl }): [string, Decl] => [`${file.dir}\0${decl.name}`, decl]),
-  )
-  const methodsByName = group(
-    all
-      .filter(({ decl }) => decl.receiver)
-      .map(({ decl }): [string, Decl] => [decl.name.slice((decl.receiver?.length ?? 0) + 1), decl]),
-  )
-  const filesByDir = new Map<string, ParsedFile[]>()
-  const fields = new Map<string, { type: string; file: ParsedFile }[]>()
-  for (const file of parsed) {
-    filesByDir.set(file.dir, [...(filesByDir.get(file.dir) ?? []), file])
-    for (const [type, typeFields] of file.structs) {
-      for (const [field, fieldType] of typeFields) {
-        const key = `${file.dir}\0${type}\0${field}`
-        fields.set(key, [...(fields.get(key) ?? []), { type: fieldType, file }])
+    // Several declarations under one key are build variants (`sock_unix.go`, `sock_windows.go`):
+    // a call to that name is not resolved to one of them.
+    const all = this.files.flatMap((file) => file.decls.map((decl) => ({ file, decl })))
+    const key = ({ file, decl }: { file: ParsedFile; decl: Decl }): [string, Decl] => [
+      `${file.dir}\0${decl.name}`,
+      decl,
+    ]
+    this.functions = group(
+      all.filter(({ decl }) => decl.node.type === 'function_declaration').map(key),
+    )
+    const withReceiver = all.filter(({ decl }) => decl.receiver)
+    this.methods = group(withReceiver.map(key))
+    this.methodsByName = group(
+      withReceiver.map(({ decl }): [string, Decl] => [
+        decl.name.slice((decl.receiver?.length ?? 0) + 1),
+        decl,
+      ]),
+    )
+    for (const file of this.files) {
+      this.filesByDir.set(file.dir, [...(this.filesByDir.get(file.dir) ?? []), file])
+      for (const [type, typeFields] of file.structs) {
+        for (const [field, fieldType] of typeFields) {
+          const k = `${file.dir}\0${type}\0${field}`
+          this.fields.set(k, [...(this.fields.get(k) ?? []), { type: fieldType, file }])
+        }
       }
     }
-  }
-  // The names a file's imports are known by, and the import path behind each.
-  const aliasesOf = new Map<string, Map<string, string>>()
-  for (const file of parsed) {
-    const aliases = new Map<string, string>()
-    for (const imp of file.imports) {
-      const dir = internalDir(imp.path)
-      const declared = dir === undefined ? undefined : filesByDir.get(dir)?.[0]?.packageName
-      const alias = imp.alias ?? declared ?? defaultPackageName(imp.path)
-      if (alias !== '_' && alias !== '.') aliases.set(alias, imp.path)
+    // The names a file's imports are known by, and the import path behind each.
+    for (const file of this.files) {
+      const aliases = new Map<string, string>()
+      for (const imp of file.imports) {
+        const dir = this.internalDir(imp.path)
+        const declared = dir === undefined ? undefined : this.filesByDir.get(dir)?.[0]?.packageName
+        const alias = imp.alias ?? declared ?? defaultPackageName(imp.path)
+        if (alias !== '_' && alias !== '.') aliases.set(alias, imp.path)
+      }
+      this.aliasesOf.set(file.path, aliases)
     }
-    aliasesOf.set(file.path, aliases)
   }
+
+  dispose() {
+    for (const file of this.files) file.tree.delete()
+  }
+
+  file(path: string): ParsedFile | undefined {
+    return this.byPath.get(path)
+  }
+
+  filesIn(dir: string): ParsedFile[] {
+    return this.filesByDir.get(dir) ?? []
+  }
+
+  internalDir(importPath: string): string | undefined {
+    if (!this.module) return undefined
+    if (importPath === this.module) return '.'
+    return importPath.startsWith(`${this.module}/`)
+      ? importPath.slice(this.module.length + 1)
+      : undefined
+  }
+
+  // The innermost declaration that encloses `node`, or the declaration `node` is.
+  declOf(file: ParsedFile, node: Node): Decl | undefined {
+    return file.declsById.get(node.id) ?? enclosing(file, node)
+  }
+
   // An identifier names an imported package only when no local declaration shadows it.
-  const packageOf = (node: Node, file: ParsedFile): string | undefined => {
+  packageOf(node: Node, file: ParsedFile): string | undefined {
     if (node.type !== 'identifier') return undefined
-    const importPath = aliasesOf.get(file.path)?.get(node.text)
+    const importPath = this.aliasesOf.get(file.path)?.get(node.text)
     return importPath && !declaredAt(node.text, node) ? importPath : undefined
   }
 
-  // A named type, located: in a package of the module by its directory, or outside by import path.
-  type Located = { dir: string; name: string } | { importPath: string; name: string }
-  type Outside = { outside: true }
-  const outside: Outside = { outside: true }
-  const parsedByPath = new Map(parsed.map((file) => [file.path, file]))
-  const locate = (text: string, file: ParsedFile): Located | undefined => {
+  // A type as written, located: in a package of the module by its directory, or outside it by
+  // import path.
+  locate(text: string, file: ParsedFile): Located | undefined {
     const type = namedType(text)
     if (!type) return undefined
     if (!type.qualifier) return { dir: file.dir, name: type.name }
-    const importPath = aliasesOf.get(file.path)?.get(type.qualifier)
+    const importPath = this.aliasesOf.get(file.path)?.get(type.qualifier)
     if (!importPath) return undefined
-    const dir = internalDir(importPath)
+    const dir = this.internalDir(importPath)
     return dir === undefined ? { importPath, name: type.name } : { dir, name: type.name }
   }
-  // One type when every candidate agrees on it, none otherwise.
-  const agreed = (types: (Located | undefined)[]) => {
-    const first = JSON.stringify(types[0])
-    return types.length > 0 && types.every((t) => JSON.stringify(t) === first)
-      ? types[0]
-      : undefined
-  }
+
   // The `index`-th type a function declares it returns, located from the function's own file.
-  const resultOf = (decls: Decl[] | undefined, index: number): Located | undefined =>
-    agreed(
+  private resultOf(decls: Decl[] | undefined, index: number): Located | undefined {
+    return agreed(
       (decls ?? []).map((decl) => {
         const result = decl.node.childForFieldName('result')
-        const file = parsedByPath.get(decl.file)
+        const file = this.byPath.get(decl.file)
         if (!result || !file) return undefined
         const types =
           result.type === 'parameter_list'
@@ -435,19 +461,16 @@ export async function extractGo(
               })
             : [result.text]
         const text = types[index]
-        return text ? locate(text, file) : undefined
+        return text ? this.locate(text, file) : undefined
       }),
     )
+  }
+
   // The type of an expression, from what the syntax states: a typed variable, a field of a struct
   // of the module, a composite literal, or the result of a call. A value that comes from a package
   // outside the module is `outside`: its methods are not the module's, even when its type is not
   // known.
-  const typeOf = (
-    node: Node,
-    file: ParsedFile,
-    index = 0,
-    depth = 0,
-  ): Located | Outside | undefined => {
+  typeOf(node: Node, file: ParsedFile, index = 0, depth = 0): Located | Outside | undefined {
     if (depth > 8) return undefined
     if (index > 0 && node.type !== 'call_expression') return undefined
     switch (node.type) {
@@ -455,181 +478,224 @@ export async function extractGo(
         const declared = declaredAt(node.text, node)
         if (!declared || 'untyped' in declared) return undefined
         return 'type' in declared
-          ? locate(declared.type, file)
-          : typeOf(declared.value, file, declared.index, depth + 1)
+          ? this.locate(declared.type, file)
+          : this.typeOf(declared.value, file, declared.index, depth + 1)
       }
       case 'parenthesized_expression':
       case 'unary_expression': {
         const operator = node.childForFieldName('operator')?.text
         if (operator && operator !== '&') return undefined
         const inner = node.childForFieldName('operand') ?? node.namedChildren[0]
-        return inner ? typeOf(inner, file, 0, depth + 1) : undefined
+        return inner ? this.typeOf(inner, file, 0, depth + 1) : undefined
       }
       case 'composite_literal': {
         const type = node.childForFieldName('type')?.text
-        return type ? locate(type, file) : undefined
+        return type ? this.locate(type, file) : undefined
       }
       case 'selector_expression': {
         const inner = node.childForFieldName('operand')
         const field = node.childForFieldName('field')?.text
-        if (!inner || !field || packageOf(inner, file)) return undefined
-        const owner = typeOf(inner, file, 0, depth + 1)
+        if (!inner || !field || this.packageOf(inner, file)) return undefined
+        const owner = this.typeOf(inner, file, 0, depth + 1)
         if (!owner || !('dir' in owner)) return owner ? outside : undefined
-        const declared = fields.get(`${owner.dir}\0${owner.name}\0${field}`) ?? []
-        return agreed(declared.map((d) => locate(d.type, d.file)))
+        const declared = this.fields.get(`${owner.dir}\0${owner.name}\0${field}`) ?? []
+        return agreed(declared.map((d) => this.locate(d.type, d.file)))
       }
       case 'call_expression': {
         const fn = node.childForFieldName('function')
         if (fn?.type === 'identifier') {
           return declaredAt(fn.text, fn)
             ? undefined
-            : resultOf(functions.get(`${file.dir}\0${fn.text}`), index)
+            : this.resultOf(this.functions.get(`${file.dir}\0${fn.text}`), index)
         }
         if (fn?.type !== 'selector_expression') return undefined
         const operand = fn.childForFieldName('operand')
         const name = fn.childForFieldName('field')?.text
         if (!operand || !name) return undefined
-        const importPath = packageOf(operand, file)
+        const importPath = this.packageOf(operand, file)
         if (importPath) {
-          const dir = internalDir(importPath)
-          return dir === undefined ? outside : resultOf(functions.get(`${dir}\0${name}`), index)
+          const dir = this.internalDir(importPath)
+          return dir === undefined
+            ? outside
+            : this.resultOf(this.functions.get(`${dir}\0${name}`), index)
         }
-        const receiver = typeOf(operand, file, 0, depth + 1)
+        const receiver = this.typeOf(operand, file, 0, depth + 1)
         if (!receiver || !('dir' in receiver)) return receiver ? outside : undefined
-        return resultOf(methods.get(`${receiver.dir}\0${receiver.name}.${name}`), index)
+        return this.resultOf(this.methods.get(`${receiver.dir}\0${receiver.name}.${name}`), index)
       }
       default:
         return undefined
     }
   }
 
-  const edge = (e: Omit<GraphEdge, 'source'>) => graph.edges.push({ ...e, source })
-
-  for (const file of parsed) {
-    graph.files.push({ path: file.path, hash: file.hash, language: 'go' })
-    const root = file.tree.rootNode
-    graph.nodes.push({
-      ref: file.path,
-      kind: 'file',
-      name: posix.basename(file.path),
-      file: file.path,
-      startLine: 1,
-      endLine: root.endPosition.row + 1,
-      fingerprint: fingerprint(root, isComment),
-      data: { package: file.packageName },
-    })
-
-    for (const imp of file.imports) {
-      const citation = { file: file.path, line: line(imp.node) }
-      const data = { path: imp.path }
-      const dir = internalDir(imp.path)
-      if (dir === undefined) {
-        const to = external(externalRef(imp.path), imp.path)
-        edge({ kind: 'imports', from: file.path, to, citation, data })
-        continue
-      }
-      for (const target of filesByDir.get(dir) ?? []) {
-        edge({ kind: 'imports', from: file.path, to: target.path, citation, data })
-      }
+  // What a callee expression names, as the call graph sees it: `f`, `pkg.F` or `x.m`. Each target
+  // is a declaration of the module or an external reference, resolved or guessed with a reason.
+  // `undefined` means the index cannot name it.
+  targets(fn: Node, file: ParsedFile): Target[] | undefined {
+    const variants = (decls: Decl[] | undefined): Target[] | undefined => {
+      const [first] = decls ?? []
+      if (!decls || !first) return undefined
+      if (decls.length === 1) return [{ ref: first.ref, decl: first, resolution: 'resolved' }]
+      const reason = `${decls.length} declarations of ${first.name}, one per build variant`
+      return decls.map((decl) => ({ ref: decl.ref, decl, resolution: 'guessed', reason }))
     }
-
-    for (const decl of file.decls) {
-      const node: GraphNode = {
-        ref: decl.ref,
-        kind: 'decl',
-        name: decl.name,
-        file: file.path,
-        startLine: line(decl.node),
-        endLine: decl.node.endPosition.row + 1,
-        fingerprint: fingerprint(decl.node, isComment),
-      }
-      if (decl.node.type === 'func_literal') node.data = { literal: true }
-      graph.nodes.push(node)
-      const citation = { file: file.path, line: line(decl.node) }
-      edge({ kind: 'contains', from: file.path, to: decl.ref, citation })
-      // A literal is reached through the function that defines it: a handler built inside a
-      // middleware runs when the middleware's result is called.
-      const parent = decl.node.type === 'func_literal' ? enclosing(file, decl.node) : undefined
-      if (parent) {
-        const data = { resolution: 'resolved', literal: true }
-        edge({ kind: 'calls', from: parent.ref, to: decl.ref, citation, data })
-      }
+    if (fn.type === 'func_literal') {
+      const decl = file.declsById.get(fn.id)
+      return decl ? [{ ref: decl.ref, decl, resolution: 'resolved' }] : undefined
     }
-
-    for (const match of calls.matches(root)) {
-      const call = match.captures.find((c) => c.name === 'call')?.node
-      const callee = match.captures.find((c) => c.name === 'callee')?.node.text
-      if (!call || !callee) continue
-      const caller = enclosing(file, call)
-      if (!caller) continue
-      const operand = match.captures.find((c) => c.name === 'operand')?.node
-      const citation = { file: file.path, line: line(call) }
-      const resolved = (to: string) => {
-        stats.resolved++
-        edge({ kind: 'calls', from: caller.ref, to, citation, data: { resolution: 'resolved' } })
+    if (fn.type === 'identifier') {
+      const declared = declaredAt(fn.text, fn)
+      if (declared && 'value' in declared && declared.value.type === 'func_literal') {
+        return this.targets(declared.value, file)
       }
-      const guessed = (to: string, reason: string) => {
-        stats.guessed++
-        const data = { resolution: 'guessed', reason }
-        edge({ kind: 'calls', from: caller.ref, to, citation, data })
-      }
-      // One declaration is the callee; several are build variants, each a guess.
-      const declared = (decls: Decl[] | undefined): boolean => {
-        const [first] = decls ?? []
-        if (!decls || !first) return false
-        if (decls.length === 1) resolved(first.ref)
-        else {
-          const reason = `${decls.length} declarations of ${first.name}, one per build variant`
-          for (const decl of decls) guessed(decl.ref, reason)
-        }
-        return true
-      }
-
-      if (!operand) {
-        // A local variable holding a function is not the package-level function of that name.
-        const local = declaredAt(callee, call)
-        if (builtins.has(callee) && !local) continue
-        stats.calls++
-        if (local || !declared(functions.get(`${file.dir}\0${callee}`))) stats.unresolved++
-        continue
-      }
-
-      stats.calls++
-      const importPath = packageOf(operand, file)
-      if (importPath) {
-        const dir = internalDir(importPath)
-        if (dir === undefined) {
-          resolved(external(externalRef(importPath, callee), `${operand.text}.${callee}`))
-        } else if (!declared(functions.get(`${dir}\0${callee}`))) stats.unresolved++
-        continue
-      }
-      // A call on a value whose type the syntax states: a method of the module, or of a package
-      // outside it, named by its import path.
-      const type = typeOf(operand, file)
-      if (type && 'outside' in type) {
-        stats.unresolved++
-        continue
-      }
-      if (type && 'importPath' in type) {
-        const name = `${type.name}.${callee}`
-        resolved(external(externalRef(type.importPath, name), name))
-        continue
-      }
-      if (type && declared(methods.get(`${type.dir}\0${type.name}.${callee}`))) continue
-      // Otherwise, an interface, an embedded method or a value of unknown type: the only method
-      // of the module with that name is a guess.
-      const candidates = methodsByName.get(callee) ?? []
-      if (candidates.length === 1 && candidates[0]) {
-        const why = type ? `${type.name} declares no method ${callee}` : 'receiver type unknown'
-        guessed(
-          candidates[0].ref,
-          `${why}; ${candidates[0].name} is the only method named ${callee}`,
-        )
-      } else stats.unresolved++
+      if (declared) return undefined
+      return variants(this.functions.get(`${file.dir}\0${fn.text}`))
     }
+    if (fn.type !== 'selector_expression') return undefined
+    const operand = fn.childForFieldName('operand')
+    const name = fn.childForFieldName('field')?.text
+    if (!operand || !name) return undefined
+    const importPath = this.packageOf(operand, file)
+    if (importPath) {
+      const dir = this.internalDir(importPath)
+      if (dir !== undefined) return variants(this.functions.get(`${dir}\0${name}`))
+      return [
+        {
+          ref: externalRef(importPath, name),
+          external: `${operand.text}.${name}`,
+          resolution: 'resolved',
+        },
+      ]
+    }
+    // A method of a value whose type the syntax states, of the module or of a package outside it.
+    const type = this.typeOf(operand, file)
+    if (type && 'outside' in type) return undefined
+    if (type && 'importPath' in type) {
+      const symbol = `${type.name}.${name}`
+      return [
+        { ref: externalRef(type.importPath, symbol), external: symbol, resolution: 'resolved' },
+      ]
+    }
+    const own = type ? variants(this.methods.get(`${type.dir}\0${type.name}.${name}`)) : undefined
+    if (own) return own
+    // Otherwise, an interface, an embedded method or a value of unknown type: the only method of
+    // the module with that name is a guess.
+    const candidates = this.methodsByName.get(name) ?? []
+    if (candidates.length !== 1 || !candidates[0]) return undefined
+    const why = type ? `${type.name} declares no method ${name}` : 'receiver type unknown'
+    const reason = `${why}; ${candidates[0].name} is the only method named ${name}`
+    return [{ ref: candidates[0].ref, decl: candidates[0], resolution: 'guessed', reason }]
   }
 
-  graph.nodes.push(...externals.values())
-  for (const file of parsed) file.tree.delete()
-  return { graph, stats }
+  // The file, declaration and call-graph nodes and edges of the program (D6).
+  callGraph(): { graph: Graph; stats: CallStats } {
+    const graph: Graph = { files: [], nodes: [], edges: [], facts: [], skips: [] }
+    const stats: CallStats = { calls: 0, resolved: 0, guessed: 0, unresolved: 0 }
+    const externals = new Map<string, GraphNode>()
+    const edge = (e: Omit<GraphEdge, 'source'>) => graph.edges.push({ ...e, source })
+
+    for (const file of this.files) {
+      graph.files.push({ path: file.path, hash: file.hash, language: 'go' })
+      const root = file.tree.rootNode
+      graph.nodes.push({
+        ref: file.path,
+        kind: 'file',
+        name: posix.basename(file.path),
+        file: file.path,
+        startLine: 1,
+        endLine: root.endPosition.row + 1,
+        fingerprint: fingerprint(root, isComment),
+        data: { package: file.packageName },
+      })
+
+      for (const imp of file.imports) {
+        const citation = { file: file.path, line: line(imp.node) }
+        const data = { path: imp.path }
+        const dir = this.internalDir(imp.path)
+        if (dir === undefined) {
+          const ref = externalRef(imp.path)
+          if (!externals.has(ref)) externals.set(ref, { ref, kind: 'external', name: imp.path })
+          edge({ kind: 'imports', from: file.path, to: ref, citation, data })
+          continue
+        }
+        for (const target of this.filesIn(dir)) {
+          edge({ kind: 'imports', from: file.path, to: target.path, citation, data })
+        }
+      }
+
+      for (const decl of file.decls) {
+        const node: GraphNode = {
+          ref: decl.ref,
+          kind: 'decl',
+          name: decl.name,
+          file: file.path,
+          startLine: line(decl.node),
+          endLine: decl.node.endPosition.row + 1,
+          fingerprint: fingerprint(decl.node, isComment),
+        }
+        if (decl.node.type === 'func_literal') node.data = { literal: true }
+        graph.nodes.push(node)
+        const citation = { file: file.path, line: line(decl.node) }
+        edge({ kind: 'contains', from: file.path, to: decl.ref, citation })
+        // A literal is reached through the function that defines it: a handler built inside a
+        // middleware runs when the middleware's result is called.
+        const parent = decl.node.type === 'func_literal' ? enclosing(file, decl.node) : undefined
+        if (parent) {
+          const data = { resolution: 'resolved', literal: true }
+          edge({ kind: 'calls', from: parent.ref, to: decl.ref, citation, data })
+        }
+      }
+
+      for (const call of present(file.tree.rootNode.descendantsOfType('call_expression'))) {
+        const fn = call.childForFieldName('function')
+        const caller = enclosing(file, call)
+        if (!fn || !caller || fn.type === 'func_literal') continue
+        if (fn.type !== 'identifier' && fn.type !== 'selector_expression') continue
+        if (fn.type === 'identifier' && builtins.has(fn.text) && !declaredAt(fn.text, fn)) continue
+        stats.calls++
+        const targets = this.targets(fn, file)
+        if (!targets) {
+          stats.unresolved++
+          continue
+        }
+        const citation = { file: file.path, line: line(call) }
+        for (const target of targets) {
+          if (target.resolution === 'resolved') stats.resolved++
+          else stats.guessed++
+          if (target.external && !externals.has(target.ref)) {
+            externals.set(target.ref, { ref: target.ref, kind: 'external', name: target.external })
+          }
+          const data =
+            target.resolution === 'guessed'
+              ? { resolution: 'guessed', reason: target.reason }
+              : { resolution: 'resolved' }
+          edge({ kind: 'calls', from: caller.ref, to: target.ref, citation, data })
+        }
+      }
+    }
+
+    graph.nodes.push(...externals.values())
+    return { graph, stats }
+  }
+}
+
+export interface Target {
+  ref: string
+  // The declaration of the module, or the external symbol's name as written (`chi.NewRouter`).
+  decl?: Decl
+  external?: string
+  resolution: 'resolved' | 'guessed'
+  reason?: string
+}
+
+export async function extractGo(
+  files: GoFile[],
+  options: { module?: string } = {},
+): Promise<{ graph: Graph; stats: CallStats }> {
+  const program = await GoProgram.load(files, options)
+  try {
+    return program.callGraph()
+  } finally {
+    program.dispose()
+  }
 }

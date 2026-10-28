@@ -65,8 +65,8 @@ test('types a call by its declared result, and guesses when nothing states a typ
   const { graph } = await extractGo(files, { module: 'example.com/a' })
   assert.deepEqual(calls(graph, 'a.go#f'), [
     ['a.go#T.Run', 'guessed', 'receiver type unknown; T.Run is the only method named Run'],
-    ['a.go#g', 'resolved', undefined],
     ['a.go#T.Run', 'resolved', undefined],
+    ['a.go#g', 'resolved', undefined],
   ])
   // A value from a package outside the module has none of the module's methods: `Get` on the
   // header is not guessed to be `T.Get`.

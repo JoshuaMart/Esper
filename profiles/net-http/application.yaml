@@ -1,0 +1,44 @@
+# The standard library's HTTP server, for an application routed by http.ServeMux. Other Go
+# profiles extend it for the request type and its reads.
+name: net-http
+kind: application
+language: go
+detect:
+  import: [net/http]
+request: net/http#Request
+handlers:
+  adapters: [net/http#HandlerFunc]
+routers:
+  - types: [net/http#ServeMux]
+    create: [net/http#NewServeMux]
+    default: [net/http#Handle, net/http#HandleFunc]
+    pattern: servemux
+    methods:
+      - { name: Handle, does: route, method: pattern }
+      - { name: HandleFunc, does: route, method: pattern }
+reads:
+  - { chain: Header.Get(name), read: header }
+  - { chain: Header.Values(name), read: header }
+  - { chain: Header, read: header }
+  - { chain: UserAgent(), read: header }
+  - { chain: Referer(), read: header }
+  - { chain: BasicAuth(), read: header }
+  - { chain: URL.Query().Get(name), read: query }
+  - { chain: URL.Query(), read: query }
+  - { chain: URL.RawQuery, read: query }
+  - { chain: URL.Path, read: path }
+  - { chain: URL.RawPath, read: path }
+  - { chain: PathValue(name), read: path }
+  - { chain: FormValue(name), read: form }
+  - { chain: PostFormValue(name), read: form }
+  - { chain: FormFile(name), read: form }
+  - { chain: Form, read: form }
+  - { chain: PostForm, read: form }
+  - { chain: MultipartForm, read: form }
+  - { chain: Cookie(name), read: cookie }
+  - { chain: Cookies(), read: cookie }
+  - { chain: Body, read: body }
+  - { chain: Host, read: host }
+  - { chain: RemoteAddr, read: remoteaddr }
+  - { chain: Method, read: method }
+  - { chain: Context().Value(name), read: context }

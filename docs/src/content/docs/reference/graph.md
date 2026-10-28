@@ -84,3 +84,19 @@ Measured on chi 5.3.2, its 35 non-test files:
 
 The tree-sitter prototype cited in [D12](/decisions/#d12--precision-scip-right-after-the-first-index-dataflow-later)
 guessed 262 of 486.
+
+## Entry points
+
+An application's routes, read with its profile ([Profiles](/reference/profiles/)):
+
+| What | Stored as |
+|---|---|
+| a route | an `entry` node `route:<METHOD> <path>`, at the line that registers it; `data` keeps the pattern as written, the handler's text, and what could not be resolved |
+| its method and path | `method` and `path` facts |
+| its handler | `handles` edges to each declaration or external the handler names |
+| its chain | `chain` edges, with `data.position` from the outermost middleware |
+| a read | a `read` fact on the declaration that makes it, `header.X-Forwarded-For` or `body` |
+| what an entry reads | a `read` fact on the entry for each read its handler or its chain reaches through resolved calls, with `data.via` (the declaration) and `data.from` (`handler` or `chain`) |
+
+Two routes with the same method and path take an ordinal, `route:GET /x~2`. An entry's fingerprint
+covers its method, path, handler and chain, and the fingerprints of the declarations they name.

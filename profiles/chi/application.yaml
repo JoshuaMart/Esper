@@ -1,0 +1,34 @@
+# chi, for an application built on it: routes, groups, subrouters and mounts, and the middleware
+# chain each route inherits.
+name: chi
+kind: application
+language: go
+extends: [net-http]
+detect:
+  dependency: [github.com/go-chi/chi/v5, github.com/go-chi/chi]
+routers:
+  - types: [github.com/go-chi/chi/v5#Router, github.com/go-chi/chi/v5#Mux]
+    create: [github.com/go-chi/chi/v5#NewRouter, github.com/go-chi/chi/v5#NewMux]
+    pattern: braces
+    methods:
+      - { name: Get, does: route, method: GET }
+      - { name: Head, does: route, method: HEAD }
+      - { name: Post, does: route, method: POST }
+      - { name: Put, does: route, method: PUT }
+      - { name: Patch, does: route, method: PATCH }
+      - { name: Delete, does: route, method: DELETE }
+      - { name: Options, does: route, method: OPTIONS }
+      - { name: Connect, does: route, method: CONNECT }
+      - { name: Trace, does: route, method: TRACE }
+      - { name: Handle, does: route, method: pattern }
+      - { name: HandleFunc, does: route, method: pattern }
+      - { name: Method, does: route, args: [method, path, handler] }
+      - { name: MethodFunc, does: route, args: [method, path, handler] }
+      - { name: Use, does: use }
+      - { name: With, does: with }
+      - { name: Group, does: group }
+      - { name: Route, does: subrouter }
+      - { name: Mount, does: mount }
+reads:
+  - { call: github.com/go-chi/chi/v5#URLParam, request: 0, name: 1, read: path }
+  - { call: github.com/go-chi/chi/v5#URLParamFromCtx, name: 1, read: path }

@@ -1,0 +1,141 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/JoshuaMart/Esper/schemas/profile.schema.json",
+  "title": "Esper framework profile",
+  "description": "What is specific to a framework, as data: how routes are declared, how middleware chains are built, and what reads the request (D10).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["name", "kind", "language", "detect"],
+  "properties": {
+    "name": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+    "kind": { "enum": ["application", "framework"] },
+    "language": { "enum": ["go"] },
+    "description": { "type": "string" },
+    "extends": {
+      "description": "Profiles whose request type, handler adapters, routers and reads also apply.",
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "detect": {
+      "description": "How the profile recognises its target: a module that requires a dependency (an application), a module with that path (the framework itself), or a file that imports a package.",
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "dependency": { "$ref": "#/$defs/paths" },
+        "module": { "$ref": "#/$defs/paths" },
+        "import": { "$ref": "#/$defs/paths" }
+      }
+    },
+    "request": {
+      "description": "The type of the incoming request, as `<import path>#<Type>`.",
+      "$ref": "#/$defs/symbol"
+    },
+    "handlers": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "adapters": {
+          "description": "Conversions and wrappers whose first argument is the handler: `net/http#HandlerFunc`.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/symbol" }
+        }
+      }
+    },
+    "routers": { "type": "array", "items": { "$ref": "#/$defs/router" } },
+    "reads": { "type": "array", "items": { "$ref": "#/$defs/read" } }
+  },
+  "$defs": {
+    "paths": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+    "symbol": { "type": "string", "pattern": "^[^#\\s]+#[A-Za-z_][A-Za-z0-9_.]*$" },
+    "router": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["types", "pattern", "methods"],
+      "properties": {
+        "types": {
+          "description": "The types a router value has, so that a parameter of one of them receives the router passed to it.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/symbol" }
+        },
+        "create": {
+          "description": "Functions that return a new router.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/symbol" }
+        },
+        "default": {
+          "description": "Package functions that register on a router of the package itself, such as `http.HandleFunc` on the default mux.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/symbol" }
+        },
+        "pattern": {
+          "description": "How a route's path is written: `braces` for `/items/{id}`, `{id:[0-9]+}` and `*`; `servemux` for `GET /items/{id}`, `{path...}` and a trailing `/` for a subtree.",
+          "enum": ["braces", "servemux"]
+        },
+        "methods": { "type": "array", "items": { "$ref": "#/$defs/method" } }
+      }
+    },
+    "method": {
+      "description": "A method of a router, or a function listed in `default`, by what it does.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "does"],
+      "properties": {
+        "name": { "type": "string" },
+        "does": {
+          "description": "`route` adds a route; `use` adds middleware to the router's chain; `with` returns a router with more middleware; `group` passes a router with the same prefix to a callback; `subrouter` passes a router mounted at a prefix to a callback; `mount` attaches a router or a handler at a prefix.",
+          "enum": ["route", "use", "with", "group", "subrouter", "mount"]
+        },
+        "method": {
+          "description": "For `route`: the HTTP method, `ANY`, or `pattern` when the path carries it (`GET /items`).",
+          "type": "string",
+          "pattern": "^([A-Z]+|pattern)$"
+        },
+        "args": {
+          "description": "The meaning of each argument, when it is not the default for `does`: `route` takes `[path, handler]`, `subrouter` `[path, callback]`, `group` `[callback]`, `mount` `[path, handler]`.",
+          "type": "array",
+          "items": { "enum": ["method", "path", "handler", "callback", "other"] }
+        }
+      }
+    },
+    "read": {
+      "description": "What reads the request: a chain of fields and calls on the request (`Header.Get(name)`), or a function taking it (`chi.URLParam(r, name)`).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["read"],
+      "oneOf": [{ "required": ["chain"] }, { "required": ["call"] }],
+      "properties": {
+        "read": {
+          "enum": [
+            "header",
+            "query",
+            "path",
+            "body",
+            "cookie",
+            "form",
+            "host",
+            "remoteaddr",
+            "method",
+            "context"
+          ]
+        },
+        "chain": {
+          "description": "Fields and calls on the request, in order. `(name)` marks the argument that names what is read; `()` a call whose arguments do not matter.",
+          "type": "string",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\((name)?\\))?(\\.[A-Za-z_][A-Za-z0-9_]*(\\((name)?\\))?)*$"
+        },
+        "call": { "$ref": "#/$defs/symbol" },
+        "request": {
+          "description": "For `call`: the argument that is the request.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "name": {
+          "description": "For `call`: the argument that names what is read.",
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  }
+}
