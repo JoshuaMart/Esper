@@ -33,6 +33,9 @@ test('patterns are normalised, and paths joined without trailing slashes', () =>
     path: '/items/{id}',
   })
   assert.deepEqual(normalisePattern('/files/', 'servemux'), { path: '/files/{rest...}' })
+  // In a ServeMux, `/` serves every path no other pattern matches; `/{$}` only the root.
+  assert.deepEqual(normalisePattern('/', 'servemux'), { path: '/{rest...}' })
+  assert.deepEqual(normalisePattern('GET /{$}', 'servemux'), { method: 'GET', path: '/' })
   assert.equal(joinPath('/api', '/'), '/api')
   assert.equal(joinPath('', '/'), '/')
   assert.equal(joinPath('/a/', '/b/'), '/a/b')
@@ -138,4 +141,30 @@ test('a router parameter no call binds keeps its routes under an explicit unknow
   })
   const entries = graph.nodes.filter((n) => n.kind === 'entry').map((n) => n.ref)
   assert.deepEqual(entries, [`route:GET /\${router}/board`])
+})
+
+test('a method given as a constant of net/http is read', async () => {
+  const profiles = await loadProfiles(new URL('../../../profiles', import.meta.url).pathname)
+  const chi = profiles.find((p) => p.name === 'chi' && p.kind === 'application')
+  assert.ok(chi)
+  const source = [
+    'package main',
+    'import (',
+    '  "net/http"',
+    '  "github.com/go-chi/chi/v5"',
+    ')',
+    'func main() {',
+    '  r := chi.NewRouter()',
+    '  r.Method(http.MethodPost, "/users", http.HandlerFunc(create))',
+    '  r.Method(verb(), "/other", http.HandlerFunc(create))',
+    '}',
+    'func verb() string { return "PUT" }',
+    'func create(w http.ResponseWriter, r *http.Request) {}',
+  ].join('\n')
+  const { graph } = await indexGo([{ path: 'main.go', source }], {
+    module: 'example.com/app',
+    profile: resolveProfile(chi, profiles),
+  })
+  const entries = graph.nodes.filter((n) => n.kind === 'entry').map((n) => n.ref)
+  assert.deepEqual(entries, [`route:\${verb()} /other`, 'route:POST /users'])
 })

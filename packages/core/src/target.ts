@@ -1,6 +1,6 @@
 import { execFile, spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { readdir, readFile } from 'node:fs/promises'
+import { lstat, readdir, readFile } from 'node:fs/promises'
 import { join, posix } from 'node:path'
 import { promisify } from 'node:util'
 import type { Skip } from './graph.ts'
@@ -98,12 +98,21 @@ export async function isGitRepository(dir: string): Promise<boolean> {
   }
 }
 
-function select(paths: string[]): { read: string[]; skips: Skip[] } {
+// Git modes that are not a regular file: a symbolic link, whose target may be outside the
+// target (`leak.go -> ~/.ssh/id_rsa`), and a submodule, which is another repository.
+const notFiles: Record<string, string> = { '120000': 'symlink', '160000': 'submodule' }
+
+function select(
+  paths: string[],
+  modes: Map<string, string> = new Map(),
+): { read: string[]; skips: Skip[] } {
   const read: string[] = []
   const skips = new Map<string, Skip>()
   for (const path of [...paths].sort()) {
     const { skip, read: kept } = classify(path)
+    const other = notFiles[modes.get(path) ?? '']
     if (skip) skips.set(skip.path, skip)
+    else if (kept && other) skips.set(path, { path, reason: other })
     else if (kept) read.push(path)
   }
   return { read, skips: [...skips.values()] }
@@ -118,20 +127,31 @@ const blobId = (content: Buffer) =>
 export async function readFolder(dir: string): Promise<TargetSnapshot> {
   if (await isGitRepository(dir)) {
     const tracked = (await git(dir, ['ls-files', '-s', '-z'])).split('\0').filter(Boolean)
-    const index = new Map(
-      tracked.map((line) => {
-        const [meta, path] = line.split('\t') as [string, string]
-        return [path, meta.split(' ')[1] as string]
-      }),
-    )
+    const index = new Map<string, string>()
+    const modes = new Map<string, string>()
+    for (const line of tracked) {
+      const [meta, path] = line.split('\t') as [string, string]
+      const [mode, id] = meta.split(' ') as [string, string]
+      index.set(path, id)
+      modes.set(path, mode)
+    }
     const untracked = (await git(dir, ['ls-files', '-o', '--exclude-standard', '-z']))
       .split('\0')
       .filter(Boolean)
-    const { read, skips } = select([...index.keys(), ...untracked])
+    const { read, skips } = select([...index.keys(), ...untracked], modes)
     let dirty = untracked.some((p) => select([p]).read.length > 0)
     const files: TargetFile[] = []
     for (const path of read) {
-      const content = await readFile(join(dir, path)).catch(() => undefined)
+      // What is on disk may differ from the index: a link is never followed.
+      const info = await lstat(join(dir, path)).catch(() => undefined)
+      if (info?.isSymbolicLink()) {
+        skips.push({ path, reason: 'symlink' })
+        dirty = true
+        continue
+      }
+      const content = info?.isFile()
+        ? await readFile(join(dir, path)).catch(() => undefined)
+        : undefined
       if (!content) {
         dirty = true
         continue
@@ -163,24 +183,33 @@ export async function readFolder(dir: string): Promise<TargetSnapshot> {
 // A git ref, read from the object database: the checkout is not touched.
 export async function readRef(dir: string, ref: string): Promise<TargetSnapshot> {
   const commit = (await git(dir, ['rev-parse', '--verify', `${ref}^{commit}`])).trim()
-  const paths = (await git(dir, ['ls-tree', '-r', '-z', '--name-only', commit]))
-    .split('\0')
-    .filter(Boolean)
-  const { read, skips } = select(paths)
+  // Paths are relative to the project's folder, which may be a subfolder of the repository.
+  const entries = (await git(dir, ['ls-tree', '-r', '-z', commit])).split('\0').filter(Boolean)
+  const modes = new Map<string, string>()
+  for (const entry of entries) {
+    const [meta, path] = entry.split('\t') as [string, string]
+    modes.set(path, meta.split(' ')[0] as string)
+  }
+  const { read, skips } = select([...modes.keys()], modes)
   const files: TargetFile[] = []
   if (read.length > 0) {
+    // `<commit>:./<path>` is relative to the folder git runs in, as `ls-tree` is.
     const data = await blobs(
       dir,
-      read.map((p) => `${commit}:${p}`),
+      read.map((p) => `${commit}:./${p}`),
     )
     let offset = 0
     for (const path of read) {
       const end = data.indexOf(10, offset)
       const header = data.subarray(offset, end).toString('utf8')
-      const size = Number(header.split(' ')[2])
+      const [, type, size] = header.split(' ')
+      if (type !== 'blob' || !/^\d+$/.test(size ?? '')) {
+        throw new Error(`git could not read ${path} at ${commit}: ${header}`)
+      }
       offset = end + 1
-      files.push({ path, source: data.subarray(offset, offset + size).toString('utf8') })
-      offset += size + 1
+      const length = Number(size)
+      files.push({ path, source: data.subarray(offset, offset + length).toString('utf8') })
+      offset += length + 1
     }
   }
   return { files, skips, dirty: false, commit, ref }

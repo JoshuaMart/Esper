@@ -90,9 +90,12 @@ export function normalisePattern(
   let path = text
   if (syntax === 'braces') {
     path = path.replace(/\{([A-Za-z_][\w-]*)(:[^}]*)?\}/g, '{$1}').replace(/\*$/, '{rest...}')
-  } else {
-    path = path.replace(/\{\$\}$/, '')
-    if (path.endsWith('/') && path.length > 1 && !/\{[^}]*\.\.\.\}$/.test(path)) path += '{rest...}'
+  } else if (path.endsWith('/{$}')) {
+    // `/{$}` matches the path exactly.
+    path = path.slice(0, -3)
+  } else if (path.endsWith('/')) {
+    // A trailing slash, the root included, matches the whole subtree.
+    path += '{rest...}'
   }
   return { ...(method ? { method } : {}), path }
 }
@@ -393,7 +396,9 @@ export class RouteInterpreter {
         const pattern = normalisePattern(raw, router.spec.pattern)
         const explicit = arg('method')
         let verb = method.method ?? 'ANY'
-        if (explicit) verb = pathOf(this.program, explicit, file).toUpperCase()
+        // A method that cannot be read stays the expression, as written.
+        if (explicit)
+          verb = this.program.stringValue(explicit, file)?.toUpperCase() ?? `\${${explicit.text}}`
         if (method.method === 'pattern') verb = pattern.method ?? 'ANY'
         const handlerNode = arg('handler')
         if (!handlerNode) return undefined
@@ -488,6 +493,10 @@ export class RouteInterpreter {
   member(node: Node, file: ParsedFile): Member {
     const citation = this.site(file, node)
     const text = node.text.replace(/\s+/g, ' ')
+    if (node.type === 'parenthesized_expression') {
+      const inner = node.namedChildren[0]
+      if (inner) return { ...this.member(inner, file), text, citation }
+    }
     if (node.type === 'call_expression') {
       const fn = node.childForFieldName('function')
       const first = present(node.childForFieldName('arguments')?.namedChildren ?? [])[0]

@@ -15,6 +15,19 @@ keeps:
   - net/http#CanonicalHeaderKey
   - net/textproto#CanonicalMIMEHeaderKey
 
+# String constants of packages outside the module, so that `r.Method(http.MethodPost, …)` is a
+# POST route.
+constants:
+  net/http#MethodGet: GET
+  net/http#MethodHead: HEAD
+  net/http#MethodPost: POST
+  net/http#MethodPut: PUT
+  net/http#MethodPatch: PATCH
+  net/http#MethodDelete: DELETE
+  net/http#MethodConnect: CONNECT
+  net/http#MethodOptions: OPTIONS
+  net/http#MethodTrace: TRACE
+
 # The type a function outside the module returns first, for the chains that start from it:
 # `json.NewDecoder(r.Body).Decode(&v)`.
 returns:

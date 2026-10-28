@@ -4,6 +4,7 @@ import {
   type CallStats,
   declaredAt,
   type GoFile,
+  type GoModuleRoot,
   GoProgram,
   type Located,
   line,
@@ -185,7 +186,7 @@ const fromChain = new Set(['short-circuit', 'live-state', 'callback-passed', 're
 
 export async function indexGo(
   files: GoFile[],
-  options: { module?: string; profile: ResolvedProfile },
+  options: { module?: string; modules?: GoModuleRoot[]; profile: ResolvedProfile },
 ): Promise<{ graph: Graph; stats: IndexStats; routes: Route[] }> {
   const library = await loadLibrary('go')
   const program = await GoProgram.load(files, {
@@ -193,6 +194,7 @@ export async function indexGo(
     fluent: library.fluent,
     returns: library.returns,
     keeps: library.keeps,
+    constants: library.constants,
   })
   try {
     const { graph, stats } = program.callGraph()
@@ -381,7 +383,17 @@ export async function indexGo(
           (factsOf.get(decl) ?? []).some((f) => f.value === 'short-circuit'),
         )
         if (stops)
-          guards.set(`member:${member.text}`, { citation: member.citation, text: member.text })
+          // Known by what it names, not by how it is written: `auth` and `(auth)` are one guard.
+          guards.set(
+            `member:${member.targets
+              .map((t) => t.ref)
+              .sort()
+              .join(',')}`,
+            {
+              citation: member.citation,
+              text: member.text,
+            },
+          )
       }
       guarding.set(ref, guards)
     }

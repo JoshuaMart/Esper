@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { execFile } from 'node:child_process'
-import { cp, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
+import { cp, mkdtemp, readdir, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -8,6 +8,7 @@ import { promisify } from 'node:util'
 import {
   classify,
   detectProfile,
+  goImports,
   Home,
   loadProfiles,
   parseGoMod,
@@ -45,13 +46,13 @@ test('tests, examples, fixtures, vendored and hidden folders are skipped, and sa
   assert.deepEqual(classify('go.mod'), { read: true })
 })
 
-test('go.mod gives the module path and its requirements', () => {
+test('go.mod gives the module path and its direct requirements', () => {
   const mod = parseGoMod(
     'module example.com/a\n\ngo 1.24\n\nrequire (\n\tgithub.com/go-chi/chi/v5 v5.2.0\n\tgolang.org/x/net v0.1.0 // indirect\n)\nrequire gorm.io/gorm v1.31.2\n',
   )
   assert.deepEqual(mod, {
     path: 'example.com/a',
-    requires: ['github.com/go-chi/chi/v5', 'golang.org/x/net', 'gorm.io/gorm'],
+    requires: ['github.com/go-chi/chi/v5', 'gorm.io/gorm'],
   })
 })
 
@@ -139,4 +140,59 @@ test('a project added by path is indexed into its own database, and its folder i
     await rm(dir, { recursive: true })
     await rm(home.dir, { recursive: true })
   }
+})
+
+test('a symbolic link is skipped, never followed out of the target', async () => {
+  const { dir, git } = await repository()
+  try {
+    await symlink('/etc/hosts', join(dir, 'leak.go'))
+    await git('add', 'leak.go')
+    await git('commit', '--quiet', '-m', 'link')
+    for (const snapshot of [await readFolder(dir), await readRef(dir, 'HEAD')]) {
+      assert.ok(!snapshot.files.some((f) => f.path === 'leak.go'))
+      assert.ok(snapshot.skips.some((s) => s.path === 'leak.go' && s.reason === 'symlink'))
+    }
+  } finally {
+    await rm(dir, { recursive: true })
+  }
+})
+
+test('a ref is read for a project in a subfolder of the repository, with its own go.mod', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'esper-mono-'))
+  const home = new Home(await mkdtemp(join(tmpdir(), 'esper-home-')))
+  try {
+    await cp(fixture, join(dir, 'backend'), { recursive: true })
+    const git = (...args: string[]) =>
+      run('git', ['-C', dir, '-c', 'user.name=t', '-c', 'user.email=t@t', ...args])
+    await git('init', '--quiet')
+    await git('add', '.')
+    await git('commit', '--quiet', '-m', 'v1')
+    await git('tag', 'v1')
+
+    const sub = await readRef(join(dir, 'backend'), 'v1')
+    const main = sub.files.find((f) => f.path === 'main.go')
+    assert.ok(main?.source.includes('chi.NewRouter()'))
+
+    // The repository's root has no go.mod: the module is found in `backend/`.
+    await home.add(dir, { name: 'mono' })
+    const { stats } = await home.index('mono', { ref: 'v1' })
+    assert.equal(stats?.entries, 10)
+  } finally {
+    await rm(dir, { recursive: true })
+    await rm(home.dir, { recursive: true })
+  }
+})
+
+test('an import is read from import declarations, not from comments or strings', async () => {
+  assert.deepEqual(
+    goImports(
+      'package a\n// see "net/http"\nimport (\n\tchi "github.com/go-chi/chi/v5"\n\t"fmt" // fmt\n)\nimport "os"\nvar s = "net/http"\n',
+    ),
+    ['github.com/go-chi/chi/v5', 'fmt', 'os'],
+  )
+  const refused = detectProfile(
+    [{ path: 'main.go', source: 'package main\n// talks to "net/http" servers\nfunc main() {}\n' }],
+    await loadProfiles(profilesDir),
+  )
+  assert.ok('refused' in refused)
 })

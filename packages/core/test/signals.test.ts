@@ -149,3 +149,20 @@ test('a lazily created singleton is not live state', async () => {
   assert.ok(!graph.facts.some((f) => f.node === 'main.go#current' && f.value === 'live-state'))
   assert.ok(!signals(graph, 'route:DELETE /cache').includes('live-state'))
 })
+
+test('the same middleware written two ways is one guard', async () => {
+  const profiles = await loadProfiles(new URL('../../../profiles', import.meta.url).pathname)
+  const chi = profiles.find((p) => p.name === 'chi' && p.kind === 'application')
+  assert.ok(chi)
+  const code = source.replace(
+    'r.With(auth).Post("/users", s.create)',
+    'r.With((auth)).Post("/users", s.create)',
+  )
+  const { graph } = await indexGo([{ path: 'main.go', source: code }], {
+    module: 'example.com/app',
+    profile: resolveProfile(chi, profiles),
+  })
+  assert.ok(!signals(graph, 'route:POST /users').includes('divergent-guard'))
+  assert.ok(!signals(graph, 'route:GET /users/{id}').includes('divergent-guard'))
+  assert.ok(signals(graph, 'route:GET /users/{id}/export').includes('divergent-guard'))
+})

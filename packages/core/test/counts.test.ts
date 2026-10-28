@@ -39,7 +39,7 @@ for (const [path, count] of counts.sort(([a], [b]) => (a < b ? -1 : 1))) {
     const { graph } = await indexGo(
       snapshot.files.filter((f) => f.path.endsWith('.go')),
       {
-        ...(detection.module.path ? { module: detection.module.path } : {}),
+        modules: detection.modules,
         profile: detection.profile,
       },
     )

@@ -67,7 +67,7 @@ Symbols are written `<import path>#<symbol>`.
 | `pattern` | Written | Normalised |
 |---|---|---|
 | `braces` | `/users/{id}`, `/users/{id:[0-9]+}`, `/static/*` | `/users/{id}`, `/static/{rest...}` |
-| `servemux` | `GET /items/{id}`, `/files/`, `/{path...}`, `/{$}` | method `GET` and `/items/{id}`; `/files/{rest...}` |
+| `servemux` | `GET /items/{id}`, `/files/`, `/`, `/{path...}`, `/{$}` | method `GET` and `/items/{id}`; `/files/{rest...}`; `/{rest...}`, since `/` serves every path no other pattern matches; `/` for `/{$}` |
 
 Joined paths lose their trailing slash, but the root: `Mount("/api", r)` with `r.Get("/", …)` is
 `/api`.

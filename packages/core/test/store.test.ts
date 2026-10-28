@@ -57,3 +57,15 @@ test('a second writer waits for the lock instead of failing', async () => {
   second.close()
   await rm(dir, { recursive: true })
 })
+
+test('a snapshot of a commit already stored by the same indexer is not stored twice', async () => {
+  const store = new Store(':memory:')
+  const info = { commit: 'abc', ref: 'v1', indexer: 'x' }
+  const first = store.addSnapshotOnce(await shop(), info)
+  const second = store.addSnapshotOnce(await shop(), info)
+  assert.deepEqual([first.existed, second.existed, second.id], [false, true, first.id])
+  // Another indexer, or a changed folder, is a new snapshot.
+  assert.equal(store.addSnapshotOnce(await shop(), { ...info, indexer: 'y' }).existed, false)
+  assert.equal(store.addSnapshotOnce(await shop(), { ...info, dirty: true }).existed, false)
+  store.close()
+})

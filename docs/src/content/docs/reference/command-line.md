@@ -44,15 +44,18 @@ projects/<name>/checkout/      its clone, for a project added by URL
 
 ## How a target is read
 
-- **What is read.** Go files and `go.mod`. A folder that is a git checkout is listed by git, so
-  that ignored files stay out; any other folder is walked.
+- **What is read.** Go files and every `go.mod`: a module in a subfolder, or several modules, are
+  each known by their folder, so that their imports of each other are internal. A folder that is a
+  git checkout is listed by git, so that ignored files stay out; any other folder is walked.
 - **What is skipped.** Tests (`*_test.go`), examples (`examples/`, `_examples/`, `example/`), fixtures
   (`testdata/`, `fixtures/`), mocks (`mocks/`), vendored code (`vendor/`, `third_party/`,
-  `node_modules/`) and hidden folders. Each skipped folder, and each skipped test file, is stored
-  with the snapshot and its reason.
+  `node_modules/`) and hidden folders. Symbolic links are never followed, so that a link in the
+  target cannot read a file outside it, and submodules are not read. Each skipped folder, and each
+  skipped file, is stored with the snapshot and its reason.
 - **Which profile.** A target whose `go.mod` declares a framework's module is that framework, read
   with its `framework` profile. Otherwise, the `application` profiles of the frameworks it requires
-  or imports apply, together when there are several. A profile that another matching one extends,
+  directly (not `// indirect`) or imports in an import declaration apply, together when there are
+  several. A profile that another matching one extends,
   such as `net-http` under `chi`, is not applied twice.
 - **What is refused.** A target with no Go file, or that no profile matches, is refused with the
   reason, rather than indexed into an empty attack surface.

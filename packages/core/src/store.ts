@@ -119,9 +119,32 @@ export class Store {
 
   // Writes a whole snapshot in one transaction, in canonical order.
   addSnapshot(graph: Graph, info: NewSnapshot = {}): number {
+    return this.write(graph, info, false).id
+  }
+
+  // Writes a snapshot unless a clean one of the same commit and ref, by the same indexer, is
+  // already stored (D20). The check and the write are one transaction, so two indexes running at
+  // once store it once.
+  addSnapshotOnce(graph: Graph, info: NewSnapshot): { id: number; existed: boolean } {
+    return this.write(graph, info, true)
+  }
+
+  private write(graph: Graph, info: NewSnapshot, once: boolean): { id: number; existed: boolean } {
     const g = canonical(graph)
     this.db.exec('BEGIN IMMEDIATE')
     try {
+      if (once && info.commit && !info.dirty) {
+        const existing = this.db
+          .prepare(
+            `SELECT id FROM snapshots WHERE commit_sha = ? AND dirty = 0 AND indexer IS ? AND ref IS ?
+             ORDER BY id DESC LIMIT 1`,
+          )
+          .get(info.commit, info.indexer ?? null, info.ref ?? null)
+        if (existing) {
+          this.db.exec('COMMIT')
+          return { id: Number(existing.id), existed: true }
+        }
+      }
       const { lastInsertRowid } = this.db
         .prepare(
           `INSERT INTO snapshots (ref, commit_sha, dirty, created_at, schema_version, profiles, indexer)
@@ -173,7 +196,7 @@ export class Store {
         )
       }
       this.db.exec('COMMIT')
-      return id
+      return { id, existed: false }
     } catch (error) {
       this.db.exec('ROLLBACK')
       throw error

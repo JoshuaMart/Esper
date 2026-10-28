@@ -7,9 +7,10 @@ served to hunting agents over MCP and explorable in a web interface.
 > Named after the Esper machine in *Blade Runner*, which Deckard uses to explore a photograph, zoom in
 > and bring out what nobody had seen.
 
-**Status: early development.** The documentation describes the target design; the code is at
-[M1](docs/src/content/docs/roadmap.md#m1--the-core-on-go-and-chi): Go applications on chi or
-`net/http`, and chi itself, can be indexed from the command line.
+**Status: early development.** The documentation describes the target design.
+[M1](docs/src/content/docs/roadmap.md#m1--the-core-on-go-and-chi) is done: Go applications on chi
+or `net/http`, and chi itself, can be indexed from the command line. Next is
+[M2](docs/src/content/docs/roadmap.md#m2--mcp-and-notes), MCP and notes.
 
 ## Documentation
 

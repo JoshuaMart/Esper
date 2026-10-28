@@ -361,7 +361,8 @@ function agreed(types: (Located | undefined)[]): Located | undefined {
 // through it; `dispose` frees the syntax trees.
 export class GoProgram {
   readonly files: ParsedFile[]
-  readonly module: string | undefined
+  // The modules of the target, by the folder their `go.mod` is in; the longest path wins.
+  readonly modules: GoModuleRoot[]
   // Types whose methods return the type itself: `db.Where(…).First(…)` keeps `*gorm.DB`.
   private readonly fluent: Set<string>
   // What functions outside the module return first: `encoding/json#NewDecoder` gives
@@ -369,6 +370,8 @@ export class GoProgram {
   private readonly returns: Map<string, string>
   // Functions outside the module that return their string argument normalised.
   private readonly keeps: Set<string>
+  // String constants of packages outside the module: `net/http#MethodGet` is `GET`.
+  private readonly constants: Map<string, string>
   private readonly functions: Map<string, Decl[]>
   private readonly methods: Map<string, Decl[]>
   private readonly methodsByName: Map<string, Decl[]>
@@ -380,30 +383,41 @@ export class GoProgram {
   static async load(
     files: GoFile[],
     options: {
+      // One module at the target's root, or every module with its folder.
       module?: string
+      modules?: GoModuleRoot[]
       fluent?: Iterable<string>
       returns?: Iterable<[string, string]>
       keeps?: Iterable<string>
+      constants?: Iterable<[string, string]>
     } = {},
   ): Promise<GoProgram> {
     const parsed = await Promise.all(files.map(parseFile))
-    return new GoProgram(parsed, options.module, {
+    const modules = options.modules ?? (options.module ? [{ path: options.module, dir: '.' }] : [])
+    return new GoProgram(parsed, modules, {
       fluent: new Set(options.fluent ?? []),
       returns: new Map(options.returns ?? []),
       keeps: new Set(options.keeps ?? []),
+      constants: new Map(options.constants ?? []),
     })
   }
 
   private constructor(
     parsed: ParsedFile[],
-    module: string | undefined,
-    library: { fluent: Set<string>; returns: Map<string, string>; keeps: Set<string> },
+    modules: GoModuleRoot[],
+    library: {
+      fluent: Set<string>
+      returns: Map<string, string>
+      keeps: Set<string>
+      constants: Map<string, string>
+    },
   ) {
     this.fluent = library.fluent
     this.returns = library.returns
     this.keeps = library.keeps
+    this.constants = library.constants
     this.files = parsed.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
-    this.module = module
+    this.modules = [...modules].sort((a, b) => b.path.length - a.path.length)
     this.byPath = new Map(this.files.map((file) => [file.path, file]))
 
     // Several declarations under one key are build variants (`sock_unix.go`, `sock_windows.go`):
@@ -459,11 +473,13 @@ export class GoProgram {
   }
 
   internalDir(importPath: string): string | undefined {
-    if (!this.module) return undefined
-    if (importPath === this.module) return '.'
-    return importPath.startsWith(`${this.module}/`)
-      ? importPath.slice(this.module.length + 1)
-      : undefined
+    for (const module of this.modules) {
+      if (importPath === module.path) return module.dir
+      if (importPath.startsWith(`${module.path}/`)) {
+        return posix.join(module.dir, importPath.slice(module.path.length + 1))
+      }
+    }
+    return undefined
   }
 
   // The innermost declaration that encloses `node`, or the declaration `node` is.
@@ -552,52 +568,68 @@ export class GoProgram {
       const importPath = operand ? this.packageOf(operand, file) : undefined
       dir = importPath ? this.internalDir(importPath) : undefined
       name = node.childForFieldName('field')?.text
+      const known = this.constants.get(`${importPath}#${name}`)
+      if (importPath && dir === undefined && known !== undefined) return known
     }
     if (!name || dir === undefined) return undefined
-    for (const other of this.filesIn(dir)) {
-      for (const top of present(other.tree.rootNode.namedChildren)) {
+    const [declared] = this.packageValues(dir).declared.get(name) ?? []
+    return declared ? this.stringValue(declared.value, declared.file) : undefined
+  }
+
+  // The values a package's own constants and variables get: where they are declared, and, for
+  // variables, where they are assigned. Built once per package.
+  private readonly values = new Map<string, PackageValues>()
+
+  private packageValues(dir: string): PackageValues {
+    let found = this.values.get(dir)
+    if (found) return found
+    found = { declared: new Map(), assigned: new Map() }
+    const add = (map: Map<string, PackageValue[]>, name: string, entry: PackageValue) =>
+      map.set(name, [...(map.get(name) ?? []), entry])
+    for (const file of this.filesIn(dir)) {
+      for (const top of present(file.tree.rootNode.namedChildren)) {
         if (top.type !== 'const_declaration' && top.type !== 'var_declaration') continue
         for (const spec of present(top.descendantsOfType(['const_spec', 'var_spec']))) {
-          const declared = names(spec)
-          const value = spec.childForFieldName('value')?.namedChildren[declared.indexOf(name)]
-          if (declared.includes(name) && value) return this.stringValue(value, other)
+          const values = spec.childForFieldName('value')?.namedChildren ?? []
+          names(spec).forEach((name, i) => {
+            const value = values[i]
+            if (value)
+              add(found.declared, name, { value, file, variable: spec.type === 'var_spec' })
+          })
         }
       }
+      for (const assignment of present(
+        file.tree.rootNode.descendantsOfType('assignment_statement'),
+      )) {
+        const left = present(assignment.childForFieldName('left')?.namedChildren ?? [])
+        const right = assignment.childForFieldName('right')?.namedChildren ?? []
+        left.forEach((target, i) => {
+          const value = right[i]
+          if (target.type === 'identifier' && value && !declaredAt(target.text, target)) {
+            add(found.assigned, target.text, { value, file, variable: true })
+          }
+        })
+      }
     }
-    return undefined
+    this.values.set(dir, found)
+    return found
   }
 
   // What a package variable holding a function is assigned: `DefaultLogger = RequestLogger(…)`
   // makes a call to `DefaultLogger` a guess to `RequestLogger`, whose result it holds.
   assigned(fn: Node, file: ParsedFile): Target[] | undefined {
     if (fn.type !== 'identifier' || declaredAt(fn.text, fn)) return undefined
+    const { declared, assigned } = this.packageValues(file.dir)
+    const values = [
+      ...(declared.get(fn.text) ?? []).filter((v) => v.variable),
+      ...(assigned.get(fn.text) ?? []),
+    ]
     const found: Target[] = []
-    for (const other of this.filesIn(file.dir)) {
-      const values: Node[] = []
-      for (const top of present(other.tree.rootNode.namedChildren)) {
-        if (top.type !== 'var_declaration') continue
-        for (const spec of present(top.descendantsOfType('var_spec'))) {
-          const index = names(spec).indexOf(fn.text)
-          const value = spec.childForFieldName('value')?.namedChildren[index]
-          if (index >= 0 && value) values.push(value)
-        }
-      }
-      for (const assignment of present(
-        other.tree.rootNode.descendantsOfType('assignment_statement'),
-      )) {
-        const left = present(assignment.childForFieldName('left')?.namedChildren ?? [])
-        const index = left.findIndex(
-          (n) => n.type === 'identifier' && n.text === fn.text && !declaredAt(n.text, n),
-        )
-        const value = assignment.childForFieldName('right')?.namedChildren[index]
-        if (index >= 0 && value) values.push(value)
-      }
-      for (const value of values) {
-        const named = value.type === 'call_expression' ? value.childForFieldName('function') : value
-        for (const target of (named ? this.targets(named, other) : undefined) ?? []) {
-          const reason = `${fn.text} is assigned ${value.text.replace(/\s+/g, ' ').slice(0, 80)}`
-          found.push({ ...target, resolution: 'guessed', reason })
-        }
+    for (const { value, file: other } of values) {
+      const named = value.type === 'call_expression' ? value.childForFieldName('function') : value
+      for (const target of (named ? this.targets(named, other) : undefined) ?? []) {
+        const reason = `${fn.text} is assigned ${value.text.replace(/\s+/g, ' ').slice(0, 80)}`
+        found.push({ ...target, resolution: 'guessed', reason })
       }
     }
     return found.length > 0 ? found : undefined
@@ -903,6 +935,23 @@ function returned(node: Node): boolean {
   return throughValues.has(parent.type) && returned(parent)
 }
 
+interface PackageValue {
+  value: Node
+  file: ParsedFile
+  variable: boolean
+}
+
+interface PackageValues {
+  declared: Map<string, PackageValue[]>
+  assigned: Map<string, PackageValue[]>
+}
+
+export interface GoModuleRoot {
+  path: string
+  // The folder of its `go.mod`, relative to the target's root: `.` at the root.
+  dir: string
+}
+
 export interface Target {
   ref: string
   // The declaration of the module, or the external symbol's name as written (`chi.NewRouter`).
@@ -914,7 +963,7 @@ export interface Target {
 
 export async function extractGo(
   files: GoFile[],
-  options: { module?: string } = {},
+  options: { module?: string; modules?: GoModuleRoot[] } = {},
 ): Promise<{ graph: Graph; stats: CallStats }> {
   const program = await GoProgram.load(files, options)
   try {

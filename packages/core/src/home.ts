@@ -157,19 +157,26 @@ export class Home {
     }
     const goFiles = snapshot.files.filter((f) => f.path.endsWith('.go'))
     const { graph, stats } = await indexGo(goFiles, {
-      ...(detection.module.path ? { module: detection.module.path } : {}),
+      modules: detection.modules,
       profile: detection.profile,
     })
     graph.skips.push(...snapshot.skips)
     const store = new Store(this.database(name))
     try {
-      const id = store.addSnapshot(graph, {
+      const info = {
         ...(snapshot.ref ? { ref: snapshot.ref } : {}),
         ...(snapshot.commit ? { commit: snapshot.commit } : {}),
         dirty: snapshot.dirty,
         profiles: detection.profile.sources,
         indexer,
-      })
+      }
+      const { id, existed } = options.force
+        ? { id: store.addSnapshot(graph, info), existed: false }
+        : store.addSnapshotOnce(graph, info)
+      // Another index of the same commit finished first: its snapshot is the one kept.
+      if (existed) {
+        return { id, snapshot, profiles: detection.profile.sources, unchanged: true }
+      }
       return { id, snapshot, stats, profiles: detection.profile.sources }
     } finally {
       store.close()

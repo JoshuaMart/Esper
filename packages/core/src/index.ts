@@ -1,9 +1,10 @@
-export { type Detection, detectProfile, type GoModule, parseGoMod } from './detect.ts'
+export { type Detection, detectProfile, type GoModule, goImports, parseGoMod } from './detect.ts'
 export {
   type CallStats,
   defaultPackageName,
   extractGo,
   type GoFile,
+  type GoModuleRoot,
   GoProgram,
   modulePath,
 } from './go.ts'
