@@ -1,0 +1,135 @@
+# Wakapi, a chi application, counted by hand (D16) from main.go and every RegisterRoutes.
+# Two entries are kept with what the index could not read, and are expected as such:
+# - `GET /${router}/leaderboard`: its handler is chosen by a generic helper
+#   (`condition.Ternary[bool, routes.Handler](…)`), so the router it registers on is not bound;
+#   its real path is `GET /leaderboard`.
+# - `OPTIONS /api/${route.Pattern}`: one OPTIONS route per route already in the tree that
+#   `r.Routes()` returns at run time, which depends on the order handlers register in.
+# The five /debug/pprof routes are registered by `import _ "net/http/pprof"` on the default mux,
+# which main.go serves on 127.0.0.1:6060 when profiling is enabled.
+target: https://github.com/muety/wakapi
+commit: aba6a4475a797fd4325fc3126c1df33d2b00ff85
+kind: application
+entries:
+  - { ref: "route:GET /", at: "routes/home.go:40" }
+  - { ref: "route:GET /${router}/leaderboard", at: "routes/leaderboard.go:47" }
+  - { ref: "route:GET /api", at: "routes/api/root.go:18" }
+  - { ref: "route:GET /api/activity/chart/{userWithExt}", at: "routes/api/activity.go:43" }
+  - { ref: "route:GET /api/avatar/{hash}.svg", at: "routes/api/avatar.go:34" }
+  - { ref: "route:GET /api/badge/{user}/{rest...}", at: "routes/api/badge.go:40" }
+  - { ref: "route:GET /api/captcha/{id}.png", at: "routes/api/captcha.go:20" }
+  - {
+      ref: "route:GET /api/compat/shields/v1/{user}/{rest...}",
+      at: "routes/compat/shields/v1/badge.go:38",
+    }
+  - {
+      ref: "route:GET /api/compat/wakatime/v1/leaders",
+      at: "routes/compat/wakatime/v1/leaders.go:38",
+    }
+  - {
+      ref: "route:GET /api/compat/wakatime/v1/users/{user}",
+      at: "routes/compat/wakatime/v1/users.go:32",
+    }
+  - {
+      ref: "route:GET /api/compat/wakatime/v1/users/{user}/all_time_since_today",
+      at: "routes/compat/wakatime/v1/all_time.go:36",
+    }
+  - {
+      ref: "route:GET /api/compat/wakatime/v1/users/{user}/heartbeats",
+      at: "routes/compat/wakatime/v1/heartbeat.go:39",
+    }
+  - {
+      ref: "route:GET /api/compat/wakatime/v1/users/{user}/projects",
+      at: "routes/compat/wakatime/v1/projects.go:40",
+    }
+  - {
+      ref: "route:GET /api/compat/wakatime/v1/users/{user}/projects/{id}",
+      at: "routes/compat/wakatime/v1/projects.go:41",
+    }
+  - {
+      ref: "route:GET /api/compat/wakatime/v1/users/{user}/stats",
+      at: "routes/compat/wakatime/v1/stats.go:42",
+    }
+  - {
+      ref: "route:GET /api/compat/wakatime/v1/users/{user}/stats/{range}",
+      at: "routes/compat/wakatime/v1/stats.go:38",
+    }
+  - {
+      ref: "route:GET /api/compat/wakatime/v1/users/{user}/statusbar/{range}",
+      at: "routes/compat/wakatime/v1/statusbar.go:43",
+    }
+  - {
+      ref: "route:GET /api/compat/wakatime/v1/users/{user}/summaries",
+      at: "routes/compat/wakatime/v1/summaries.go:39",
+    }
+  - {
+      ref: "route:GET /api/compat/wakatime/v1/users/{user}/user_agents",
+      at: "routes/compat/wakatime/v1/user_agents.go:33",
+    }
+  - { ref: "route:GET /api/health", at: "routes/api/health.go:27" }
+  - { ref: "route:GET /api/metrics", at: "routes/api/metrics.go:95" }
+  - { ref: "route:GET /api/summary", at: "routes/api/summary.go:31" }
+  - {
+      ref: "route:GET /api/users/{user}/statusbar/{range}",
+      at: "routes/compat/wakatime/v1/statusbar.go:41",
+    }
+  - { ref: "route:GET /api/v1/users/{user}/stats", at: "routes/compat/wakatime/v1/stats.go:41" }
+  - {
+      ref: "route:GET /api/v1/users/{user}/stats/{range}",
+      at: "routes/compat/wakatime/v1/stats.go:37",
+    }
+  - {
+      ref: "route:GET /api/v1/users/{user}/statusbar/{range}",
+      at: "routes/compat/wakatime/v1/statusbar.go:42",
+    }
+  - { ref: "route:GET /assets/{rest...}", at: "main.go:347" }
+  - { ref: "route:GET /contribute.json", at: "main.go:346" }
+  - { ref: "route:GET /debug/pprof/cmdline", at: "main.go:11" }
+  - { ref: "route:GET /debug/pprof/profile", at: "main.go:11" }
+  - { ref: "route:GET /debug/pprof/symbol", at: "main.go:11" }
+  - { ref: "route:GET /debug/pprof/trace", at: "main.go:11" }
+  - { ref: "route:GET /debug/pprof/{rest...}", at: "main.go:11" }
+  - { ref: "route:GET /imprint", at: "routes/imprint.go:25" }
+  - { ref: "route:GET /login", at: "routes/login.go:49" }
+  - { ref: "route:GET /oidc/{provider}/callback", at: "routes/login.go:79" }
+  - { ref: "route:GET /oidc/{provider}/login", at: "routes/login.go:78" }
+  - { ref: "route:GET /projects", at: "routes/projects.go:40" }
+  - { ref: "route:GET /reset-password", at: "routes/login.go:70" }
+  - { ref: "route:GET /set-password", at: "routes/login.go:67" }
+  - { ref: "route:GET /settings", at: "routes/settings.go:114" }
+  - { ref: "route:GET /settings/webauthn/options", at: "routes/settings.go:115" }
+  - { ref: "route:GET /setup", at: "routes/setup.go:35" }
+  - { ref: "route:GET /signup", at: "routes/login.go:58" }
+  - { ref: "route:GET /subscription/cancel", at: "routes/subscription.go:105" }
+  - { ref: "route:GET /subscription/success", at: "routes/subscription.go:104" }
+  - { ref: "route:GET /summary", at: "routes/summary.go:51" }
+  - { ref: "route:GET /swagger-ui", at: "main.go:348" }
+  - { ref: "route:GET /swagger-ui/{rest...}", at: "main.go:349" }
+  - { ref: "route:GET /unsubscribe", at: "routes/misc.go:28" }
+  - { ref: "route:GET /webauthn/options", at: "routes/login.go:82" }
+  - { ref: "route:OPTIONS /api/${route.Pattern}", at: "routes/api/heartbeat.go:55" }
+  - {
+      ref: "route:POST /api/compat/wakatime/v1/users/{user}/heartbeats",
+      at: "routes/api/heartbeat.go:50",
+    }
+  - {
+      ref: "route:POST /api/compat/wakatime/v1/users/{user}/heartbeats.bulk",
+      at: "routes/api/heartbeat.go:51",
+    }
+  - { ref: "route:POST /api/heartbeat", at: "routes/api/heartbeat.go:44" }
+  - { ref: "route:POST /api/heartbeats", at: "routes/api/heartbeat.go:45" }
+  - { ref: "route:POST /api/plugins/errors", at: "routes/api/diagnostics.go:29" }
+  - { ref: "route:POST /api/users/{user}/heartbeats", at: "routes/api/heartbeat.go:46" }
+  - { ref: "route:POST /api/users/{user}/heartbeats.bulk", at: "routes/api/heartbeat.go:47" }
+  - { ref: "route:POST /api/v1/users/{user}/heartbeats", at: "routes/api/heartbeat.go:48" }
+  - { ref: "route:POST /api/v1/users/{user}/heartbeats.bulk", at: "routes/api/heartbeat.go:49" }
+  - { ref: "route:POST /login", at: "routes/login.go:52" }
+  - { ref: "route:POST /logout", at: "routes/login.go:93" }
+  - { ref: "route:POST /reset-password", at: "routes/login.go:73" }
+  - { ref: "route:POST /set-password", at: "routes/login.go:68" }
+  - { ref: "route:POST /settings", at: "routes/settings.go:116" }
+  - { ref: "route:POST /signup", at: "routes/login.go:61" }
+  - { ref: "route:POST /subscription/checkout", at: "routes/subscription.go:114" }
+  - { ref: "route:POST /subscription/portal", at: "routes/subscription.go:115" }
+  - { ref: "route:POST /subscription/webhook", at: "routes/subscription.go:106" }
+  - { ref: "route:POST /webauthn/login", at: "routes/login.go:83" }

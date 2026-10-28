@@ -119,7 +119,7 @@ test('a project added by path is indexed into its own database, and its folder i
     assert.deepEqual(project.source, { path: dir })
     const { id, stats, profiles } = await home.index('shop', { ref: 'v1' })
     assert.deepEqual(profiles, ['net-http/application', 'chi/application'])
-    assert.equal(stats.entries, 10)
+    assert.equal(stats?.entries, 10)
     assert.deepEqual((await readdir(dir)).sort(), before)
     const store = new Store(home.database('shop'))
     assert.deepEqual(
@@ -128,6 +128,11 @@ test('a project added by path is indexed into its own database, and its folder i
     )
     assert.ok(store.graph(id).skips.some((s) => s.path === 'main_test.go'))
     store.close()
+    // The same commit, by the same Esper and profiles, is not indexed twice, unless forced.
+    const again = await home.index('shop', { ref: 'v1' })
+    assert.deepEqual([again.id, again.unchanged, again.stats], [id, true, undefined])
+    const forced = await home.index('shop', { ref: 'v1', force: true })
+    assert.notEqual(forced.id, id)
     await assert.rejects(home.add(dir, { name: 'shop' }), /already exists/)
     await assert.rejects(home.index('nope'), /no project named nope/)
   } finally {

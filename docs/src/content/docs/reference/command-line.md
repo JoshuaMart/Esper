@@ -11,7 +11,7 @@ lists those that exist. From the repository, `pnpm esper <command>` runs them fr
 | Command | Does |
 |---|---|
 | `esper add <path or git URL>` | adds a project. A path is read in place and never written; a URL is cloned into the project's folder. `--name` sets its name (by default, the folder's or the repository's), `--kind application\|framework` overrides the detection |
-| `esper index <project>` | indexes a snapshot. Without options, it reads the folder as it is. With `--ref <tag, branch or commit>`, it reads that ref from git and leaves the checkout alone |
+| `esper index <project>` | indexes a snapshot. Without options, it reads the folder as it is. With `--ref <tag, branch or commit>`, it reads that ref from git and leaves the checkout alone. A clean commit already indexed with the same profiles is not indexed again; `--force` does it anyway |
 | `esper list` | the projects, and the snapshots of each |
 
 An unknown option is refused, as is an option of another command. A refusal exits with code 1 and
@@ -27,9 +27,9 @@ chi: snapshot 2 (v5.3.2, 38939062c5df)
   profiles     net-http/application, chi/framework
   files        35 read
   skipped      27: .github/ (hidden), _examples/ (examples), context_test.go (tests), …
-  entry points 29
-  call edges   539, 94.6 % resolved; 107 calls without an edge
-  reads        49, signals on entry points 8
+  entry points 40
+  call edges   540, 94.4 % resolved; 106 calls without an edge
+  reads        55, signals on entry points 10
 ```
 
 ## Where projects live
@@ -63,5 +63,6 @@ projects/<name>/checkout/      its clone, for a project added by URL
   monitor turned off, and only for commands that run none of its filters (`ls-files`, `ls-tree`,
   `cat-file` without `--filters`, `rev-parse`). A clone brings no hooks.
 
-Each index reads every file again; reading only the changed ones
-([D11](/decisions/#d11--indexing-rules)) is still to come.
+Each index reads every file again, which takes about a second for a few hundred files
+([D20](/decisions/#d20--a-reindex-reads-the-whole-target)). An error says what failed in one line;
+`ESPER_DEBUG=1` shows where it came from.

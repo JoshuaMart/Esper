@@ -1,6 +1,8 @@
+import { createHash } from 'node:crypto'
 import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
+import pkg from '../package.json' with { type: 'json' }
 import { detectProfile } from './detect.ts'
 import { type IndexStats, indexGo } from './go-index.ts'
 import { loadProfiles } from './profile.ts'
@@ -106,11 +108,19 @@ export class Home {
     return project
   }
 
-  // Indexes a snapshot of a project: its checkout as it is, or a git ref.
+  // Indexes a snapshot of a project: its checkout as it is, or a git ref. A commit already
+  // indexed, clean, by the same Esper with the same profiles is not indexed again (D20), unless
+  // `force` is set; the result then has no stats.
   async index(
     name: string,
-    options: { ref?: string } = {},
-  ): Promise<{ id: number; snapshot: TargetSnapshot; stats: IndexStats; profiles: string[] }> {
+    options: { ref?: string; force?: boolean } = {},
+  ): Promise<{
+    id: number
+    snapshot: TargetSnapshot
+    stats?: IndexStats
+    profiles: string[]
+    unchanged?: boolean
+  }> {
     const project = await this.project(name)
     const dir = this.sourceDir(project)
     if (options.ref && !(await isGitRepository(dir))) {
@@ -121,6 +131,30 @@ export class Home {
       ...(project.kind ? { kind: project.kind } : {}),
     })
     if ('refused' in detection) throw new EsperError(`refused: ${detection.refused}`)
+    const library = await readFile(new URL('../queries/go/library.yaml', import.meta.url), 'utf8')
+    const indexer = createHash('sha256')
+      .update(JSON.stringify([pkg.version, detection.profile, library]))
+      .digest('hex')
+    if (!options.force && snapshot.commit && !snapshot.dirty) {
+      const store = new Store(this.database(name))
+      try {
+        const same = store
+          .snapshots()
+          .reverse()
+          .find(
+            (s) =>
+              s.commit === snapshot.commit &&
+              !s.dirty &&
+              s.indexer === indexer &&
+              (s.ref ?? undefined) === snapshot.ref,
+          )
+        if (same) {
+          return { id: same.id, snapshot, profiles: detection.profile.sources, unchanged: true }
+        }
+      } finally {
+        store.close()
+      }
+    }
     const goFiles = snapshot.files.filter((f) => f.path.endsWith('.go'))
     const { graph, stats } = await indexGo(goFiles, {
       ...(detection.module.path ? { module: detection.module.path } : {}),
@@ -134,6 +168,7 @@ export class Home {
         ...(snapshot.commit ? { commit: snapshot.commit } : {}),
         dirty: snapshot.dirty,
         profiles: detection.profile.sources,
+        indexer,
       })
       return { id, snapshot, stats, profiles: detection.profile.sources }
     } finally {

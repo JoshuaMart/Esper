@@ -23,7 +23,15 @@ test('a snapshot reads back as the graph that was written, in canonical order', 
   })
   assert.deepEqual(store.graph(id), canonical(graph))
   assert.deepEqual(store.snapshots(), [
-    { id, ref: 'v1', commit: 'abc', dirty: false, createdAt: '2026-10-28T00:00:00Z', profiles: [] },
+    {
+      id,
+      ref: 'v1',
+      commit: 'abc',
+      dirty: false,
+      createdAt: '2026-10-28T00:00:00Z',
+      profiles: [],
+      indexer: null,
+    },
   ])
   store.close()
 })

@@ -69,7 +69,6 @@ function chainFrom(node: Node): { field?: string; args?: Node[]; node: Node }[] 
 function extractReads(program: GoProgram, profile: ResolvedProfile): Fact[] {
   const facts: Fact[] = []
   const source = `tree-sitter:${profile.name}`
-  const [requestPath, requestType] = (profile.request ?? '').split('#')
   const chains = profile.reads
     .filter((r): r is Extract<ReadRule, { chain: string }> => 'chain' in r)
     .map((rule) => ({ rule, items: parseChain(rule.chain) }))
@@ -93,47 +92,40 @@ function extractReads(program: GoProgram, profile: ResolvedProfile): Fact[] {
   }
 
   for (const file of program.files) {
-    // Reads on the request: the longest chain rule that its fields and calls follow.
-    if (requestPath && requestType) {
-      for (const id of present(file.tree.rootNode.descendantsOfType('identifier'))) {
-        const parent = id.parent
-        if (
-          parent?.type !== 'selector_expression' ||
-          parent.childForFieldName('operand')?.id !== id.id
-        ) {
-          continue
-        }
-        if (!declaredAt(id.text, id)) continue
-        const type = program.typeOf(id, file)
-        if (
-          !type ||
-          !('importPath' in type) ||
-          type.importPath !== requestPath ||
-          type.name !== requestType
-        ) {
-          continue
-        }
-        const observed = chainFrom(id)
-        for (const { rule, items } of chains) {
-          if (items.length > observed.length) continue
-          const fits = items.every((item, i) => {
-            const seen = observed[i]
-            return item.field !== undefined ? seen?.field === item.field : seen?.args !== undefined
-          })
-          if (!fits) continue
-          // `r.RemoteAddr = ip` writes the request; it reads nothing.
-          const outer = observed[items.length - 1]?.node
-          const list = outer?.parent
-          const assigned =
-            list?.type === 'expression_list' &&
-            list.parent?.type === 'assignment_statement' &&
-            list.parent.childForFieldName('left')?.id === list.id
-          if (assigned) break
-          const named = items.findIndex((item) => item.call?.name)
-          const name = named < 0 ? undefined : program.stringValue(observed[named]?.args?.[0], file)
-          add(file, id, rule.read, name)
-          break
-        }
+    // Reads on the request, or on a value that carries it: the longest chain rule that the
+    // value's fields and calls follow.
+    for (const id of present(file.tree.rootNode.descendantsOfType('identifier'))) {
+      const parent = id.parent
+      if (
+        parent?.type !== 'selector_expression' ||
+        parent.childForFieldName('operand')?.id !== id.id
+      ) {
+        continue
+      }
+      if (!declaredAt(id.text, id)) continue
+      const type = program.typeOf(id, file)
+      if (!type || !('importPath' in type)) continue
+      const typeName = `${type.importPath}#${type.name}`
+      const observed = chainFrom(id)
+      for (const { rule, items } of chains) {
+        if ((rule.on ?? profile.request) !== typeName || items.length > observed.length) continue
+        const fits = items.every((item, i) => {
+          const seen = observed[i]
+          return item.field !== undefined ? seen?.field === item.field : seen?.args !== undefined
+        })
+        if (!fits) continue
+        // `r.RemoteAddr = ip` writes the request; it reads nothing.
+        const outer = observed[items.length - 1]?.node
+        const list = outer?.parent
+        const assigned =
+          list?.type === 'expression_list' &&
+          list.parent?.type === 'assignment_statement' &&
+          list.parent.childForFieldName('left')?.id === list.id
+        if (assigned) break
+        const named = items.findIndex((item) => item.call?.name)
+        const name = named < 0 ? undefined : program.stringValue(observed[named]?.args?.[0], file)
+        add(file, id, rule.read, name)
+        break
       }
     }
     // Reads through a function that takes the request, or a value derived from it.

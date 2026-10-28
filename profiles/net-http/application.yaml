@@ -17,6 +17,18 @@ routers:
     methods:
       - { name: Handle, does: route, method: pattern }
       - { name: HandleFunc, does: route, method: pattern }
+    # Imported for their side effects, these packages register handlers on the default mux.
+    registers:
+      - import: net/http/pprof
+        routes:
+          - { pattern: GET /debug/pprof/, handler: net/http/pprof#Index }
+          - { pattern: GET /debug/pprof/cmdline, handler: net/http/pprof#Cmdline }
+          - { pattern: GET /debug/pprof/profile, handler: net/http/pprof#Profile }
+          - { pattern: GET /debug/pprof/symbol, handler: net/http/pprof#Symbol }
+          - { pattern: GET /debug/pprof/trace, handler: net/http/pprof#Trace }
+      - import: expvar
+        routes:
+          - { pattern: /debug/vars, handler: expvar#Handler }
 reads:
   - { chain: Header.Get(name), read: header }
   - { chain: Header.Values(name), read: header }
@@ -28,6 +40,9 @@ reads:
   - { chain: URL.Query(), read: query }
   - { chain: URL.RawQuery, read: query }
   - { chain: URL.Path, read: path }
+  - { chain: URL.EscapedPath(), read: path }
+  - { chain: URL.RequestURI(), read: path }
+  - { chain: RequestURI, read: path }
   - { chain: URL.RawPath, read: path }
   - { chain: PathValue(name), read: path }
   - { chain: FormValue(name), read: form }
@@ -43,3 +58,5 @@ reads:
   - { chain: RemoteAddr, read: remoteaddr }
   - { chain: Method, read: method }
   - { chain: Context().Value(name), read: context }
+  # A request-scoped value read from a context the request handed on.
+  - { on: context#Context, chain: Value(name), read: context }

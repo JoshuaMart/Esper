@@ -50,8 +50,8 @@ Everything the index needs, on one language and one framework:
   ([D9](/decisions/#d9--storage-one-sqlite-database-per-project-outside-the-target));
 - the profile format and its validation, and the Go queries
   ([D10](/decisions/#d10--frameworks-as-profiles));
-- the indexing rules: skips recorded, refusals with a reason, incremental reindex
-  ([D11](/decisions/#d11--indexing-rules));
+- the indexing rules: skips recorded, refusals with a reason, a commit not indexed twice
+  ([D11](/decisions/#d11--indexing-rules), [D20](/decisions/#d20--a-reindex-reads-the-whole-target));
 - the two chi profiles, application and framework, over `net/http`
   ([D5](/decisions/#d5--two-kinds-of-target-applications-and-the-frameworks-themselves));
 - the commands `esper add`, `esper index` and `esper list`
@@ -66,7 +66,7 @@ Everything the index needs, on one language and one framework:
   in application mode, match their hand count, recorded in `profiles/chi/counts/`: no entry point
   missing, none invented;
 - each index reports its share of resolved edges, measured on chi 5.3.2 against the 262 guessed
-  edges out of 486 that the decisions cite;
+  edges out of 486 that the decisions cite: 30 of 540;
 - indexing the same commit twice gives the same snapshot;
 - a target without a matching profile is refused, with its reason.
 

@@ -28,6 +28,7 @@ says why. Versions and behaviours cited here were checked on 2026-10-28.
 | [D17](#d17--model-enrichment-claims-beside-the-facts) | Model enrichment: claims beside the facts, bounded first, exploring when needed | settled |
 | [D18](#d18--running-esper-one-home-many-projects) | Running Esper: one home, many projects, one project per MCP connection | settled |
 | [D19](#d19--past-vulnerabilities-advisories-linked-to-the-code-they-touched) | Past vulnerabilities: advisories of medium severity or more, linked to the code their fix touched | settled |
+| [D20](#d20--a-reindex-reads-the-whole-target) | A reindex reads the whole target; an unchanged commit is not indexed again | settled |
 
 ## D1 — What Esper is and is not
 
@@ -350,7 +351,8 @@ differ because the questions differ: what an application exposes, and what the f
   profile, is refused with the reason. An empty list would pass for an empty attack surface.
 - **Say what was skipped.** Tests, examples, fixtures and vendored code are skipped by default, and
   every skipped folder is listed in the index result.
-- **Incremental.** A reindex parses only the files whose hash changed.
+- **Reindexing.** A reindex reads the whole target; a commit already indexed is not indexed again
+  ([D20](#d20--a-reindex-reads-the-whole-target), which replaces an incremental reindex).
 - **Deterministic.** The same code and the same profiles give the same graph, byte for byte.
 
 **Why.** The target is untrusted: its build scripts, its dependencies and its instruction files
@@ -379,7 +381,7 @@ tree-sitter reads syntax: it sees that `svc.update(id)` is called, not which `up
    scip-go ([roadmap](/roadmap/)). Measured on chi 5.3.2 with an earlier tree-sitter prototype of
    the call graph: 486 edges, of which 262 are guessed. More than half of the paths an agent follows
    would rest on a guess, which is too much to wait for. Esper's own index, which types what the
-   syntax states, guesses 29 of 539 ([graph schema](/reference/graph/#go)); SCIP is still what
+   syntax states, guesses 30 of 540 ([graph schema](/reference/graph/#go)); SCIP is still what
    resolves the rest, and the calls left without an edge.
 2. **Dataflow comes later, on demand**: run for a question (this read, this sink), not for every
    index, and through Joern or CodeQL depending on the language.
@@ -771,3 +773,27 @@ mostly hardening and noise in a ranking meant to point at the code worth reading
 
 **Rules out.** Advisories written as notes; links proposed by a model stored as facts; scanning the
 target's dependencies for known vulnerabilities, which is a dependency scanner's job.
+
+## D20 — A reindex reads the whole target
+
+This replaces the incremental reindex of [D11](#d11--indexing-rules), which said that a reindex
+parses only the files whose hash changed.
+
+**Decision.** Each index reads and parses every file of the target. A commit that is already
+indexed, clean, by the same version of Esper with the same profiles and library data, is not
+indexed again: `esper index` says which snapshot already holds it, and `--force` indexes it again.
+
+**Why.**
+- **Measured.** A full index takes 0.3 s for chi 5.3.2 (35 files) and 1.5 s for Wakapi (240 files),
+  well below what would make anyone wait.
+- **Not sound as stated.** What a file states depends on other files: a call is resolved from
+  declarations elsewhere, a route's path from the routers it is mounted under, an entry's reads from
+  everything it reaches. Reusing the facts of an unchanged file would keep facts that a change
+  elsewhere made wrong. Doing it right means tracking those dependencies, a cost to pay only when a
+  target makes indexing slow.
+- **When to revisit.** When a target takes more than about 30 seconds to index, likely a framework
+  the size of Next.js: parsing could then be cached per file hash, with the cross-file steps still
+  run on the whole snapshot.
+
+**Rules out.** Reusing facts from a previous snapshot for files that did not change.
+

@@ -107,14 +107,15 @@ and through the functions that `library.yaml` says return their argument normali
 `var xRealIP = http.CanonicalHeaderKey("X-Real-IP")` makes `r.Header.Get(xRealIP)` read
 `header.X-Real-IP`.
 
-Measured on chi 5.3.2: 29 entry points.
-- 27 are exported middleware and methods, among them `middleware.RealIP`, which reads
-  `header.True-Client-IP`, `header.X-Forwarded-For` and `header.X-Real-IP` and rewrites the
-  request's `RemoteAddr` (`retained-mutation`).
-- 2 are the router's own handlers: `Mux.ServeHTTP` and `Mux.routeHTTP`, the latter reached only
-  through a handler the router builds at run time.
-
-Every signal on them was checked by hand.
+Measured on chi 5.3.2: 40 entry points, the same 40 as its hand count.
+- **Middleware**, such as `middleware.RealIP`, which reads `header.True-Client-IP`,
+  `header.X-Forwarded-For` and `header.X-Real-IP` and rewrites the request's `RemoteAddr`
+  (`retained-mutation`).
+- **Accessors of the request's context**, such as `chi.URLParam` and `middleware.GetReqID`, which
+  read values through `ctx.Value`.
+- **The router's own handlers**: `Mux.ServeHTTP`, `Mux.routeHTTP`, reached only through a handler
+  the router builds at run time, and `Mux.Mount` and `Mux.Route`, whose mount handler shifts the
+  path for the subrouter.
 
 ## How routes are read
 
@@ -136,7 +137,27 @@ When the index cannot read something, it keeps the route and says what it could 
 - **A handler that is a method of a value the index cannot type**, such as `fs.ServeHTTP` where
   `fs := http.FileServer(…)`, is named by the call that built the value: `ext:net/http#FileServer`.
 
-Measured on [Wakapi](https://github.com/muety/wakapi) at `aba6a44`, 240 files: 66 routes in under
-a second, every handler named, one route under `/${router}` (its handler is registered through a
-generic helper). The hand count of [M1](/roadmap/#m1--the-core-on-go-and-chi) is what says
-whether any route is missing.
+Measured on [Wakapi](https://github.com/muety/wakapi) at `aba6a44`, 240 files: 71 routes, every
+handler named, matching its hand count with two limits the count records:
+- **`GET /${router}/leaderboard`.** Its handler is chosen by a generic helper
+  (`condition.Ternary[bool, routes.Handler](…)`), so the router it registers on is not bound; the
+  real path is `/leaderboard`.
+- **`OPTIONS /api/${route.Pattern}`.** It stands for one route per pattern that `r.Routes()`
+  returns at run time. chi's tree is shared with the parent router there, so which patterns depends
+  on the order the handlers register in.
+
+The five `/debug/pprof` routes come from `import _ "net/http/pprof"`, which registers on the
+default mux; `net-http`'s `registers` lists what such imports add.
+
+## Hand counts
+
+Each profile is measured against targets counted by hand ([D16](/decisions/#d16--measured-against-hand-counted-targets)),
+in `profiles/<framework>/counts/<target>@<commit>.yaml`: the target, the commit, how it was
+counted, and each entry point with its citation. `pnpm fetch-targets` fetches each target at its
+commit into `$ESPER_TARGETS`, and the tests then index it and compare: no entry point missing,
+none invented. CI does both.
+
+| Target | Mode | Entry points |
+|---|---|---|
+| chi 5.3.2 | framework | 40 |
+| Wakapi `aba6a44` | application | 71, two of them with what the index could not read |

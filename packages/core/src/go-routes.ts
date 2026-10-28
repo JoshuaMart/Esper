@@ -138,6 +138,44 @@ export class RouteInterpreter {
         if (decl.node.type !== 'func_literal') this.interpret(decl, file, new Map())
       }
     }
+    // Packages that register on the default router when imported.
+    for (const spec of this.profile.routers) {
+      const [defaulted] = spec.default ?? []
+      if (!defaulted) continue
+      for (const registration of spec.registers ?? []) {
+        for (const file of this.program.files) {
+          const imp = file.imports.find((i) => i.path === registration.import)
+          if (!imp) continue
+          const site = this.site(file, imp.node)
+          const router = this.router(`default:ext:${defaulted.split('#')[0]}`, spec, site)
+          for (const { pattern, handler } of registration.routes) {
+            const parsed = normalisePattern(pattern, spec.pattern)
+            const [path, symbol] = handler.split('#')
+            const route: Route = {
+              method: parsed.method ?? 'ANY',
+              path: parsed.path,
+              pattern,
+              handler: {
+                text: handler,
+                citation: site,
+                targets: [
+                  {
+                    ref: `ext:${handler}`,
+                    external: `${path?.split('/').at(-1)}.${symbol}`,
+                    resolution: 'resolved',
+                  },
+                ],
+              },
+              chain: [],
+              citation: site,
+              group: router.id,
+            }
+            if (!router.routes.some((r) => routeKey(r) === routeKey(route)))
+              router.routes.push(route)
+          }
+        }
+      }
+    }
     const routes: Route[] = []
     const walk = (router: Router, prefix: string, chain: Member[], seen: Set<number>) => {
       if (seen.has(router.id)) return

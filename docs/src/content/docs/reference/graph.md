@@ -71,6 +71,14 @@ A method of a type outside the module is named by its import path
 stated has none of the module's methods, so it gets no edge. Otherwise, when exactly one method of
 the module has that name, the call is **guessed** to be it, with the reason.
 
+Two more edges come from values rather than calls:
+- **A function that returns a function value** reaches it: `return compressor.Handler` is a
+  `calls` edge with `data.reference`, as a middleware factory reaches the handler it builds. A
+  function stored for later, as a router stores its handlers, is not reached this way.
+- **A call to a package variable holding a function** is a guess to what the package assigns it:
+  `DefaultLogger(next)`, where `init` sets `DefaultLogger = RequestLogger(…)`, is guessed to call
+  `RequestLogger`.
+
 A package of the module is known by the name its `package` clause declares, and a local variable
 that shadows an imported package's name is the variable. When two files of one package declare the
 same name, as build variants do (`sock_unix.go`, `sock_windows.go`), a call to it is a guess to each,
@@ -78,8 +86,8 @@ whatever order the files are read in.
 
 Measured on chi 5.3.2, its 35 non-test files:
 - 256 declarations;
-- 539 call edges, of which 29 are guessed (5.4 %), mostly calls through an interface;
-- 107 calls left without an edge, mostly to methods of values from the standard library whose type
+- 540 call edges, of which 30 are guessed (5.6 %), mostly calls through an interface;
+- 106 calls left without an edge, mostly to methods of values from the standard library whose type
   is not stated.
 
 The tree-sitter prototype cited in [D12](/decisions/#d12--precision-scip-right-after-the-first-index-dataflow-later)
@@ -128,11 +136,11 @@ What the facts say, and where they come from:
   (`gorm.DB`, so `db.Where(…).First(…)` keeps its type), and the first result type of common
   constructors outside the module (`json.NewDecoder` gives a `Decoder`).
 
-Measured on Wakapi at `aba6a44`, the 66 routes carry:
+Measured on Wakapi at `aba6a44`, the 71 routes carry:
 - `short-circuit`: 39, from its authentication middleware;
 - `sink-reachable`: 26, mostly redirects and template output;
-- `retained-mutation`: 10;
-- `data-read` and `data-write`: 3 each, through repositories behind interfaces;
+- `retained-mutation`: 11;
+- `data-read` and `data-write`: 4 each, through repositories behind interfaces;
 - `live-state`: 45, almost all from a template reload on the development path, which writes a
   package variable during a request. Lazily created singletons (`if x == nil { x = … }`, or
   `if x != nil { return x }` before it) do not count.

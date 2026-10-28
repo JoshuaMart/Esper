@@ -23,6 +23,12 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
+      # The hand-counted targets, at the commits they were counted at (D16).
+      - run: pnpm fetch-targets
+        env:
+          ESPER_TARGETS: ${{ runner.temp }}/targets
       - run: pnpm test
+        env:
+          ESPER_TARGETS: ${{ runner.temp }}/targets
       - run: pnpm esper --version
       - run: pnpm --filter @esper/docs build

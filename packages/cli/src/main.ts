@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 import { parseArgs } from 'node:util'
-import { EsperError, Home } from '@esper/core'
+import { Home } from '@esper/core'
 import pkg from '../package.json' with { type: 'json' }
 
 const usage = `Usage: esper <command> [options]
 
 Commands:
   add <path or git URL>   add a project; --name <name>, --kind application|framework
-  index <project>         index a snapshot of it; --ref <git ref> reads that ref, not the checkout
+  index <project>         index a snapshot of it; --ref <git ref> reads that ref, not the checkout;
+                          --force indexes a commit already indexed
   list                    the projects and their snapshots
 
 Options:
@@ -22,12 +23,13 @@ const options = {
   name: { type: 'string' },
   kind: { type: 'string' },
   ref: { type: 'string' },
+  force: { type: 'boolean' },
   version: { type: 'boolean' },
   help: { type: 'boolean' },
 } as const
 const commands: Record<string, (keyof typeof options)[]> = {
   add: ['name', 'kind'],
-  index: ['ref'],
+  index: ['ref', 'force'],
   list: [],
 }
 
@@ -85,14 +87,24 @@ async function main() {
     const [name] = rest
     if (!name || rest.length > 1) fail('index takes one project name')
     const ref = values.ref
-    const { id, snapshot, stats, profiles } = await home.index(name, ref ? { ref } : {})
+    const { id, snapshot, stats, profiles, unchanged } = await home.index(name, {
+      ...(ref ? { ref } : {}),
+      ...(values.force ? { force: true } : {}),
+    })
     const version = [
       snapshot.ref,
       snapshot.commit?.slice(0, 12),
       snapshot.dirty ? 'dirty' : undefined,
     ].filter(Boolean)
+    const label = `${name}: snapshot ${id}${version.length > 0 ? ` (${version.join(', ')})` : ''}`
+    if (unchanged || !stats) {
+      console.log(
+        `${label} already indexes this commit with these profiles; --force indexes it again`,
+      )
+      return
+    }
     const edges = stats.resolved + stats.guessed
-    console.log(`${name}: snapshot ${id}${version.length > 0 ? ` (${version.join(', ')})` : ''}`)
+    console.log(label)
     console.log(`  profiles     ${profiles.join(', ')}`)
     console.log(
       `  files        ${snapshot.files.filter((f) => f.path.endsWith('.go')).length} read`,
@@ -137,7 +149,8 @@ async function main() {
   }
 }
 
+// A refusal or a failure is said in one line; ESPER_DEBUG shows where it came from.
 main().catch((error: unknown) => {
-  if (error instanceof EsperError) fail(error.message, 1)
-  throw error
+  if (process.env.ESPER_DEBUG || !(error instanceof Error)) throw error
+  fail(error.message, 1)
 })

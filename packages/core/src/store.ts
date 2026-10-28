@@ -14,7 +14,8 @@ CREATE TABLE IF NOT EXISTS snapshots (
   dirty INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL,
   schema_version INTEGER NOT NULL,
-  profiles TEXT NOT NULL DEFAULT '[]'
+  profiles TEXT NOT NULL DEFAULT '[]',
+  indexer TEXT
 );
 CREATE TABLE IF NOT EXISTS files (
   snapshot_id INTEGER NOT NULL REFERENCES snapshots(id) ON DELETE CASCADE,
@@ -73,6 +74,8 @@ export interface SnapshotInfo {
   dirty: boolean
   createdAt: string
   profiles: string[]
+  // What indexed it: Esper's version, its profiles and its library data, hashed.
+  indexer: string | null
 }
 
 export interface NewSnapshot {
@@ -81,6 +84,7 @@ export interface NewSnapshot {
   dirty?: boolean
   profiles?: string[]
   createdAt?: string
+  indexer?: string
 }
 
 const json = (value: unknown) => (value === undefined ? null : JSON.stringify(value))
@@ -104,7 +108,7 @@ export class Store {
         .run(String(schemaVersion))
     } else if (Number(version.value) !== schemaVersion) {
       throw new Error(
-        `database schema ${String(version.value)} does not match Esper's schema ${schemaVersion}`,
+        `${path} has schema ${String(version.value)}, and this Esper reads schema ${schemaVersion}: index the project into a new home`,
       )
     }
   }
@@ -120,8 +124,8 @@ export class Store {
     try {
       const { lastInsertRowid } = this.db
         .prepare(
-          `INSERT INTO snapshots (ref, commit_sha, dirty, created_at, schema_version, profiles)
-           VALUES (?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO snapshots (ref, commit_sha, dirty, created_at, schema_version, profiles, indexer)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           info.ref ?? null,
@@ -130,6 +134,7 @@ export class Store {
           info.createdAt ?? new Date().toISOString(),
           schemaVersion,
           JSON.stringify(info.profiles ?? []),
+          info.indexer ?? null,
         )
       const id = Number(lastInsertRowid)
       const file = this.db.prepare(`INSERT INTO files VALUES (?, ?, ?, ?)`)
@@ -177,7 +182,9 @@ export class Store {
 
   snapshots(): SnapshotInfo[] {
     return this.db
-      .prepare(`SELECT id, ref, commit_sha, dirty, created_at, profiles FROM snapshots ORDER BY id`)
+      .prepare(
+        `SELECT id, ref, commit_sha, dirty, created_at, profiles, indexer FROM snapshots ORDER BY id`,
+      )
       .all()
       .map((row) => ({
         id: Number(row.id),
@@ -186,6 +193,7 @@ export class Store {
         dirty: row.dirty === 1,
         createdAt: String(row.created_at),
         profiles: JSON.parse(String(row.profiles)) as string[],
+        indexer: (row.indexer as string | null) ?? null,
       }))
   }
 

@@ -1,6 +1,6 @@
 // The graph model of D6: what a snapshot holds, before and after it is stored.
 
-export const schemaVersion = 1
+export const schemaVersion = 2
 
 export type NodeKind = 'file' | 'decl' | 'external' | 'entry' | 'advisory'
 

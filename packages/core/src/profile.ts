@@ -34,10 +34,11 @@ export interface RouterSpec {
   default?: string[]
   pattern: 'braces' | 'servemux'
   methods: RouterMethod[]
+  registers?: { import: string; routes: { pattern: string; handler: string }[] }[]
 }
 
 export type ReadRule =
-  | { read: ReadKind; chain: string }
+  | { read: ReadKind; chain: string; on?: string }
   | { read: ReadKind; call: string; request?: number; name?: number }
 
 export type GuardKind =

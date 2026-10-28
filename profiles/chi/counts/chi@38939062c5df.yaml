@@ -1,0 +1,73 @@
+# chi itself, counted by hand (D16). An entry point is an exported function or method, or a
+# function that takes a response writer and the request, that reads the request in its own
+# code, in what it calls, or in the function literals it defines or returns. Each exported
+# function of chi was read; those below are all that qualify.
+target: https://github.com/go-chi/chi
+ref: v5.3.2
+commit: 38939062c5df4d3e8814aad1a488983112627ced
+kind: framework
+entries:
+  - { ref: "entry:context.go#RouteContext", at: "context.go:27" }
+  - { ref: "entry:context.go#URLParam", at: "context.go:10" }
+  - { ref: "entry:context.go#URLParamFromCtx", at: "context.go:18" }
+  - { ref: "entry:middleware/basic_auth.go#BasicAuth", at: "middleware/basic_auth.go:10" }
+  - { ref: "entry:middleware/clean_path.go#CleanPath", at: "middleware/clean_path.go:12" }
+  - { ref: "entry:middleware/client_ip.go#ClientIPFromHeader", at: "middleware/client_ip.go:41" }
+  - {
+      ref: "entry:middleware/client_ip.go#ClientIPFromRemoteAddr",
+      at: "middleware/client_ip.go:187",
+    }
+  - { ref: "entry:middleware/client_ip.go#ClientIPFromXFF", at: "middleware/client_ip.go:92" }
+  - {
+      ref: "entry:middleware/client_ip.go#ClientIPFromXFFTrustedProxies",
+      at: "middleware/client_ip.go:149",
+    }
+  - { ref: "entry:middleware/client_ip.go#GetClientIP", at: "middleware/client_ip.go:203" }
+  - { ref: "entry:middleware/client_ip.go#GetClientIPAddr", at: "middleware/client_ip.go:215" }
+  - { ref: "entry:middleware/compress.go#Compress", at: "middleware/compress.go:45" }
+  - { ref: "entry:middleware/compress.go#Compressor.Handler", at: "middleware/compress.go:199" }
+  - {
+      ref: "entry:middleware/content_charset.go#ContentCharset",
+      at: "middleware/content_charset.go:11",
+    }
+  - {
+      ref: "entry:middleware/content_encoding.go#AllowContentEncoding",
+      at: "middleware/content_encoding.go:10",
+    }
+  - {
+      ref: "entry:middleware/content_type.go#AllowContentType",
+      at: "middleware/content_type.go:20",
+    }
+  - { ref: "entry:middleware/get_head.go#GetHead", at: "middleware/get_head.go:10" }
+  - { ref: "entry:middleware/heartbeat.go#Heartbeat", at: "middleware/heartbeat.go:12" }
+  - {
+      ref: "entry:middleware/logger.go#DefaultLogFormatter.NewLogEntry",
+      at: "middleware/logger.go:98",
+    }
+  - { ref: "entry:middleware/logger.go#GetLogEntry", at: "middleware/logger.go:75" }
+  - { ref: "entry:middleware/logger.go#Logger", at: "middleware/logger.go:39" }
+  - { ref: "entry:middleware/logger.go#RequestLogger", at: "middleware/logger.go:44" }
+  - { ref: "entry:middleware/nocache.go#NoCache", at: "middleware/nocache.go:40" }
+  - { ref: "entry:middleware/page_route.go#PageRoute", at: "middleware/page_route.go:10" }
+  - { ref: "entry:middleware/path_rewrite.go#PathRewrite", at: "middleware/path_rewrite.go:9" }
+  - { ref: "entry:middleware/profiler.go#Profiler", at: "middleware/profiler.go:22" }
+  - { ref: "entry:middleware/realip.go#RealIP", at: "middleware/realip.go:28" }
+  - { ref: "entry:middleware/recoverer.go#Recoverer", at: "middleware/recoverer.go:22" }
+  - { ref: "entry:middleware/request_id.go#GetReqID", at: "middleware/request_id.go:83" }
+  - { ref: "entry:middleware/request_id.go#RequestID", at: "middleware/request_id.go:67" }
+  - { ref: "entry:middleware/request_size.go#RequestSize", at: "middleware/request_size.go:9" }
+  - {
+      ref: "entry:middleware/route_headers.go#HeaderRouter.Handler",
+      at: "middleware/route_headers.go:77",
+    }
+  - { ref: "entry:middleware/strip.go#RedirectSlashes", at: "middleware/strip.go:41" }
+  - { ref: "entry:middleware/strip.go#StripSlashes", at: "middleware/strip.go:14" }
+  - {
+      ref: "entry:middleware/supress_notfound.go#SupressNotFound",
+      at: "middleware/supress_notfound.go:15",
+    }
+  - { ref: "entry:middleware/url_format.go#URLFormat", at: "middleware/url_format.go:46" }
+  - { ref: "entry:mux.go#Mux.Mount", at: "mux.go:295" }
+  - { ref: "entry:mux.go#Mux.Route", at: "mux.go:278" }
+  - { ref: "entry:mux.go#Mux.ServeHTTP", at: "mux.go:63" }
+  - { ref: "entry:mux.go#Mux.routeHTTP", at: "mux.go:447" }

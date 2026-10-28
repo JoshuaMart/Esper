@@ -567,6 +567,42 @@ export class GoProgram {
     return undefined
   }
 
+  // What a package variable holding a function is assigned: `DefaultLogger = RequestLogger(…)`
+  // makes a call to `DefaultLogger` a guess to `RequestLogger`, whose result it holds.
+  assigned(fn: Node, file: ParsedFile): Target[] | undefined {
+    if (fn.type !== 'identifier' || declaredAt(fn.text, fn)) return undefined
+    const found: Target[] = []
+    for (const other of this.filesIn(file.dir)) {
+      const values: Node[] = []
+      for (const top of present(other.tree.rootNode.namedChildren)) {
+        if (top.type !== 'var_declaration') continue
+        for (const spec of present(top.descendantsOfType('var_spec'))) {
+          const index = names(spec).indexOf(fn.text)
+          const value = spec.childForFieldName('value')?.namedChildren[index]
+          if (index >= 0 && value) values.push(value)
+        }
+      }
+      for (const assignment of present(
+        other.tree.rootNode.descendantsOfType('assignment_statement'),
+      )) {
+        const left = present(assignment.childForFieldName('left')?.namedChildren ?? [])
+        const index = left.findIndex(
+          (n) => n.type === 'identifier' && n.text === fn.text && !declaredAt(n.text, n),
+        )
+        const value = assignment.childForFieldName('right')?.namedChildren[index]
+        if (index >= 0 && value) values.push(value)
+      }
+      for (const value of values) {
+        const named = value.type === 'call_expression' ? value.childForFieldName('function') : value
+        for (const target of (named ? this.targets(named, other) : undefined) ?? []) {
+          const reason = `${fn.text} is assigned ${value.text.replace(/\s+/g, ' ').slice(0, 80)}`
+          found.push({ ...target, resolution: 'guessed', reason })
+        }
+      }
+    }
+    return found.length > 0 ? found : undefined
+  }
+
   // The declared type of a field `x.f`, as written, when `x` is a struct of the module.
   fieldType(node: Node, file: ParsedFile): string | undefined {
     if (node.type !== 'selector_expression') return undefined
@@ -799,7 +835,7 @@ export class GoProgram {
         if (fn.type !== 'identifier' && fn.type !== 'selector_expression') continue
         if (fn.type === 'identifier' && builtins.has(fn.text) && !declaredAt(fn.text, fn)) continue
         stats.calls++
-        const targets = this.targets(fn, file)
+        const targets = this.targets(fn, file) ?? this.assigned(fn, file)
         if (!targets) {
           stats.unresolved++
           continue
@@ -818,11 +854,53 @@ export class GoProgram {
           edge({ kind: 'calls', from: caller.ref, to: target.ref, citation, data })
         }
       }
+
+      // A function or method returned as a value (`return compressor.Handler`) runs when the
+      // caller calls what it got: the function that returns it reaches it, as a middleware
+      // factory reaches the handler it builds. A function stored or registered for later, as a
+      // router does with its handlers, is not reached this way.
+      for (const node of present(root.descendantsOfType(['identifier', 'selector_expression']))) {
+        if (!returned(node)) continue
+        if (node.type === 'selector_expression' && this.fieldType(node, file)) continue
+        const caller = enclosing(file, node)
+        const targets = caller ? this.targets(node, file) : undefined
+        if (!caller || !targets) continue
+        const citation = { file: file.path, line: line(node) }
+        for (const target of targets) {
+          if (!target.decl || target.resolution !== 'resolved' || target.ref === caller.ref)
+            continue
+          const data = { resolution: 'resolved', reference: true }
+          edge({ kind: 'calls', from: caller.ref, to: target.ref, citation, data })
+        }
+      }
     }
 
     graph.nodes.push(...externals.values())
     return { graph, stats }
   }
+}
+
+// Whether a name is a value that its function returns: `return h`, `return http.HandlerFunc(h)`.
+const throughValues = new Set([
+  'argument_list',
+  'expression_list',
+  'parenthesized_expression',
+  'unary_expression',
+  'composite_literal',
+  'literal_value',
+  'keyed_element',
+  'literal_element',
+])
+function returned(node: Node): boolean {
+  const parent = node.parent
+  if (!parent) return false
+  if (parent.type === 'call_expression') {
+    // As the function called, the name is a call, not a value.
+    if (parent.childForFieldName('function')?.id === node.id) return false
+    return returned(parent)
+  }
+  if (parent.type === 'return_statement') return true
+  return throughValues.has(parent.type) && returned(parent)
 }
 
 export interface Target {

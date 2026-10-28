@@ -175,3 +175,34 @@ test('a call through an interface is a guess to each type that implements it', a
     ['a.go#Mem.Get', 'Mem implements Store'],
   ])
 })
+
+test('a function that returns a method value reaches it; one that stores it does not', async () => {
+  const code = go(
+    'package a',
+    'type C struct{}',
+    'func (c *C) Handle() {}',
+    'func Wrap() func() { c := &C{}; return c.Handle }',
+    'type Mux struct{ h func() }',
+    'func (m *Mux) route() {}',
+    'func (m *Mux) Register() { m.h = m.route }',
+  )
+  assert.deepEqual(await callsFrom([{ path: 'a.go', source: code }], 'a.go#Wrap'), [
+    ['a.go#C.Handle', 'resolved'],
+  ])
+  assert.deepEqual(await callsFrom([{ path: 'a.go', source: code }], 'a.go#Mux.Register'), [])
+})
+
+test('a call to a package variable holding a function is a guess to what it is assigned', async () => {
+  const code = go(
+    'package a',
+    'var Default func() func()',
+    'func init() { Default = Build("x") }',
+    'func Build(s string) func() { return func() {} }',
+    'func Use() { Default() }',
+  )
+  const { graph } = await extractGo([{ path: 'a.go', source: code }], { module: 'example.com/m' })
+  const edges = graph.edges
+    .filter((e) => e.kind === 'calls' && e.from === 'a.go#Use')
+    .map((e) => [e.to, e.data?.resolution, e.data?.reason])
+  assert.deepEqual(edges, [['a.go#Build', 'guessed', 'Default is assigned Build("x")']])
+})

@@ -145,6 +145,36 @@
           "items": {
             "$ref": "#/$defs/method"
           }
+        },
+        "registers": {
+          "description": "Routes a package registers on the `default` router when it is imported, even for its side effects alone (`import _ \"net/http/pprof\"`).",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["import", "routes"],
+            "properties": {
+              "import": {
+                "type": "string"
+              },
+              "routes": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["pattern", "handler"],
+                  "properties": {
+                    "pattern": {
+                      "type": "string"
+                    },
+                    "handler": {
+                      "$ref": "#/$defs/symbol"
+                    }
+                  }
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -176,7 +206,7 @@
       }
     },
     "read": {
-      "description": "What reads the request: a chain of fields and calls on the request (`Header.Get(name)`), or a function taking it (`chi.URLParam(r, name)`).",
+      "description": "What reads the request: a chain of fields and calls on the request, or on another value that carries it (`Header.Get(name)`, `ctx.Value(name)`), or a function taking it (`chi.URLParam(r, name)`).",
       "type": "object",
       "additionalProperties": false,
       "required": ["read"],
@@ -220,6 +250,10 @@
           "description": "For `call`: the argument that names what is read.",
           "type": "integer",
           "minimum": 0
+        },
+        "on": {
+          "description": "For `chain`: the type the chain starts from, when it is not the request: `context#Context` for `ctx.Value(key)`.",
+          "$ref": "#/$defs/symbol"
         }
       }
     },
