@@ -1,0 +1,265 @@
+# FastAPI, for an application built on it: routes declared by decorators (`@router.get(…)`) and by
+# `add_api_route` and `api_route`, routers included under a prefix with their dependencies
+# (`include_router(users.router, prefix='/users', dependencies=[…])`), applications mounted under
+# another, and Starlette's route objects and middleware, which FastAPI builds on. A route's chain
+# is its applications' middleware, outermost first, then the dependencies of its routers, of the
+# include and of its decorator, then those its parameters declare (`Depends`, `Security`, in a
+# default or in `Annotated`), each after its own. Its parameters read the request by what they
+# declare: `Query`, `Path`, `Header`, `Cookie`, `Body`, `Form`, `File`, a Pydantic model for the
+# body, a plain value from the path when the path names it and from the query otherwise.
+name: fastapi
+kind: application
+language: python
+extends: [starlette]
+detect:
+  dependency: [fastapi, fastapi-slim]
+  import: [fastapi]
+# What FastAPI re-exports, by where it is declared: a symbol is named once, by its own module.
+reexports:
+  fastapi#FastAPI: fastapi.applications#FastAPI
+  fastapi#APIRouter: fastapi.routing#APIRouter
+  fastapi#Depends: fastapi.param_functions#Depends
+  fastapi#Security: fastapi.param_functions#Security
+  fastapi#Query: fastapi.param_functions#Query
+  fastapi#Path: fastapi.param_functions#Path
+  fastapi#Header: fastapi.param_functions#Header
+  fastapi#Cookie: fastapi.param_functions#Cookie
+  fastapi#Body: fastapi.param_functions#Body
+  fastapi#Form: fastapi.param_functions#Form
+  fastapi#File: fastapi.param_functions#File
+  fastapi#Request: starlette.requests#Request
+  fastapi.requests#Request: starlette.requests#Request
+  fastapi.requests#HTTPConnection: starlette.requests#HTTPConnection
+  fastapi#WebSocket: starlette.websockets#WebSocket
+  fastapi.websockets#WebSocket: starlette.websockets#WebSocket
+  fastapi#HTTPException: fastapi.exceptions#HTTPException
+  fastapi#UploadFile: fastapi.datastructures#UploadFile
+  fastapi#BackgroundTasks: fastapi.background#BackgroundTasks
+  fastapi#Response: starlette.responses#Response
+  fastapi.responses#Response: starlette.responses#Response
+  fastapi.responses#RedirectResponse: starlette.responses#RedirectResponse
+  fastapi.responses#HTMLResponse: starlette.responses#HTMLResponse
+  fastapi.responses#FileResponse: starlette.responses#FileResponse
+  fastapi.responses#JSONResponse: starlette.responses#JSONResponse
+  fastapi.responses#PlainTextResponse: starlette.responses#PlainTextResponse
+  fastapi.responses#StreamingResponse: starlette.responses#StreamingResponse
+  fastapi.staticfiles#StaticFiles: starlette.staticfiles#StaticFiles
+  fastapi.templating#Jinja2Templates: starlette.templating#Jinja2Templates
+  fastapi.middleware#Middleware: starlette.middleware#Middleware
+  fastapi.middleware.cors#CORSMiddleware: starlette.middleware.cors#CORSMiddleware
+  fastapi.middleware.gzip#GZipMiddleware: starlette.middleware.gzip#GZipMiddleware
+  fastapi.middleware.trustedhost#TrustedHostMiddleware: starlette.middleware.trustedhost#TrustedHostMiddleware
+  fastapi.middleware.httpsredirect#HTTPSRedirectMiddleware: starlette.middleware.httpsredirect#HTTPSRedirectMiddleware
+  fastapi.routing#APIRoute: fastapi.routing#APIRoute
+  fastapi.security#OAuth2: fastapi.security.oauth2#OAuth2
+  fastapi.security#OAuth2PasswordBearer: fastapi.security.oauth2#OAuth2PasswordBearer
+  fastapi.security#OAuth2AuthorizationCodeBearer: fastapi.security.oauth2#OAuth2AuthorizationCodeBearer
+  fastapi.security#OAuth2PasswordRequestForm: fastapi.security.oauth2#OAuth2PasswordRequestForm
+  fastapi.security#OAuth2PasswordRequestFormStrict: fastapi.security.oauth2#OAuth2PasswordRequestFormStrict
+  fastapi.security#SecurityScopes: fastapi.security.oauth2#SecurityScopes
+  fastapi.security#HTTPBearer: fastapi.security.http#HTTPBearer
+  fastapi.security#HTTPBasic: fastapi.security.http#HTTPBasic
+  fastapi.security#HTTPDigest: fastapi.security.http#HTTPDigest
+  fastapi.security#HTTPAuthorizationCredentials: fastapi.security.http#HTTPAuthorizationCredentials
+  fastapi.security#HTTPBasicCredentials: fastapi.security.http#HTTPBasicCredentials
+  fastapi.security#APIKeyHeader: fastapi.security.api_key#APIKeyHeader
+  fastapi.security#APIKeyQuery: fastapi.security.api_key#APIKeyQuery
+  fastapi.security#APIKeyCookie: fastapi.security.api_key#APIKeyCookie
+  fastapi.security#OpenIdConnect: fastapi.security.open_id_connect_url#OpenIdConnect
+routers:
+  - types: [fastapi.applications#FastAPI, fastapi.routing#APIRouter]
+    create: [fastapi.applications#FastAPI, fastapi.routing#APIRouter]
+    pattern: braces
+    construct: { prefix: path, dependencies: chain, routes: routes, middleware: middleware }
+    self: [router]
+    methods:
+      - name: get
+        does: route
+        method: GET
+        args: [path, handler]
+        keywords: { path: path, dependencies: chain }
+        parameters: true
+      - name: post
+        does: route
+        method: POST
+        args: [path, handler]
+        keywords: { path: path, dependencies: chain }
+        parameters: true
+      - name: put
+        does: route
+        method: PUT
+        args: [path, handler]
+        keywords: { path: path, dependencies: chain }
+        parameters: true
+      - name: patch
+        does: route
+        method: PATCH
+        args: [path, handler]
+        keywords: { path: path, dependencies: chain }
+        parameters: true
+      - name: delete
+        does: route
+        method: DELETE
+        args: [path, handler]
+        keywords: { path: path, dependencies: chain }
+        parameters: true
+      - name: head
+        does: route
+        method: HEAD
+        args: [path, handler]
+        keywords: { path: path, dependencies: chain }
+        parameters: true
+      - name: options
+        does: route
+        method: OPTIONS
+        args: [path, handler]
+        keywords: { path: path, dependencies: chain }
+        parameters: true
+      - name: trace
+        does: route
+        method: TRACE
+        args: [path, handler]
+        keywords: { path: path, dependencies: chain }
+        parameters: true
+      - name: query
+        does: route
+        method: QUERY
+        args: [path, handler]
+        keywords: { path: path, dependencies: chain }
+        parameters: true
+      - name: api_route
+        does: route
+        method: GET
+        args: [path, handler]
+        keywords: { path: path, methods: method, dependencies: chain }
+        parameters: true
+      - name: add_api_route
+        does: route
+        method: GET
+        args: [path, handler]
+        keywords: { path: path, endpoint: handler, methods: method, dependencies: chain }
+        parameters: true
+      - name: websocket
+        does: route
+        method: WEBSOCKET
+        args: [path, handler]
+        keywords: { path: path, dependencies: chain }
+        parameters: true
+      - name: add_api_websocket_route
+        does: route
+        method: WEBSOCKET
+        args: [path, handler]
+        keywords: { path: path, endpoint: handler, dependencies: chain }
+        parameters: true
+      - name: include_router
+        does: include
+        args: [handler]
+        keywords: { router: handler, prefix: path, dependencies: chain }
+      # A static frontend served below a path.
+      - { name: frontend, does: mount, args: [path], keywords: { path: path } }
+      # Starlette's, which FastAPI's application and router inherit.
+      - { name: mount, does: mount, args: [path, handler], keywords: { path: path, app: handler } }
+      - { name: host, does: mount, args: [other, handler], keywords: { app: handler } }
+      - name: add_route
+        does: route
+        method: GET
+        args: [path, handler]
+        keywords: { path: path, route: handler, methods: method }
+      - { name: route, does: route, method: GET, args: [path], keywords: { methods: method } }
+      - name: add_websocket_route
+        does: route
+        method: WEBSOCKET
+        args: [path, handler]
+        keywords: { path: path, route: handler }
+        receives: starlette.websockets#WebSocket
+      - {
+          name: websocket_route,
+          does: route,
+          method: WEBSOCKET,
+          args: [path],
+          receives: starlette.websockets#WebSocket,
+        }
+      - { name: add_middleware, does: use, args: [middleware] }
+      - { name: middleware, does: use, args: [other] }
+      - { name: routes.extend, does: routes, args: [routes] }
+      - { name: routes.append, does: routes, args: [routes] }
+      - { name: router.routes.extend, does: routes, args: [routes] }
+      - { name: router.routes.append, does: routes, args: [routes] }
+declares:
+  - call: fastapi.routing#APIRoute
+    does: route
+    method: GET
+    args: [path, handler]
+    keywords: { path: path, endpoint: handler, methods: method, dependencies: chain }
+    parameters: true
+  - call: fastapi.routing#APIWebSocketRoute
+    does: route
+    method: WEBSOCKET
+    args: [path, handler]
+    keywords: { path: path, endpoint: handler, dependencies: chain }
+    parameters: true
+parameters:
+  depends:
+    [
+      fastapi.param_functions#Depends,
+      fastapi.param_functions#Security,
+      fastapi.params#Depends,
+      fastapi.params#Security,
+    ]
+  markers:
+    - { call: fastapi.param_functions#Query, read: query }
+    - { call: fastapi.param_functions#Path, read: path }
+    - { call: fastapi.param_functions#Header, read: header, hyphens: true }
+    - { call: fastapi.param_functions#Cookie, read: cookie }
+    - { call: fastapi.param_functions#Body, read: body }
+    - { call: fastapi.param_functions#Form, read: form }
+    - { call: fastapi.param_functions#File, read: form }
+    - { call: fastapi.params#Query, read: query }
+    - { call: fastapi.params#Path, read: path }
+    - { call: fastapi.params#Header, read: header, hyphens: true }
+    - { call: fastapi.params#Cookie, read: cookie }
+    - { call: fastapi.params#Body, read: body }
+    - { call: fastapi.params#Form, read: form }
+    - { call: fastapi.params#File, read: form }
+  alias: alias
+  given:
+    - starlette.requests#Request
+    - starlette.requests#HTTPConnection
+    - starlette.websockets#WebSocket
+    - starlette.responses#Response
+    - fastapi.background#BackgroundTasks
+    - starlette.background#BackgroundTasks
+    - fastapi.security.oauth2#SecurityScopes
+  models:
+    [pydantic#BaseModel, pydantic.main#BaseModel, sqlmodel#SQLModel, pydantic.dataclasses#dataclass]
+  files: [fastapi.datastructures#UploadFile, starlette.datastructures#UploadFile]
+guards:
+  # The security schemes: each reads a credential and refuses a request without one, unless it is
+  # built with `auto_error=False`.
+  - { call: fastapi.security.oauth2#OAuth2, kind: authn, unless: { auto_error: "False" } }
+  - {
+      call: fastapi.security.oauth2#OAuth2PasswordBearer,
+      kind: authn,
+      unless: { auto_error: "False" },
+    }
+  - {
+      call: fastapi.security.oauth2#OAuth2AuthorizationCodeBearer,
+      kind: authn,
+      unless: { auto_error: "False" },
+    }
+  - { call: fastapi.security.http#HTTPBearer, kind: authn, unless: { auto_error: "False" } }
+  - { call: fastapi.security.http#HTTPBasic, kind: authn, unless: { auto_error: "False" } }
+  - { call: fastapi.security.http#HTTPDigest, kind: authn, unless: { auto_error: "False" } }
+  - { call: fastapi.security.api_key#APIKeyHeader, kind: authn, unless: { auto_error: "False" } }
+  - { call: fastapi.security.api_key#APIKeyQuery, kind: authn, unless: { auto_error: "False" } }
+  - { call: fastapi.security.api_key#APIKeyCookie, kind: authn, unless: { auto_error: "False" } }
+  - {
+      call: fastapi.security.open_id_connect_url#OpenIdConnect,
+      kind: authn,
+      unless: { auto_error: "False" },
+    }
+  # A dependency that refuses: 401 says the client is not authenticated, 403 that it is not allowed.
+  - { status: 401, kind: authn }
+  - { status: 403, kind: authz-role }
+sinks:
+  redirect: [starlette.responses#RedirectResponse]

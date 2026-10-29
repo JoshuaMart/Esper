@@ -1,0 +1,9 @@
+{
+  "name": "esper-scip-python",
+  "private": true,
+  "type": "module",
+  "description": "scip-python inside Esper's analyzer contract.",
+  "dependencies": {
+    "@sourcegraph/scip-python": "0.6.8"
+  }
+}

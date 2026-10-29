@@ -8,17 +8,18 @@ served to hunting agents over MCP and explorable in a web interface.
 > and bring out what nobody had seen.
 
 **Status: early development.**
-[M7](docs/src/content/docs/roadmap.md#m7--sveltekit) is done: Go applications on chi or `net/http`
-and chi itself, TypeScript and JavaScript applications on Hono or SvelteKit and both frameworks
+[M8](docs/src/content/docs/roadmap.md#m8--python-and-fastapi) is done: Go applications on chi or
+`net/http` and chi itself, TypeScript and JavaScript applications on Hono or SvelteKit and both
+frameworks themselves, and Python applications on FastAPI or Starlette and both frameworks
 themselves, can be indexed, SvelteKit's routes read from its file tree (the server side: `.ts` and
-`.js`, not the `.svelte` components), with their call edges resolved by scip-go or scip-typescript
-in Docker on request, their past advisories from OSV linked to the code their fixes touched
-(`esper advisories`), and a model's claims about what parsing cannot see kept apart from the facts
-(`esper enrich`, on the auditor's Claude Code or an API key). All of it is served to agents over MCP
-(`esper mcp <project>`, or HTTP), and followed and annotated in a web interface (`esper serve`),
-where an agent's notes appear as it writes them. Next is
-[M8](docs/src/content/docs/roadmap.md#m8--python-and-fastapi), Python and FastAPI, then
-[M9](docs/src/content/docs/roadmap.md#m9--dataflow-on-demand), dataflow on demand.
+`.js`, not the `.svelte` components) and FastAPI's dependencies read as each route's chain, with
+their call edges resolved by scip-go, scip-typescript or scip-python in Docker on request, their
+past advisories from OSV linked to the code their fixes touched (`esper advisories`), and a model's
+claims about what parsing cannot see kept apart from the facts (`esper enrich`, on the auditor's
+Claude Code or an API key). All of it is served to agents over MCP (`esper mcp <project>`, or HTTP),
+and followed and annotated in a web interface (`esper serve`), where an agent's notes appear as it
+writes them. Next is [M9](docs/src/content/docs/roadmap.md#m9--dataflow-on-demand), dataflow on
+demand.
 
 ## Documentation
 

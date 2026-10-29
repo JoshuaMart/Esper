@@ -16,7 +16,7 @@
     },
     "language": {
       "description": "The language of the code the profile reads.",
-      "enum": ["go", "typescript"]
+      "enum": ["go", "typescript", "python"]
     },
     "description": {
       "type": "string"
@@ -135,6 +135,156 @@
             "type": "string"
           }
         }
+      }
+    },
+    "declares": {
+      "description": "Calls that build a route or a mount given to a router as a value, in a list (`starlette.routing#Route`, `starlette.routing#Mount`): their arguments and keywords by role, as a router method's.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["call", "does"],
+        "properties": {
+          "call": {
+            "$ref": "#/$defs/symbol"
+          },
+          "does": {
+            "enum": ["route", "mount"]
+          },
+          "method": {
+            "$ref": "#/$defs/method/properties/method"
+          },
+          "args": {
+            "$ref": "#/$defs/method/properties/args"
+          },
+          "keywords": {
+            "$ref": "#/$defs/method/properties/keywords"
+          },
+          "receives": {
+            "$ref": "#/$defs/method/properties/receives"
+          },
+          "parameters": {
+            "$ref": "#/$defs/method/properties/parameters"
+          }
+        }
+      }
+    },
+    "middleware": {
+      "description": "How middleware is given as a value: `wrap` lists the calls that name a middleware class as their first argument (`Middleware(CORSMiddleware, …)`); `classes`, the method of a middleware class that handles a request (`dispatch`, `__call__`), in order of preference, each with what it receives after the instance; `forwards`, the attributes through which such a method calls the next application (`self.app(…)`), so that a method that returns before it answers on its own.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "wrap": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/symbol"
+          }
+        },
+        "classes": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/symbol"
+          }
+        },
+        "forwards": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "exceptions": {
+      "description": "How an exception says the status it answers with, for the guards a `status` rule names: `handlers`, the router methods that register an exception handler (`exception_handler`), whose answer's one status is the exception's; `status`, the keywords that hold a status (`status_code`); `named`, a pattern of a constant that names one, the status its first group (`HTTP_(\\d{3})_`).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "handlers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "status": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "named": {
+          "type": "string"
+        }
+      }
+    },
+    "parameters": {
+      "description": "How a handler's and its dependencies' parameters read the request, where a framework says so by parameters (FastAPI): `depends`, the calls that name a dependency, run before the function, its own first (`Depends`); `markers`, the calls that say what a parameter reads, as its default or in its annotation's `Annotated` metadata (`Query`, `Header` with `hyphens`, whose parameter `user_agent` reads `user-agent`), named by its `alias` keyword when given; `given`, types a parameter receives rather than reads (the request); `models`, types read from the body whole; `files`, types read from a form. Any other parameter of a handler or a dependency reads a path parameter when the route's path names it, a query parameter otherwise.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["depends", "markers"],
+      "properties": {
+        "depends": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/symbol"
+          }
+        },
+        "markers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["call", "read"],
+            "properties": {
+              "call": {
+                "$ref": "#/$defs/symbol"
+              },
+              "read": {
+                "$ref": "#/$defs/read/properties/read"
+              },
+              "hyphens": {
+                "type": "boolean"
+              }
+            }
+          }
+        },
+        "alias": {
+          "type": "string"
+        },
+        "given": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/symbol"
+          }
+        },
+        "models": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/symbol"
+          }
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/symbol"
+          }
+        }
+      }
+    },
+    "bases": {
+      "description": "The bases of types outside the target, which the index cannot read: rules on a base apply to its subclasses (`starlette.requests#Request` is a `starlette.requests#HTTPConnection`).",
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/symbol"
+        }
+      }
+    },
+    "reexports": {
+      "description": "Symbols outside the target that another module declares, re-exported (`fastapi#Request` is `starlette.requests#Request`): the index names each by the symbol it maps to, so that rules name it once.",
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/symbol"
       }
     },
     "guards": {
@@ -273,6 +423,17 @@
             "$ref": "#/$defs/method"
           }
         },
+        "construct": {
+          "description": "The role of each keyword of the call that creates a router: `{ prefix: path, dependencies: chain, routes: routes, middleware: middleware }`.",
+          "$ref": "#/$defs/method/properties/keywords"
+        },
+        "self": {
+          "description": "Attributes of a router that are the router itself: FastAPI's `app.router`.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "registers": {
           "description": "Routes a package registers on the `default` router when it is imported, even for its side effects alone (`import _ \"net/http/pprof\"`).",
           "type": "array",
@@ -315,8 +476,18 @@
           "type": "string"
         },
         "does": {
-          "description": "`route` adds a route; `use` adds middleware to the router's chain, after a path when the first argument is one; `with` returns a router with more middleware; `group` passes a router with the same prefix to a callback; `subrouter` passes a router mounted at a prefix to a callback; `mount` attaches a router or a handler at a prefix; `prefix` returns a router whose registrations go to this one under a prefix (Hono's `basePath`).",
-          "enum": ["route", "use", "with", "group", "subrouter", "mount", "prefix"]
+          "description": "`route` adds a route; `use` adds middleware to the router's chain, after a path when the first argument is one; `with` returns a router with more middleware; `group` passes a router with the same prefix to a callback; `subrouter` passes a router mounted at a prefix to a callback; `mount` attaches a router or a handler at a prefix; `include` adds a router's routes under a prefix, with the dependencies of a `chain` keyword before their own (`include_router`); `prefix` returns a router whose registrations go to this one under a prefix (Hono's `basePath`); `routes` adds route objects (`declares`) given as a list.",
+          "enum": [
+            "route",
+            "use",
+            "with",
+            "group",
+            "subrouter",
+            "mount",
+            "prefix",
+            "routes",
+            "include"
+          ]
         },
         "method": {
           "description": "For `route`: the HTTP method, `ANY`, or `pattern` when the path carries it (`GET /items`).",
@@ -324,11 +495,46 @@
           "pattern": "^([A-Z]+|pattern)$"
         },
         "args": {
-          "description": "The meaning of each argument, when it is not the default for `does`: `route` takes `[path, handler]`, `subrouter` `[path, callback]`, `group` `[callback]`, `mount` `[path, handler]`, `prefix` `[path]`. `chain` stands for every argument between the ones before it and the last, middleware in front of the handler; `config` for an object whose properties say what `config` maps them to.",
+          "description": "The meaning of each argument, when it is not the default for `does`: `route` takes `[path, handler]`, `subrouter` `[path, callback]`, `group` `[callback]`, `mount` `[path, handler]`, `prefix` `[path]`. `chain` stands for every argument between the ones before it and the last, middleware in front of the handler; `config` for an object whose properties say what `config` maps them to; `routes` for a list of route objects; `middleware` for a middleware class or a list of them. A method called as a decorator takes the function it decorates as its handler.",
           "type": "array",
           "items": {
-            "enum": ["method", "path", "handler", "callback", "chain", "config", "other"]
+            "enum": [
+              "method",
+              "path",
+              "handler",
+              "callback",
+              "chain",
+              "config",
+              "routes",
+              "middleware",
+              "other"
+            ]
           }
+        },
+        "keywords": {
+          "description": "The role of each keyword argument, by its keyword, where the language has them: `{ prefix: path, dependencies: chain, methods: method }`. A `chain` keyword is a list of dependencies.",
+          "type": "object",
+          "additionalProperties": {
+            "enum": [
+              "method",
+              "path",
+              "handler",
+              "callback",
+              "chain",
+              "config",
+              "routes",
+              "middleware",
+              "other"
+            ]
+          }
+        },
+        "receives": {
+          "description": "What the handler receives first when its code does not say, when not the profile's `context`.",
+          "$ref": "#/$defs/symbol"
+        },
+        "parameters": {
+          "description": "The handler's parameters are read by the profile's `parameters`, and declare its dependencies.",
+          "type": "boolean"
         },
         "config": {
           "description": "For a `config` argument: the role of each property of the object (`{ method: method, path: path, middleware: chain }`).",
@@ -387,9 +593,16 @@
           "$ref": "#/$defs/symbol"
         },
         "request": {
-          "description": "For `call`: the argument that is the request.",
-          "type": "integer",
-          "minimum": 0
+          "description": "For `call`: the argument that is the request, by its position, or by its keyword: a call given no such keyword reads nothing (`Headers(scope=…)` reads the request's headers, `Headers(raw=…)` does not).",
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "string"
+            }
+          ]
         },
         "name": {
           "description": "For `call`: the argument that names what is read.",
@@ -400,8 +613,15 @@
           "description": "For `chain`: the type the chain starts from, when it is not the request: `context#Context` for `ctx.Value(key)`.",
           "$ref": "#/$defs/symbol"
         },
+        "except": {
+          "description": "For `chain`: the names its `(name)` argument or `[name]` key may hold that are not read from the request, such as what the server sets in an ASGI scope (`type`, `asgi`).",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "by": {
-          "description": "For `chain`: the kind of read named by the string its `(name)` argument holds, rather than `read` with that name: `req.valid(name)` reads the body for `json` and a path parameter for `param`.",
+          "description": "For `chain`: the kind of read named by the string its `(name)` argument, or its `[name]` key, holds, rather than `read` with that name: `req.valid(name)` reads the body for `json` and a path parameter for `param`; an ASGI scope's `scope['headers']` reads the headers.",
           "type": "object",
           "additionalProperties": {
             "enum": [
@@ -421,7 +641,7 @@
       }
     },
     "guard": {
-      "description": "A call that can refuse a request (`basicAuth`), or a check: a function that refuses the request, by one of the profile's `refusals`, when a value read from it is missing (`context.user`, for `if (!locals.user) error(401)`).",
+      "description": "A call that can refuse a request (`basicAuth`), or a check: a function that refuses the request, by one of the profile's `refusals`, when a value read from it is missing (`context.user`, for `if (!locals.user) error(401)`), or a dependency that refuses with a `status`.",
       "type": "object",
       "additionalProperties": false,
       "required": ["kind"],
@@ -431,11 +651,27 @@
         },
         {
           "required": ["check"]
+        },
+        {
+          "required": ["status"]
         }
       ],
       "properties": {
         "call": {
           "$ref": "#/$defs/symbol"
+        },
+        "unless": {
+          "description": "For `call`: keyword arguments that make it let every request through, as written: `{ auto_error: \"False\" }`.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "status": {
+          "description": "A dependency that, in a condition, raises an exception with this status: `raise HTTPException(status_code=401)`, or an exception of the application's own that its exception handler answers with it.",
+          "type": "integer",
+          "minimum": 400,
+          "maximum": 599
         },
         "check": {
           "type": "string",

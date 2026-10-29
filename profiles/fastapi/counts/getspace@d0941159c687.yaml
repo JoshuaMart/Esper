@@ -1,0 +1,233 @@
+# Space's backend (getspace), a FastAPI application (`backend/`: uv, psycopg, an MCP server),
+# counted by hand (D16) and by a script written apart from Esper that lists each route decorator
+# with Python's own parser: the same 90 decorated routes, route for route and line for line.
+# - `src/space/app.py` declares three routes on the application, and its middleware: CORS (added
+#   last, so outermost), `private_responses` (`@app.middleware("http")`), then
+#   `HealthCheckedHostMiddleware`.
+# - `src/space/api/rest.py` declares 87 routes on two routers, `public` and `router`, both with
+#   the prefix `/v1`, included through a third router that `create_app` includes. Every route
+#   of either takes `session=auth`, `session=read` or `session=write`, names that hold
+#   `Depends(…)` or a call returning one, whose dependency `authenticated` depends on
+#   `HTTPBearer(auto_error=False)` (which refuses nothing) and refuses without a token by raising
+#   `Unauthenticated`, answered 401 by the application's exception handler: an `authn` guard.
+#   `/v1/device/code` and `/v1/device/token` take no session.
+# - `src/space/oauth_server.py`'s `routes()` returns Starlette `Route` objects that
+#   `create_app` adds to the application's router: 16 routes, one per path and method, three of
+#   them from a generator over a tuple of paths. Two of those paths differ only by their trailing
+#   slash, `/.well-known/oauth-protected-resource/mcp` and `…/mcp/`, which normalise to the same
+#   path (D7): the second is `…/mcp~2`.
+# - `app.mount("/mcp", mcp_app)` serves the MCP server, built by the `mcp` package's FastMCP,
+#   below `/mcp`: one entry point, `ANY /mcp/{rest...}`. Its tools are not routes of the
+#   application: FastMCP is a framework of its own, which no profile describes yet.
+target: https://github.com/Hugo-SEQUIER/getspace
+ref: main
+commit: d0941159c6873d87fe798e50538c9bdb153c2035
+dir: backend
+kind: application
+entries:
+  - { ref: "route:ANY /mcp/{rest...}", at: "src/space/app.py:238" }
+  - { ref: "route:DELETE /v1/agent-identities/{agent_id}", at: "src/space/api/rest.py:383" }
+  - { ref: "route:DELETE /v1/agents/{client_id}", at: "src/space/api/rest.py:510" }
+  - {
+      ref: "route:DELETE /v1/organizations/{organization_id}/invitations/{invitation_id}",
+      at: "src/space/api/rest.py:592",
+    }
+  - {
+      ref: "route:DELETE /v1/organizations/{organization_id}/members/{member_id}",
+      at: "src/space/api/rest.py:580",
+    }
+  - { ref: "route:DELETE /v1/profile/image", at: "src/space/api/rest.py:560" }
+  - { ref: "route:DELETE /v1/spaces/{space_id}/api-keys/{key_id}", at: "src/space/api/rest.py:608" }
+  - {
+      ref: "route:DELETE /v1/spaces/{space_id}/memories/{resource_id}",
+      at: "src/space/api/rest.py:483",
+    }
+  - {
+      ref: "route:DELETE /v1/spaces/{space_id}/resources/{resource_id}",
+      at: "src/space/api/rest.py:162",
+    }
+  - {
+      ref: "route:DELETE /v1/spaces/{space_id}/restores/{restore_id}",
+      at: "src/space/api/rest.py:241",
+    }
+  - {
+      ref: "route:GET /.well-known/oauth-authorization-server",
+      at: "src/space/oauth_server.py:596",
+    }
+  - { ref: "route:GET /.well-known/oauth-protected-resource", at: "src/space/oauth_server.py:604" }
+  - {
+      ref: "route:GET /.well-known/oauth-protected-resource/mcp",
+      at: "src/space/oauth_server.py:604",
+    }
+  - {
+      ref: "route:GET /.well-known/oauth-protected-resource/mcp~2",
+      at: "src/space/oauth_server.py:604",
+    }
+  - { ref: "route:GET /health/live", at: "src/space/app.py:228" }
+  - { ref: "route:GET /health/ready", at: "src/space/app.py:136" }
+  - { ref: "route:GET /oauth/authorize", at: "src/space/oauth_server.py:611" }
+  - { ref: "route:GET /ops/metrics", at: "src/space/app.py:151" }
+  - { ref: "route:GET /v1/agent-identities", at: "src/space/api/rest.py:370" }
+  - { ref: "route:GET /v1/agents", at: "src/space/api/rest.py:287" }
+  - { ref: "route:GET /v1/oauth/details", at: "src/space/api/rest.py:521" }
+  - {
+      ref: "route:GET /v1/organizations/{organization_id}/invitations",
+      at: "src/space/api/rest.py:584",
+    }
+  - {
+      ref: "route:GET /v1/organizations/{organization_id}/members",
+      at: "src/space/api/rest.py:572",
+    }
+  - { ref: "route:GET /v1/profile/image", at: "src/space/api/rest.py:552" }
+  - { ref: "route:GET /v1/spaces/{space_id}/access", at: "src/space/api/rest.py:612" }
+  - { ref: "route:GET /v1/spaces/{space_id}/api-keys", at: "src/space/api/rest.py:600" }
+  - { ref: "route:GET /v1/spaces/{space_id}/items", at: "src/space/api/rest.py:291" }
+  - { ref: "route:GET /v1/spaces/{space_id}/items/{item_id}", at: "src/space/api/rest.py:305" }
+  - { ref: "route:GET /v1/spaces/{space_id}/map", at: "src/space/api/rest.py:321" }
+  - { ref: "route:GET /v1/spaces/{space_id}/memories", at: "src/space/api/rest.py:399" }
+  - {
+      ref: "route:GET /v1/spaces/{space_id}/memories/{resource_id}",
+      at: "src/space/api/rest.py:274",
+    }
+  - {
+      ref: "route:GET /v1/spaces/{space_id}/memories/{resource_id}/links",
+      at: "src/space/api/rest.py:421",
+    }
+  - { ref: "route:GET /v1/spaces/{space_id}/memory/imports", at: "src/space/api/rest.py:449" }
+  - { ref: "route:GET /v1/spaces/{space_id}/memory/jobs", at: "src/space/api/rest.py:472" }
+  - { ref: "route:GET /v1/spaces/{space_id}/memory/jobs/{job_id}", at: "src/space/api/rest.py:466" }
+  - { ref: "route:GET /v1/spaces/{space_id}/memory/provider", at: "src/space/api/rest.py:393" }
+  - { ref: "route:GET /v1/spaces/{space_id}/overview", at: "src/space/api/rest.py:219" }
+  - { ref: "route:GET /v1/spaces/{space_id}/read-version", at: "src/space/api/rest.py:120" }
+  - { ref: "route:GET /v1/spaces/{space_id}/resources", at: "src/space/api/rest.py:135" }
+  - {
+      ref: "route:GET /v1/spaces/{space_id}/resources/{resource_id}",
+      at: "src/space/api/rest.py:149",
+    }
+  - { ref: "route:GET /v1/spaces/{space_id}/restores", at: "src/space/api/rest.py:229" }
+  - {
+      ref: "route:GET /v1/spaces/{space_id}/restores/{restore_id}",
+      at: "src/space/api/rest.py:237",
+    }
+  - { ref: "route:GET /v1/spaces/{space_id}/search/index", at: "src/space/api/rest.py:266" }
+  - { ref: "route:GET /v1/spaces/{space_id}/tasks/columns", at: "src/space/api/rest.py:185" }
+  - { ref: "route:GET /v1/spaces/{space_id}/usage", at: "src/space/api/rest.py:215" }
+  - { ref: "route:GET /v1/spaces/{space_id}/views", at: "src/space/api/rest.py:127" }
+  - { ref: "route:GET /v1/spaces/{space_id}/webhooks", at: "src/space/api/rest.py:340" }
+  - {
+      ref: "route:GET /v1/spaces/{space_id}/webhooks/{subscription_id}/deliveries",
+      at: "src/space/api/rest.py:354",
+    }
+  - { ref: "route:GET /v1/workspace", at: "src/space/api/rest.py:116" }
+  - { ref: "route:GET /v1/workspaces", at: "src/space/api/rest.py:547" }
+  - {
+      ref: "route:OPTIONS /.well-known/oauth-authorization-server",
+      at: "src/space/oauth_server.py:596",
+    }
+  - {
+      ref: "route:OPTIONS /.well-known/oauth-protected-resource",
+      at: "src/space/oauth_server.py:604",
+    }
+  - {
+      ref: "route:OPTIONS /.well-known/oauth-protected-resource/mcp",
+      at: "src/space/oauth_server.py:604",
+    }
+  - {
+      ref: "route:OPTIONS /.well-known/oauth-protected-resource/mcp~2",
+      at: "src/space/oauth_server.py:604",
+    }
+  - { ref: "route:OPTIONS /oauth/register", at: "src/space/oauth_server.py:617" }
+  - { ref: "route:OPTIONS /oauth/revoke", at: "src/space/oauth_server.py:625" }
+  - { ref: "route:OPTIONS /oauth/token", at: "src/space/oauth_server.py:612" }
+  - { ref: "route:POST /oauth/authorize", at: "src/space/oauth_server.py:611" }
+  - { ref: "route:POST /oauth/register", at: "src/space/oauth_server.py:617" }
+  - { ref: "route:POST /oauth/revoke", at: "src/space/oauth_server.py:625" }
+  - { ref: "route:POST /oauth/token", at: "src/space/oauth_server.py:612" }
+  - { ref: "route:POST /v1/agent-identities", at: "src/space/api/rest.py:375" }
+  - { ref: "route:POST /v1/agent-identities/{agent_id}", at: "src/space/api/rest.py:379" }
+  - { ref: "route:POST /v1/agent-tokens", at: "src/space/api/rest.py:515" }
+  - { ref: "route:POST /v1/agents/{client_id}/identity", at: "src/space/api/rest.py:389" }
+  - { ref: "route:POST /v1/device/claim", at: "src/space/api/rest.py:539" }
+  - { ref: "route:POST /v1/device/code", at: "src/space/api/rest.py:531" }
+  - { ref: "route:POST /v1/device/consent", at: "src/space/api/rest.py:543" }
+  - { ref: "route:POST /v1/device/token", at: "src/space/api/rest.py:535" }
+  - { ref: "route:POST /v1/invitations/accept", at: "src/space/api/rest.py:568" }
+  - { ref: "route:POST /v1/oauth/consent", at: "src/space/api/rest.py:525" }
+  - { ref: "route:POST /v1/organizations", at: "src/space/api/rest.py:564" }
+  - {
+      ref: "route:POST /v1/organizations/{organization_id}/invitations",
+      at: "src/space/api/rest.py:588",
+    }
+  - {
+      ref: "route:POST /v1/organizations/{organization_id}/members/{member_id}",
+      at: "src/space/api/rest.py:576",
+    }
+  - {
+      ref: "route:POST /v1/organizations/{organization_id}/spaces",
+      at: "src/space/api/rest.py:596",
+    }
+  - { ref: "route:POST /v1/profile/image", at: "src/space/api/rest.py:556" }
+  - { ref: "route:POST /v1/spaces/{space_id}/access", at: "src/space/api/rest.py:616" }
+  - { ref: "route:POST /v1/spaces/{space_id}/api-keys", at: "src/space/api/rest.py:604" }
+  - { ref: "route:POST /v1/spaces/{space_id}/context", at: "src/space/api/rest.py:280" }
+  - {
+      ref: "route:POST /v1/spaces/{space_id}/databases/{database_id}/query",
+      at: "src/space/api/rest.py:326",
+    }
+  - { ref: "route:POST /v1/spaces/{space_id}/export", at: "src/space/api/rest.py:223" }
+  - { ref: "route:POST /v1/spaces/{space_id}/handoffs", at: "src/space/api/rest.py:209" }
+  - { ref: "route:POST /v1/spaces/{space_id}/items", at: "src/space/api/rest.py:313" }
+  - {
+      ref: "route:POST /v1/spaces/{space_id}/items/{item_id}/visibility",
+      at: "src/space/api/rest.py:334",
+    }
+  - { ref: "route:POST /v1/spaces/{space_id}/memory/build", at: "src/space/api/rest.py:429" }
+  - { ref: "route:POST /v1/spaces/{space_id}/memory/change", at: "src/space/api/rest.py:496" }
+  - { ref: "route:POST /v1/spaces/{space_id}/memory/claims", at: "src/space/api/rest.py:435" }
+  - { ref: "route:POST /v1/spaces/{space_id}/memory/creator", at: "src/space/api/rest.py:504" }
+  - { ref: "route:POST /v1/spaces/{space_id}/memory/imports", at: "src/space/api/rest.py:445" }
+  - {
+      ref: "route:POST /v1/spaces/{space_id}/memory/imports/preview",
+      at: "src/space/api/rest.py:441",
+    }
+  - {
+      ref: "route:POST /v1/spaces/{space_id}/memory/imports/{job_id}/retry",
+      at: "src/space/api/rest.py:453",
+    }
+  - { ref: "route:POST /v1/spaces/{space_id}/memory/jobs", at: "src/space/api/rest.py:457" }
+  - { ref: "route:POST /v1/spaces/{space_id}/memory/remember", at: "src/space/api/rest.py:476" }
+  - { ref: "route:POST /v1/spaces/{space_id}/resources", at: "src/space/api/rest.py:177" }
+  - { ref: "route:POST /v1/spaces/{space_id}/restores", at: "src/space/api/rest.py:233" }
+  - {
+      ref: "route:POST /v1/spaces/{space_id}/restores/{restore_id}/commit",
+      at: "src/space/api/rest.py:255",
+    }
+  - {
+      ref: "route:POST /v1/spaces/{space_id}/restores/{restore_id}/parts/{part}",
+      at: "src/space/api/rest.py:245",
+    }
+  - {
+      ref: "route:POST /v1/spaces/{space_id}/restores/{restore_id}/review",
+      at: "src/space/api/rest.py:251",
+    }
+  - { ref: "route:POST /v1/spaces/{space_id}/search", at: "src/space/api/rest.py:259" }
+  - { ref: "route:POST /v1/spaces/{space_id}/tasks/columns", at: "src/space/api/rest.py:193" }
+  - {
+      ref: "route:POST /v1/spaces/{space_id}/tasks/{resource_id}/status",
+      at: "src/space/api/rest.py:201",
+    }
+  - { ref: "route:POST /v1/spaces/{space_id}/views", at: "src/space/api/rest.py:131" }
+  - { ref: "route:POST /v1/spaces/{space_id}/webhooks", at: "src/space/api/rest.py:344" }
+  - {
+      ref: "route:POST /v1/spaces/{space_id}/webhooks/{subscription_id}",
+      at: "src/space/api/rest.py:348",
+    }
+  - {
+      ref: "route:POST /v1/spaces/{space_id}/webhooks/{subscription_id}/deliveries/{delivery_id}/redeliver",
+      at: "src/space/api/rest.py:358",
+    }
+  - { ref: "route:POST /v1/workspace", at: "src/space/api/rest.py:112" }
+  - {
+      ref: "route:PUT /v1/spaces/{space_id}/memories/{resource_id}/links",
+      at: "src/space/api/rest.py:409",
+    }

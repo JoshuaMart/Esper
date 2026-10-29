@@ -1,0 +1,190 @@
+# FastAPI 0.162.0, its request surface (D5), counted by hand (D16): each exported function, class
+# and method that reads the request through what it reaches, and each function that takes the
+# request, a connection, a websocket or an ASGI scope. A script written apart from Esper listed the
+# functions of the package that read the request directly (a scope's keys, a request's attributes,
+# parameters declared with `Query`, `Header`, `Form` and the like): each is an entry point below
+# or is reached by one, but `FastAPI.__call__`, which writes `scope["app"]` and reads nothing.
+# - **Security schemes**: each `__call__` reads `Authorization`, an API key's header, query
+#   parameter or cookie; `OAuth2PasswordRequestForm` reads its form fields.
+# - **The request handler**: `get_request_handler` builds `app`, which reads the body, the form
+#   and `Content-Type`; `solve_dependencies` and `request_body_to_args` read the parameters.
+#   What builds a route (`APIRoute.__init__`, `add_api_route`, `include_router`) reaches them
+#   through the handler it builds, as Hono's factories reach the middleware they return.
+# - **Routing and the frontend**: `APIRouter.app`, `matches` and `handle` read the scope's path
+#   and method; `_FrontendRoute` and its group read `Accept` for navigation requests.
+# - **Docs**: `FastAPI.setup` defines the OpenAPI and docs handlers, which read `root_path`.
+# - **Telemetry**: the ASGI middleware reads the method, path, headers and client address.
+# - Reached only through a call the index guesses ("the only method named …"): applications#FastAPI.include_router, applications#FastAPI.openapi, openapi/utils#get_fields_from_routes, openapi/utils#get_openapi, routing#APIRouter.include_router, routing#_FrontendRouteGroup._match, routing#_FrontendRouteGroup.matches, routing#_FrontendRouteGroup.matches_with_prefix, routing#iter_route_contexts.
+target: https://github.com/fastapi/fastapi
+ref: 0.162.0
+commit: 7a0a3f0b286c6c865cf4398ea0e957a87b8bffa4
+kind: framework
+entries:
+  - { ref: "entry:fastapi/applications.py#FastAPI.__init__", at: "fastapi/applications.py:68" }
+  - {
+      ref: "entry:fastapi/applications.py#FastAPI.add_api_websocket_route",
+      at: "fastapi/applications.py:1403",
+    }
+  - {
+      ref: "entry:fastapi/applications.py#FastAPI.include_router",
+      at: "fastapi/applications.py:1483",
+    }
+  - { ref: "entry:fastapi/applications.py#FastAPI.openapi", at: "fastapi/applications.py:1085" }
+  - { ref: "entry:fastapi/applications.py#FastAPI.setup", at: "fastapi/applications.py:1120" }
+  - {
+      ref: "entry:fastapi/applications.py#FastAPI.setup/openapi",
+      at: "fastapi/applications.py:1123",
+    }
+  - {
+      ref: "entry:fastapi/applications.py#FastAPI.setup/redoc_html",
+      at: "fastapi/applications.py:1166",
+    }
+  - {
+      ref: "entry:fastapi/applications.py#FastAPI.setup/swagger_ui_html",
+      at: "fastapi/applications.py:1138",
+    }
+  - { ref: "entry:fastapi/applications.py#FastAPI.websocket", at: "fastapi/applications.py:1418" }
+  - {
+      ref: "entry:fastapi/dependencies/utils.py#request_body_to_args",
+      at: "fastapi/dependencies/utils.py:1156",
+    }
+  - {
+      ref: "entry:fastapi/dependencies/utils.py#solve_dependencies",
+      at: "fastapi/dependencies/utils.py:643",
+    }
+  - {
+      ref: "entry:fastapi/openapi/utils.py#get_fields_from_routes",
+      at: "fastapi/openapi/utils.py:543",
+    }
+  - { ref: "entry:fastapi/openapi/utils.py#get_openapi", at: "fastapi/openapi/utils.py:577" }
+  - { ref: "entry:fastapi/routing.py#APIRoute.__init__", at: "fastapi/routing.py:1214" }
+  - { ref: "entry:fastapi/routing.py#APIRoute.get_route_handler", at: "fastapi/routing.py:1278" }
+  - { ref: "entry:fastapi/routing.py#APIRoute.handle", at: "fastapi/routing.py:1314" }
+  - { ref: "entry:fastapi/routing.py#APIRoute.matches", at: "fastapi/routing.py:1304" }
+  - {
+      ref: "entry:fastapi/routing.py#APIRouter._frontend_match_is_more_specific",
+      at: "fastapi/routing.py:2966",
+    }
+  - { ref: "entry:fastapi/routing.py#APIRouter._match_low_priority", at: "fastapi/routing.py:2916" }
+  - {
+      ref: "entry:fastapi/routing.py#APIRouter.add_api_websocket_route",
+      at: "fastapi/routing.py:3140",
+    }
+  - { ref: "entry:fastapi/routing.py#APIRouter.app", at: "fastapi/routing.py:2791" }
+  - { ref: "entry:fastapi/routing.py#APIRouter.handle", at: "fastapi/routing.py:2888" }
+  - { ref: "entry:fastapi/routing.py#APIRouter.include_router", at: "fastapi/routing.py:3238" }
+  - { ref: "entry:fastapi/routing.py#APIRouter.matches", at: "fastapi/routing.py:2898" }
+  - { ref: "entry:fastapi/routing.py#APIRouter.websocket", at: "fastapi/routing.py:3162" }
+  - { ref: "entry:fastapi/routing.py#APIWebSocketRoute.__init__", at: "fastapi/routing.py:855" }
+  - {
+      ref: "entry:fastapi/routing.py#_EffectiveRouteContext.matches",
+      at: "fastapi/routing.py:1562",
+    }
+  - { ref: "entry:fastapi/routing.py#_FrontendRoute.handle", at: "fastapi/routing.py:2163" }
+  - { ref: "entry:fastapi/routing.py#_FrontendRoute.matches", at: "fastapi/routing.py:2134" }
+  - {
+      ref: "entry:fastapi/routing.py#_FrontendRoute.matches_with_path",
+      at: "fastapi/routing.py:2137",
+    }
+  - { ref: "entry:fastapi/routing.py#_FrontendRouteGroup._match", at: "fastapi/routing.py:2216" }
+  - {
+      ref: "entry:fastapi/routing.py#_FrontendRouteGroup._solve_dependencies",
+      at: "fastapi/routing.py:2288",
+    }
+  - { ref: "entry:fastapi/routing.py#_FrontendRouteGroup.handle", at: "fastapi/routing.py:2239" }
+  - { ref: "entry:fastapi/routing.py#_FrontendRouteGroup.matches", at: "fastapi/routing.py:2208" }
+  - {
+      ref: "entry:fastapi/routing.py#_FrontendRouteGroup.matches_with_prefix",
+      at: "fastapi/routing.py:2212",
+    }
+  - {
+      ref: "entry:fastapi/routing.py#_FrontendStaticFiles.get_response",
+      at: "fastapi/routing.py:2011",
+    }
+  - {
+      ref: "entry:fastapi/routing.py#_FrontendStaticFiles.get_response_for_scope",
+      at: "fastapi/routing.py:2005",
+    }
+  - {
+      ref: "entry:fastapi/routing.py#_IncludedRouter._handle_selected",
+      at: "fastapi/routing.py:1841",
+    }
+  - { ref: "entry:fastapi/routing.py#_IncludedRouter._match", at: "fastapi/routing.py:1787" }
+  - { ref: "entry:fastapi/routing.py#_IncludedRouter.handle", at: "fastapi/routing.py:1837" }
+  - { ref: "entry:fastapi/routing.py#_IncludedRouter.matches", at: "fastapi/routing.py:1823" }
+  - { ref: "entry:fastapi/routing.py#_frontend_scope_specificity", at: "fastapi/routing.py:952" }
+  - {
+      ref: "entry:fastapi/routing.py#_get_scope_effective_route_context",
+      at: "fastapi/routing.py:944",
+    }
+  - { ref: "entry:fastapi/routing.py#_get_scope_included_router", at: "fastapi/routing.py:948" }
+  - {
+      ref: "entry:fastapi/routing.py#_is_frontend_navigation_request",
+      at: "fastapi/routing.py:2105",
+    }
+  - { ref: "entry:fastapi/routing.py#_restore_fastapi_scope_key", at: "fastapi/routing.py:961" }
+  - { ref: "entry:fastapi/routing.py#_update_scope", at: "fastapi/routing.py:935" }
+  - { ref: "entry:fastapi/routing.py#get_request_handler", at: "fastapi/routing.py:397" }
+  - { ref: "entry:fastapi/routing.py#get_request_handler/app", at: "fastapi/routing.py:428" }
+  - { ref: "entry:fastapi/routing.py#get_websocket_app", at: "fastapi/routing.py:807" }
+  - { ref: "entry:fastapi/routing.py#get_websocket_app/app", at: "fastapi/routing.py:812" }
+  - { ref: "entry:fastapi/routing.py#iter_route_contexts", at: "fastapi/routing.py:1893" }
+  - {
+      ref: "entry:fastapi/security/api_key.py#APIKeyCookie.__call__",
+      at: "fastapi/security/api_key.py:318",
+    }
+  - {
+      ref: "entry:fastapi/security/api_key.py#APIKeyHeader.__call__",
+      at: "fastapi/security/api_key.py:230",
+    }
+  - {
+      ref: "entry:fastapi/security/api_key.py#APIKeyQuery.__call__",
+      at: "fastapi/security/api_key.py:142",
+    }
+  - { ref: "entry:fastapi/security/http.py#HTTPBase.__call__", at: "fastapi/security/http.py:94" }
+  - { ref: "entry:fastapi/security/http.py#HTTPBasic.__call__", at: "fastapi/security/http.py:204" }
+  - {
+      ref: "entry:fastapi/security/http.py#HTTPBearer.__call__",
+      at: "fastapi/security/http.py:305",
+    }
+  - {
+      ref: "entry:fastapi/security/http.py#HTTPDigest.__call__",
+      at: "fastapi/security/http.py:408",
+    }
+  - {
+      ref: "entry:fastapi/security/oauth2.py#OAuth2.__call__",
+      at: "fastapi/security/oauth2.py:423",
+    }
+  - {
+      ref: "entry:fastapi/security/oauth2.py#OAuth2AuthorizationCodeBearer.__call__",
+      at: "fastapi/security/oauth2.py:642",
+    }
+  - {
+      ref: "entry:fastapi/security/oauth2.py#OAuth2PasswordBearer.__call__",
+      at: "fastapi/security/oauth2.py:536",
+    }
+  - {
+      ref: "entry:fastapi/security/oauth2.py#OAuth2PasswordRequestForm.__init__",
+      at: "fastapi/security/oauth2.py:59",
+    }
+  - {
+      ref: "entry:fastapi/security/oauth2.py#OAuth2PasswordRequestFormStrict.__init__",
+      at: "fastapi/security/oauth2.py:226",
+    }
+  - {
+      ref: "entry:fastapi/security/open_id_connect_url.py#OpenIdConnect.__call__",
+      at: "fastapi/security/open_id_connect_url.py:87",
+    }
+  - {
+      ref: "entry:fastapi/telemetry/_asgi.py#ExceptionTelemetryMiddleware.__call__",
+      at: "fastapi/telemetry/_asgi.py:149",
+    }
+  - {
+      ref: "entry:fastapi/telemetry/_asgi.py#NativeTelemetry.__call__",
+      at: "fastapi/telemetry/_asgi.py:228",
+    }
+  - { ref: "entry:fastapi/telemetry/_asgi.py#_exception", at: "fastapi/telemetry/_asgi.py:87" }
+  - {
+      ref: "entry:fastapi/telemetry/_asgi.py#_server_attributes",
+      at: "fastapi/telemetry/_asgi.py:116",
+    }

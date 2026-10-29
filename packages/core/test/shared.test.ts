@@ -4,14 +4,14 @@ import { test } from 'node:test'
 
 // The roadmap's M4 criterion: nothing in the shared machinery of `packages/core` (the store,
 // profiles, detection, home, notes, the analyzer contract, entry points and signals as rules)
-// names a language or a framework. Each language is a module of its own (`go*.ts`, `ts*.ts`),
-// listed in one place (`languages.ts`) and exported with the rest (`index.ts`); frameworks are
-// profiles (D10), the routes a framework declares by files included (D32).
+// names a language or a framework. Each language is a module of its own (`go*.ts`, `ts*.ts`,
+// `py*.ts`), listed in one place (`languages.ts`) and exported with the rest (`index.ts`);
+// frameworks are profiles (D10), the routes a framework declares by files included (D32).
 
 const src = new URL('../src/', import.meta.url)
-const languageModule = /^(go|ts)([-.].*)?\.ts$|^(languages|index)\.ts$/
+const languageModule = /^(go|ts|py)([-.].*)?\.ts$|^(languages|index)\.ts$/
 const names =
-  /\b(go|golang|typescript|javascript|tsx|jsx|hono|chi|net-http|gorilla|express|kaneo|wakapi|sveltekit|svelte|kener)\b/i
+  /\b(go|golang|typescript|javascript|tsx|jsx|hono|chi|net-http|gorilla|express|kaneo|wakapi|sveltekit|svelte|kener|python|fastapi|starlette|pydantic|getspace)\b/i
 
 // The code of a file, its comments left out: a comment may cite an example, code may not.
 function code(text: string): string {

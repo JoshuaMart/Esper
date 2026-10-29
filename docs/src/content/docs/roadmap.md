@@ -18,7 +18,7 @@ counted by hand, with none missing and none invented.
 | [M5](#m5--the-server-and-the-web-interface) | The server and the web interface | an audit can be followed and annotated in the browser | done |
 | [M6](#m6--enrichment-and-past-advisories) | Enrichment and past advisories | claims and advisory links measured on chi and Hono | done |
 | [M7](#m7--sveltekit) | SvelteKit | SvelteKit and a SvelteKit application pass their hand count | done |
-| [M8](#m8--python-and-fastapi) | Python and FastAPI | FastAPI and a FastAPI application pass their hand count | not started |
+| [M8](#m8--python-and-fastapi) | Python and FastAPI | FastAPI and a FastAPI application pass their hand count | done |
 | [M9](#m9--dataflow-on-demand) | Dataflow, on demand | a `flows` question answered by Joern, every step cited | not started |
 | [Next](#after-that) | More frameworks | Next.js, TanStack Start, each a pair of profiles | |
 
@@ -312,6 +312,40 @@ the contract. It comes before dataflow because the auditor's targets have FastAP
 **Done when** FastAPI, in framework mode, and a FastAPI application, in application mode, match
 their hand count, recorded in `profiles/fastapi/counts/`, and the Go, Hono and SvelteKit counts
 still hold.
+
+It is done, on FastAPI 0.162.0 and Starlette 1.10.0, the latest releases
+([D36](/decisions/#d36--python-as-its-syntax-states-it) to [D40](/decisions/#d40--scip-python-wheels-only-and-no-python-in-the-analysis)):
+
+- **Python as a module** (`py*.ts`, `queries/python/`): modules named from the files (a `src`
+  layout included), imports through `__init__.py` re-exports, projects and dependencies from
+  `pyproject.toml` (PEP 621, uv's groups, Poetry) and `requirements*.txt`, types from annotations,
+  `Annotated`, `x = C()`, fields and return annotations, calls resolved or guessed with a reason;
+  tests, virtual environments and migrations skipped. The shared core still names no language
+  (`packages/core/test/shared.test.ts`).
+- **FastAPI and Starlette's application profiles**: decorators, `add_api_route`, route objects
+  (`Route`, `Mount`) in lists, `include_router` prefixes and dependencies, mounts, middleware
+  outermost first, then dependencies as the chain, each after its own; parameters as reads
+  (`Query`, `Header`, models as the body, path or query by the route's path); security schemes and
+  dependencies that raise 401 or 403 as guards; `mass-assignment` where a model is spread into
+  another. The profile format gained keywords, route objects, middleware classes, parameters,
+  re-exports and the bases of types outside the target ([profiles](/reference/profiles/#fastapi-and-starlette)).
+- **[getspace](https://github.com/Hugo-SEQUIER/getspace)'s backend** at `d094115` (`backend/`: uv,
+  psycopg, an MCP server): 107 routes, the 90 decorated ones under `/v1` behind an `authn` check
+  that raises a 401 its exception handler answers, 16 OAuth routes as Starlette objects, and the MCP
+  server mounted at `/mcp`. It is added as its own project (`esper add …/getspace/backend`).
+  **FastAPI's [full-stack template](https://github.com/fastapi/full-stack-fastapi-template)** at
+  `f4bcfab`, for prefixes, `Annotated` aliases and `dependencies=[…]`: 24 routes. Both match their
+  hand count and a script written apart from Esper.
+- **FastAPI 0.162.0**, in framework mode: 69 entry points, from each security scheme's
+  `__call__` reading `Authorization` to the request handler reading the body; **Starlette 1.10.0**:
+  68, from the connection's properties and the multipart parser to CORS, trusted hosts, sessions
+  and static files. uvicorn's `ProxyHeadersMiddleware` is the server's, not theirs
+  ([D39](/decisions/#d39--fastapi-and-starlette-as-two-frameworks)).
+- **scip-python** 0.6.8 joins the analyzers, installing a target's dependencies as wheels only and
+  running no Python: on getspace's backend, calls without an edge fall from 2342 to 1451, the 107
+  routes unchanged.
+- **The Go, Hono and SvelteKit counts still hold**: all eleven counts run in
+  `packages/core/test/counts.test.ts`.
 
 ## M9 — Dataflow, on demand
 

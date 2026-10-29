@@ -229,13 +229,68 @@ methods of object literals) resolve a few more calls than M4 did.
 Most calls left without an edge are methods of values from outside the target whose type the
 syntax does not state (`res.headers.get`, a query builder's `.where`), as for Go.
 
+## Python
+
+What the Python extraction states, from syntax alone
+([D36](/decisions/#d36--python-as-its-syntax-states-it)):
+
+| Construct | Becomes |
+|---|---|
+| `def f()` | `decl` `path#f` |
+| `class Service:` with `def update(self)` | `decl` `path#Service`, and `path#Service.update` |
+| `def inner()` inside `create_routes` | `decl` `path#create_routes/inner`, called by `path#create_routes` |
+| `key = lambda r: …` | `decl` `path#key` |
+| `lambda r: …` inside `f`, held by no name | `decl` `path#f/lambda1`, a literal, called by `path#f` |
+| `@property def headers(self)` | `decl` `path#HTTPConnection.headers`, called where `.headers` is read |
+| `from shop.routers import items_router` (a module of the target) | an `imports` edge to `src/shop/routers/__init__.py` |
+| `from fastapi import Depends` | an `imports` edge to `ext:fastapi` |
+
+A file's module is its path from the nearest folder above it without an `__init__.py`:
+`src/space/api/rest.py` is `space.api.rest`, and the file node's `data.module` says so. Imports
+resolve through those names, relative imports from the file's package, a package's `__init__.py`
+re-exports and `from m import *` (as `__all__` says). A name outside the target is named by the
+module the code imports and the name (`ext:fastapi#Depends`, `ext:os.path#join`, a built-in
+`ext:builtins#open`), or by the module a profile says re-exports it (`fastapi#Request` is
+`starlette.requests#Request`). A declaration is `exported` when neither its name nor a part of its
+module starts with one underscore; a method when its class is.
+
+A call `x.m()` is **resolved** when the syntax states the type of `x`: an annotation (`Annotated[T,
+…]`, `Optional[T]` and `T | None` as `T`, a string naming a class), `x = C()`, the return annotation
+of the function `x` comes from or the one value it returns, a class's field (from its body, or what
+its methods assign to `self.x`), a property's result, a module-level type alias of the target as a
+type of its own (`starlette.types#Scope`). A class called runs its `__init__`, `super().m()` a
+base's method, a method missing from a class of the target a base's outside it
+(`ext:pydantic#BaseModel.model_dump`). Calls are **guessed**, with the reason, through an abstract
+method (each override in a subclass of the target), and on a value no syntax types when the target
+has one method of that name, unless values of Python's own types have it (`get`, `append`,
+`model_dump`), which `library.yaml` lists as `builtins`.
+
+Three more edges come from values rather than calls: a nested function or a lambda is called by the
+function that defines it; a function returned (`return admitted`) by the function that returns it;
+and a function given to a call (`run_in_threadpool(self.debug_response, request, exc)`) by the
+function that gives it, each with `data.reference` or `data.literal`.
+
+Measured on getspace's backend at `d094115`, 130 files, FastAPI 0.162.0, 74 files, and Starlette
+1.10.0, 36 files:
+
+| | getspace's backend | FastAPI | Starlette |
+|---|---|---|---|
+| declarations | 1444 | 715 | 642 |
+| call edges | 5836, 496 guessed (8.5 %) | 3294, 7 guessed | 1420, 14 guessed |
+| calls without an edge | 2342 | 882 | 545 |
+| with scip-python | 1451 without an edge | 329 without an edge | 189 without an edge |
+
+A third of getspace's guesses are `workspace.transaction(…)`, on a parameter its code does not
+type, which the target defines once. Most calls left without an edge are methods of values from
+outside the target whose type the syntax does not state, as for Go and TypeScript.
+
 ## Entry points
 
 An application's routes, read with its profile ([Profiles](/reference/profiles/)):
 
 | What | Stored as |
 |---|---|
-| a route | an `entry` node `route:<METHOD> <path>`, at the line that registers it; `data` keeps the pattern as written, the handler's text, and what could not be resolved |
+| a route | an `entry` node `route:<METHOD> <path>` (a websocket's method is `WEBSOCKET`), at the line that registers it, a decorator's for a decorated function; `data` keeps the pattern as written, the handler's text, and what could not be resolved |
 | its method and path | `method` and `path` facts |
 | its handler | `handles` edges to each declaration or external the handler names |
 | its chain | `chain` edges, with `data.position` from the outermost middleware |
@@ -252,7 +307,7 @@ What the facts say, and where they come from:
 | Fact | On | From |
 |---|---|---|
 | `guard` | an entry | a chain member that a profile's `guards` names, with its kind; or a check its handler, a chain member or what they call makes, with `data.check` and `data.via` |
-| `guard` | a declaration | a check: a condition on a value read from the request, then one of the profile's `refusals` (`if (!locals.user) error(401)`), with the kind of the profile's check rule ([D34](/decisions/#d34--a-check-that-refuses-is-a-guard)) |
+| `guard` | a declaration | a check: a condition on a value read from the request, then one of the profile's `refusals` (`if (!locals.user) error(401)`), with the kind of the profile's check rule ([D34](/decisions/#d34--a-check-that-refuses-is-a-guard)); or a dependency of a route that raises, in a condition, an exception with a status the profile's rule names (`raise HTTPException(401)`), with `data.status` ([D38](/decisions/#d38--what-a-parameter-reads-and-a-dependency-that-refuses)) |
 | `sink` | the declaration that makes the call | a call that the language's `library.yaml` lists as a sink, when the argument it interprets is not a literal: `db.Query("… " + id)` is a sink, `db.Query("… = ?", id)` is not |
 | `signal` | a declaration | the rules of [D6](/decisions/#d6--the-graph-model), each at the line that triggers it |
 | `signal` | an entry | the signals of what its handler, or its chain, reaches through calls, with `data.via` and `data.from`; `sink-reachable` for a sink, with `data.sink` |

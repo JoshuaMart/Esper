@@ -55,10 +55,12 @@ export function languageOf(path: string): string | undefined {
 // Whether a path is read, or the reason it is skipped. A skipped folder is reported once.
 export function classify(path: string): { skip?: Skip; read: boolean } {
   const parts = path.split('/')
+  const language = languages.find((l) => l.reads(path))
   for (let i = 0; i < parts.length - 1; i++) {
     const dir = parts[i] as string
     const reason =
       skippedDirs[dir] ??
+      language?.skip?.(dir) ??
       (dir.startsWith('.') ? 'hidden' : /[-_]tests?$/.test(dir) ? 'tests' : undefined)
     if (reason)
       return { skip: { path: `${parts.slice(0, i + 1).join('/')}/`, reason }, read: false }

@@ -1,0 +1,12 @@
+# scip-python (https://github.com/sourcegraph/scip-python): Pyright over the snapshot, as SCIP,
+# turned into the references of each call site and the methods that override each method.
+name: scip-python
+version: 0.6.8
+description: Resolves Python call edges with Pyright.
+languages: [python]
+provides: [edges.resolve]
+answers: snapshot
+image:
+  dockerfile: Dockerfile
+fetch: [fetch]
+analyze: [analyze]

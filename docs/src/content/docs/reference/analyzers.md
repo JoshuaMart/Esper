@@ -1,6 +1,6 @@
 ---
 title: Analyzers
-description: The contract every analyzer follows, the import format Esper reads from it, and the analyzers built on it, scip-go and scip-typescript.
+description: The contract every analyzer follows, the import format Esper reads from it, and the analyzers built on it, scip-go, scip-typescript and scip-python.
 ---
 
 An analyzer adds what tree-sitter cannot see, from a container and through one contract
@@ -258,12 +258,59 @@ of the target runs.
 Without the dependencies, scip-typescript still names the calls between the target's own modules;
 calls on values from outside it, and the guesses on them, stay as tree-sitter left them.
 
+## scip-python
+
+[scip-python](https://github.com/sourcegraph/scip-python) 0.6.8, its latest release, runs Pyright
+over the snapshot and writes a SCIP index
+([D40](/decisions/#d40--scip-python-wheels-only-and-no-python-in-the-analysis)). The image
+(`analyzers/scip-python/`) is built on Node 24.22.1 with Alpine's Python and uv 0.13.6, the images
+pinned by digest; scip-python is pinned by the lockfile of its program, `esper-scip-python`, and
+installed without scripts. The program does both runs:
+
+- **fetch** reads the manifest at the root of the snapshot's tree: `uv.lock`, exported frozen; else
+  a `requirements*.txt`; else a `pyproject.toml`, whose dependencies uv resolves. It keeps the
+  pinned list in the cache volume, and installs each requirement on its own from PyPI, whatever the
+  target configures, as a wheel only (`--only-binary :all:`, no build), into a folder it discards:
+  uv's cache, in the volume, keeps the wheels. A requirement without a wheel is left out, and said.
+- **analyze** copies the tree into `/tmp`, installs the pinned wheels from the cache without the
+  network, lists the installed packages from their `RECORD` files as scip-python's environment, and
+  runs `scip-python index` with no Python on its path: neither it nor Pyright starts an interpreter,
+  which would run a dependency's `.pth` files. Pyright reads the installed packages and the
+  snapshot's `src` roots as extra paths.
+
+It writes what scip-typescript's analysis writes: a `reference` for each name whose symbol is
+defined in the snapshot or outside it, a name renamed by its import left out, and an
+`implementation` for each method that overrides another of the snapshot. Outside the snapshot, a
+symbol is named by its module and its names (`fastapi.security.oauth2#OAuth2PasswordBearer.__call__`);
+where the syntax names the same call outside the target, the import's name is kept. A class a
+reference names is called through its `__init__`, as the syntax reads it.
+
+Measured at the counted commits:
+
+| | getspace's backend `d094115` | FastAPI 0.162.0 | Starlette 1.10.0 | full-stack template `f4bcfab`, `backend` |
+|---|---|---|---|---|
+| dependencies | installed from `uv.lock` | installed from `uv.lock` | installed from `uv.lock` | none: the lockfile is at the repository's root |
+| calls named by scip-python | 3037 of 7846 | 1474 of 4049 | 792 of 1779 | 64 of 222 |
+| guessed edges, tree-sitter alone | 496 of 5836 | 7 of 3294 | 14 of 1420 | none of 182 |
+| guessed edges, with scip-python | 450 of 6723 | none of 3847 | 3 of 1767 | none of 189 |
+| calls without an edge, tree-sitter alone | 2342 | 882 | 545 | 42 |
+| calls without an edge, with scip-python | 1451 | 329 | 189 | 35 |
+| entry points, as counted by hand | 107 | 69 | 68, of which 67 stay | 24 |
+| time, the first run | about 30 s | about 40 s | about 11 s | about 3 s |
+
+Starlette's `BaseRoute.__call__` reached a read only through a guess ("the only method named
+`handle`"), which the analyzer corrects: with scip-python it is no longer an entry point. Most of
+getspace's guesses that stay are calls on parameters its code does not annotate
+(`workspace.transaction(…)`), which Pyright does not type either.
+
 ## Tests
 
 `packages/core/test/analyzer.test.ts` checks the manifests and the import: a file with one invalid
 line, or one place that does not match the snapshot, is refused whole. `packages/core/test/scip-go.test.ts`
 runs scip-go in Docker on chi 5.3.2 and Wakapi at their counted commits, and on a folder that is not
 a git checkout; `packages/core/test/scip-typescript.test.ts` runs scip-typescript on Hono,
-Kaneo's API and Budget at theirs, and on a folder without a lockfile. Without Docker these tests are skipped and say so; without the targets of
+Kaneo's API and Budget at theirs, and on a folder without a lockfile;
+`packages/core/test/scip-python.test.ts` runs scip-python on getspace's backend, FastAPI and
+Starlette at theirs, and on a folder without a manifest. Without Docker these tests are skipped and say so; without the targets of
 `pnpm fetch-targets`, the ones on the counted targets are. GitHub's Ubuntu runners have Docker, so CI
 runs them.

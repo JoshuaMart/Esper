@@ -78,6 +78,9 @@ export { type Library, loadLibrary } from './library.ts'
 export * from './notes.ts'
 export { defineGrammar, loadLanguage, loadQuery, parse } from './parser.ts'
 export * from './profile.ts'
+export { type PyFile, PyProgram, type PyType, typeSymbol as pyTypeSymbol } from './py.ts'
+export { indexPy, python } from './py-index.ts'
+export { parseToml } from './py-modules.ts'
 export { declRef, externalRef, fingerprint, hashText, Names } from './refs.ts'
 export {
   type NewSnapshot,

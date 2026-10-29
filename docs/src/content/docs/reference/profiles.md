@@ -40,23 +40,34 @@ Symbols are written `<import path>#<symbol>`.
 
 | Field | What it says |
 |---|---|
-| `language` | the language of the code it reads: `go` or `typescript` (which reads JavaScript too) |
-| `detect` | how the profile recognises its target: `dependency` for an application that requires the framework (a `go.mod` requirement; a `package.json` dependency, peer or optional), `module` for the framework itself (a module path; a package name), `import` for a file that imports a package |
+| `language` | the language of the code it reads: `go`, `typescript` (which reads JavaScript too) or `python` |
+| `detect` | how the profile recognises its target: `dependency` for an application that requires the framework (a `go.mod` requirement; a `package.json` dependency, peer or optional; a `pyproject.toml` dependency, optional one or one of a group, or a `requirements*.txt` line), `module` for the framework itself (a module path; a package name; a project's name), `import` for a file that imports a package |
 | `request`, `response` | the request's type (`net/http#Request`, `globalThis#Request`), for the `chain` reads, and the type a handler writes to (`net/http#ResponseWriter`) |
 | `context` | what a handler or a middleware receives first when its code states no type: `hono#Context` |
 | `handlers.adapters` | conversions whose first argument is the handler (`net/http#HandlerFunc`, `hono/factory#createMiddleware`), seen through |
-| `handlers.types` | types of functions that are handlers (`hono#MiddlewareHandler`): a function typed so receives the `context` first |
-| `routers` | each kind of router: its types, the functions or classes that `create` one, the package functions that register on a `default` one, its `pattern` syntax, whether its middleware is `ordered` and its methods `chained`, and what each of its methods `does` |
+| `handlers.types` | types of functions that are handlers (`hono#MiddlewareHandler`): a function typed so receives the `context` first; in Python, types that stand for the request, whose parameters make a framework's handlers (an ASGI scope, `starlette.types#Scope`) |
+| `routers` | each kind of router: its types, the functions or classes that `create` one, the package functions that register on a `default` one, its `pattern` syntax, whether its middleware is `ordered` and its methods `chained`, what each of its methods `does`, what its constructor's keywords are (`construct`), and which of its attributes are itself (`self`) |
+| `declares` | calls that build a route or a mount given to a router in a list (`starlette.routing#Route`, `Mount`), their arguments by role ([below](#fastapi-and-starlette)) |
+| `middleware` | calls that name a middleware class (`wrap`: `Middleware(CORSMiddleware, …)`), the method of a middleware class that handles a request, with what it receives (`classes`), and the attributes it calls the next application through (`forwards`: `self.app(…)`) |
+| `exceptions` | how an exception says its status, for `status` guards: the router methods that register an exception handler (`handlers`), the keywords that hold a status (`status`), a pattern of a constant naming one (`named`: `HTTP_(\d{3})_`) |
+| `parameters` | how a handler's and its dependencies' parameters read the request and declare dependencies ([below](#fastapi-and-starlette)) |
+| `reexports` | symbols outside the target another module declares: `fastapi#Request` is `starlette.requests#Request`, so that rules name it once |
+| `bases` | the bases of types outside the target: rules on `starlette.requests#HTTPConnection` apply to a `Request` |
 | `files` | routes declared by the files of a route tree rather than by calls ([below](#routes-declared-by-files)) |
 | `aliases` | import specifiers mapped to a folder of the package, configured outside the target: `$lib: src/lib` |
 | `members` | the type of each property of a type outside the target, which the index cannot read: `"@sveltejs/kit#RequestEvent": { request: globalThis#Request }` |
 | `returns` | what a function outside the target returns: `$app/server#getRequestEvent: "@sveltejs/kit#RequestEvent"` |
 | `refusals` | calls that answer the request with a refusal, for the guards that are checks: `@sveltejs/kit#error` |
 | `surface` | for a framework: `exported` makes each exported declaration that reaches a read of the request an entry point; `handlers` adds each function and method that takes the request (in Go, with a response writer; in TypeScript, or the context), exported or not; `except` leaves out files by globs (`**/src/runtime/client/**`), code that runs in the browser |
-| `guards` | middleware that can refuse a request, by kind: `{ call: github.com/go-chi/chi/v5/middleware#BasicAuth, kind: authn }`; or a check, a function that refuses when a value read from the request is missing: `{ check: context.user, kind: authn }` |
+| `guards` | middleware that can refuse a request, by kind: `{ call: github.com/go-chi/chi/v5/middleware#BasicAuth, kind: authn }`, unless built with an argument `unless` names (`{ auto_error: "False" }`); or a check, a function that refuses when a value read from the request is missing: `{ check: context.user, kind: authn }`; or a dependency that raises an exception with a status: `{ status: 401, kind: authn }` |
 | `reads` | what reads the request: a `chain` of fields and calls on it, or a `call` to a function given it |
 | `mutations` | what changes request state that later code reads again, as `chain`s: `{ on: hono#Context, chain: set() }` |
 | `sinks` | the framework's own sinks, by kind, as in a language's `library.yaml`: `redirect: [hono#Context.redirect]` |
+
+In Python, a symbol is written with its module and its name, `fastapi.security.oauth2#OAuth2PasswordBearer`,
+a method with its class (`sqlalchemy.orm#Session.execute`), a class or a type alias of the target
+with its own module, so that a framework's rules name its own code as they name an application's
+imports.
 
 In TypeScript, a symbol outside the target is written with the module the code imports it from
 (`hono/cors#cors`, `@hono/zod-openapi#OpenAPIHono`), a global with `globalThis`, and a type of the
@@ -74,6 +85,8 @@ application's.
 | `subrouter` | `path`, `callback` | the callback receives a router mounted at the path |
 | `mount` | `path`, `handler` | a router mounted at the path, or a handler serving the whole subtree |
 | `prefix` | `path` | a router that registers on this one under the path (Hono's `basePath`) |
+| `routes` | `routes` | route objects (`declares`) given as a list: `app.router.routes.extend([…])` |
+| `include` | `handler` | a router's routes under a `path` keyword, with the dependencies of a `chain` keyword before each route's own (`include_router`) |
 
 `args` overrides the arguments when a method takes them in another order: `Method` takes
 `[method, path, handler]`. `chain` stands for every argument between those before it and the last
@@ -89,6 +102,11 @@ object whose properties `config` maps to roles, seen through the functions `thro
   through: ['@hono/zod-openapi#createRoute']
   pattern: braces
 ```
+
+In Python, `keywords` gives a role to each keyword argument (`{ prefix: path, dependencies:
+chain, methods: method }`), a `chain` keyword being a list of dependencies; a method called as a
+decorator takes the function it decorates as its handler; `receives` says what that handler
+receives first, and `parameters` that its parameters are read by the profile's `parameters`.
 
 A router whose middleware is `ordered` applies a `use` to the routes registered after it, and only
 to those its path matches when its first argument is one: `app.use('/admin/*', auth)`. A path
@@ -126,7 +144,12 @@ at the properties it is taken by: `({ params }) => params.id` reads what `event.
 A `call` names a function and the positions of the request and of the name:
 `chi.URLParam(r, "id")` is `path.id`.
 
-`by` names the kind of read by the string the `(name)` argument holds:
+`except` lists the names that are not read: `{ on: starlette.types#Scope, chain: "[name]", except:
+[type, asgi] }` reads `scope['headers']` but not `scope['type']`, which the server sets. A `call`'s
+`request` may be a keyword, in Python: `{ call: starlette.datastructures#Headers, request: scope,
+read: header }` reads for `Headers(scope=scope)`, not for `Headers(raw=…)`.
+
+`by` names the kind of read by the string the `(name)` argument, or the `[name]` key, holds:
 `{ on: hono#Context, chain: req.valid(name), read: body, by: { param: path, json: body } }` makes
 `c.req.valid('param')` a read of the path. A read whose name the call does not give, destructured,
 is named by its properties: `const { id } = c.req.param()` reads `path.id`, and
@@ -353,6 +376,92 @@ What the index cannot read, the count records: the request of adapter-cloudflare
 adapter-netlify's edge function is typed by a package outside the repository; `Server.respond`
 calls the instance `configure` imports with `await import()`.
 
+## FastAPI and Starlette
+
+`profiles/starlette/application.yaml` reads an application built on Starlette, and
+`profiles/fastapi/application.yaml` extends it for FastAPI
+([D37](/decisions/#d37--fastapi-routes-and-dependencies-as-the-chain),
+[D38](/decisions/#d38--what-a-parameter-reads-and-a-dependency-that-refuses)):
+
+```yaml
+routers:
+  - types: [fastapi.applications#FastAPI, fastapi.routing#APIRouter]
+    create: [fastapi.applications#FastAPI, fastapi.routing#APIRouter]
+    pattern: braces
+    construct: { prefix: path, dependencies: chain, routes: routes, middleware: middleware }
+    self: [router]
+    methods:
+      - name: get
+        does: route
+        method: GET
+        args: [path, handler]
+        keywords: { path: path, dependencies: chain }
+        parameters: true
+      - name: include_router
+        does: include
+        args: [handler]
+        keywords: { router: handler, prefix: path, dependencies: chain }
+      - { name: add_middleware, does: use, args: [middleware] }
+      - { name: router.routes.extend, does: routes, args: [routes] }
+declares:
+  - call: starlette.routing#Route
+    does: route
+    method: GET
+    args: [path, handler]
+    keywords: { path: path, endpoint: handler, methods: method }
+parameters:
+  depends: [fastapi.param_functions#Depends, fastapi.param_functions#Security]
+  markers:
+    - { call: fastapi.param_functions#Query, read: query }
+    - { call: fastapi.param_functions#Header, read: header, hyphens: true }
+  alias: alias
+  given: [starlette.requests#Request]
+  models: [pydantic#BaseModel]
+  files: [fastapi.datastructures#UploadFile]
+```
+
+- **Routes**: the decorators of an application or a router (`get`, `post`, `put`, `patch`,
+  `delete`, `head`, `options`, `trace`, `api_route`, `websocket`), `add_api_route`,
+  `add_api_websocket_route`, Starlette's `add_route` and `route`, and route objects in a list
+  (`Route`, `WebSocketRoute`, `Mount`, `Host`, FastAPI's `APIRoute`), given to a constructor
+  (`routes=[…]`) or to `app.router.routes.extend(…)`. A route's methods are its `methods` list, one
+  route each; a websocket's method is `WEBSOCKET`; Starlette's `{rest:path}` is `{rest...}`.
+- **Mounts**: `include_router(router, prefix=…, dependencies=[…])`, `mount(path, app)` and `Mount`;
+  an application that is no router of the target serves its subtree (`ANY /mcp/{rest...}`), as
+  `frontend(path, directory=…)` does.
+- **The chain**: the application's middleware, outermost first (the last added first, then the
+  constructor's `middleware=[Middleware(…)]` in order), each a function given the request, a
+  class's `dispatch` or `__call__`, or a class outside the target; then, for a route FastAPI
+  declares, the dependencies of its routers, of its include and of its decorator, and those its
+  parameters declare, each after its own and once.
+- **Reads**: a request's and a websocket's attributes (`headers`, `query_params`, `path_params`,
+  `cookies`, `client`, `url`, `state`, `session`, `json()`, `body()`, `form()`, a websocket's
+  receives), an ASGI scope's keys, and what parameters declare: a marker's kind, a model's body, an
+  upload's form field, a plain value's path parameter when the route's path names it, its query
+  parameter otherwise.
+- **Guards**: FastAPI's security schemes (`authn`, not when built with `auto_error=False`),
+  Starlette's `TrustedHostMiddleware`, `HTTPSRedirectMiddleware` (`validation`) and
+  `AuthenticationMiddleware` (`authn`), and a dependency of a route that raises 401 (`authn`) or 403
+  (`authz-role`), the status written on the exception or answered by the application's exception
+  handler for it.
+- **Sinks**: `RedirectResponse`, `FileResponse`, `StaticFiles`, `HTMLResponse`, a template's
+  context; the language's, in `queries/python/library.yaml`: processes, `eval`, `pickle` and
+  `yaml.load`, files, SQL text (`sqlalchemy.text`, a cursor's `execute`), `httpx` and `requests`,
+  Jinja2's `Markup`.
+
+`profiles/fastapi/framework.yaml` and `profiles/starlette/framework.yaml` make each framework's
+surface its exported declarations and the functions that take the request, a connection, a
+websocket or an ASGI scope ([D39](/decisions/#d39--fastapi-and-starlette-as-two-frameworks));
+Starlette's test client is left out.
+
+Measured on getspace's backend at `d094115`, 130 files: 107 routes, the decorated ones under `/v1`
+behind `authenticated`, which raises a 401, the OAuth endpoints as Starlette routes, and the MCP
+server mounted at `/mcp`. On FastAPI's full-stack template at `f4bcfab`, `backend`: 24 routes. On
+FastAPI 0.162.0, 74 files: 69 entry points, from each security scheme's `__call__` to the request
+handler and the router's matching. On Starlette 1.10.0, 36 files: 68 entry points, from the
+connection's properties and the multipart parser to CORS, trusted hosts, sessions and static
+files.
+
 ## Hand counts
 
 Each profile is measured against targets counted by hand ([D16](/decisions/#d16--measured-against-hand-counted-targets)),
@@ -370,6 +479,10 @@ none invented. CI does both.
 | SvelteKit 3.1.0 | framework | 59 |
 | Budget `cfce07b` | application | 24 |
 | Kener v4.1.10 | application | 90 |
+| FastAPI 0.162.0 | framework | 69 |
+| getspace `d094115`, `backend` | application | 107 |
+| full-stack-fastapi-template `f4bcfab`, `backend` | application | 24 |
+| Starlette 1.10.0 | framework | 68 |
 
 A count whose target is a folder of its repository says so (`dir: apps/api`): the target is read
 from git in that folder.

@@ -61,6 +61,8 @@ const defaultArgs: Record<RouterMethod['does'], ArgRole[]> = {
   subrouter: ['path', 'callback'],
   mount: ['path', 'handler'],
   prefix: ['path'],
+  routes: [],
+  include: [],
 }
 
 const literals = new Set(['arrow_function', 'function_expression', 'generator_function'])

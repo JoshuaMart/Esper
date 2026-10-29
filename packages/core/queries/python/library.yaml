@@ -1,0 +1,394 @@
+# What Python's standard library and common libraries do with what they are given: the calls that
+# are sinks, that read or write persisted data, or that decode a request body. A call is a sink only
+# when the argument it interprets is not a literal: `@1` names that argument when it is not the
+# first, `@*` means any argument. Symbols are `<module>#<name>`, the module as the code imports it
+# (`subprocess#run`, `sqlalchemy#text`), a method by its class (`sqlalchemy.orm#Session.execute`),
+# and a built-in under `builtins`.
+
+# Names a program uses without declaring them.
+globals:
+  - eval
+  - exec
+  - compile
+  - open
+  - print
+  - len
+  - str
+  - int
+  - float
+  - bool
+  - bytes
+  - list
+  - dict
+  - set
+  - frozenset
+  - tuple
+  - range
+  - enumerate
+  - zip
+  - map
+  - filter
+  - sorted
+  - reversed
+  - min
+  - max
+  - sum
+  - any
+  - all
+  - abs
+  - round
+  - isinstance
+  - issubclass
+  - getattr
+  - setattr
+  - hasattr
+  - delattr
+  - callable
+  - iter
+  - next
+  - repr
+  - hash
+  - id
+  - type
+  - object
+  - super
+  - vars
+  - dir
+  - format
+  - ord
+  - chr
+  - hex
+  - divmod
+  - pow
+  - __import__
+  - Exception
+  - ValueError
+  - TypeError
+  - KeyError
+  - RuntimeError
+  - NotImplementedError
+  - PermissionError
+  - LookupError
+  - AttributeError
+
+# Members that values of the language's own types have (`str.format`, `dict.get`, `list.append`):
+# a call of one on a value whose type the syntax does not state is not guessed to be a method of
+# the target.
+builtins:
+  - get
+  - items
+  - keys
+  - values
+  - update
+  - pop
+  - popitem
+  - setdefault
+  - copy
+  - clear
+  - append
+  - extend
+  - insert
+  - remove
+  - index
+  - count
+  - sort
+  - reverse
+  - add
+  - discard
+  - union
+  - intersection
+  - difference
+  - issubset
+  - join
+  - split
+  - rsplit
+  - splitlines
+  - strip
+  - lstrip
+  - rstrip
+  - replace
+  - startswith
+  - endswith
+  - lower
+  - upper
+  - title
+  - casefold
+  - format
+  - encode
+  - decode
+  - find
+  - rfind
+  - partition
+  - rpartition
+  - isdigit
+  - isalnum
+  - isalpha
+  - zfill
+  - read
+  - readline
+  - readlines
+  - write
+  - close
+  - flush
+  - seek
+  - tell
+  - fileno
+  - hex
+  - isoformat
+  - timestamp
+  - total_seconds
+  - __enter__
+  - __exit__
+  - __aenter__
+  - __aexit__
+  - __init__
+  - __call__
+  - __str__
+  - __repr__
+  - __eq__
+  - __hash__
+  - send
+  - throw
+  - cancel
+  - result
+  - done
+  - set_result
+  - set_exception
+  - acquire
+  - release
+  - wait
+  - put
+  - put_nowait
+  - get_nowait
+  - task_done
+  # Pydantic's models.
+  - errors
+  - json
+  - dict
+  - model_dump
+  - model_dump_json
+  - model_copy
+  - model_validate
+
+# Pydantic's and SQLModel's methods that dump a model to a mapping, and that bind a value into a
+# model, by name: a model spread or bound into what is written is `mass-assignment`.
+models:
+  dumps: [model_dump, dict, json]
+  binds: [model_validate, from_orm, parse_obj, sqlmodel_update, model_construct]
+
+# What functions outside the target return, where the syntax cannot say.
+returns:
+  sqlalchemy#create_engine: sqlalchemy#Engine
+  sqlalchemy.ext.asyncio#create_async_engine: sqlalchemy.ext.asyncio#AsyncEngine
+  psycopg#connect: psycopg#Connection
+  psycopg.Connection#connect: psycopg#Connection
+  psycopg2#connect: psycopg2#connection
+  sqlite3#connect: sqlite3#Connection
+  requests#Session: requests#Session
+
+# What persisted data a call reads or writes.
+data:
+  write:
+    - sqlalchemy.orm#Session.add
+    - sqlalchemy.orm#Session.add_all
+    - sqlalchemy.orm#Session.delete
+    - sqlalchemy.orm#Session.merge
+    - sqlalchemy.orm#Session.commit
+    - sqlalchemy.orm#Session.execute
+    - sqlalchemy.orm#Session.flush
+    - sqlalchemy.ext.asyncio#AsyncSession.add
+    - sqlalchemy.ext.asyncio#AsyncSession.add_all
+    - sqlalchemy.ext.asyncio#AsyncSession.delete
+    - sqlalchemy.ext.asyncio#AsyncSession.merge
+    - sqlalchemy.ext.asyncio#AsyncSession.commit
+    - sqlalchemy.ext.asyncio#AsyncSession.execute
+    - sqlalchemy.ext.asyncio#AsyncSession.flush
+    - sqlmodel#Session.add
+    - sqlmodel#Session.add_all
+    - sqlmodel#Session.delete
+    - sqlmodel#Session.merge
+    - sqlmodel#Session.commit
+    - sqlmodel#Session.execute
+    - sqlmodel.ext.asyncio.session#AsyncSession.add
+    - sqlmodel.ext.asyncio.session#AsyncSession.commit
+    - sqlmodel.ext.asyncio.session#AsyncSession.delete
+    - sqlalchemy#Connection.execute
+    - sqlalchemy#Engine.execute
+    - psycopg#Connection.execute
+    - psycopg#Connection.commit
+    - psycopg#Cursor.execute
+    - psycopg#Cursor.executemany
+    - psycopg#AsyncConnection.execute
+    - psycopg#AsyncCursor.execute
+    - psycopg2#connection.commit
+    - psycopg2#cursor.execute
+    - psycopg2#cursor.executemany
+    - sqlite3#Connection.execute
+    - sqlite3#Connection.commit
+    - sqlite3#Cursor.execute
+    - asyncpg#Connection.execute
+    - asyncpg#Pool.execute
+  read:
+    - sqlalchemy.orm#Session.get
+    - sqlalchemy.orm#Session.query
+    - sqlalchemy.orm#Session.scalars
+    - sqlalchemy.orm#Session.scalar
+    - sqlalchemy.orm#Session.execute
+    - sqlalchemy.ext.asyncio#AsyncSession.get
+    - sqlalchemy.ext.asyncio#AsyncSession.scalars
+    - sqlalchemy.ext.asyncio#AsyncSession.scalar
+    - sqlalchemy.ext.asyncio#AsyncSession.execute
+    - sqlmodel#Session.get
+    - sqlmodel#Session.exec
+    - sqlmodel#Session.query
+    - sqlmodel#Session.scalars
+    - sqlmodel.ext.asyncio.session#AsyncSession.get
+    - sqlmodel.ext.asyncio.session#AsyncSession.exec
+    - sqlalchemy#Connection.execute
+    - psycopg#Connection.execute
+    - psycopg#Cursor.execute
+    - psycopg#Cursor.fetchone
+    - psycopg#Cursor.fetchall
+    - psycopg#Cursor.fetchmany
+    - psycopg#AsyncConnection.execute
+    - psycopg#AsyncCursor.execute
+    - psycopg2#cursor.execute
+    - psycopg2#cursor.fetchone
+    - psycopg2#cursor.fetchall
+    - sqlite3#Connection.execute
+    - sqlite3#Cursor.execute
+    - asyncpg#Connection.fetch
+    - asyncpg#Connection.fetchrow
+    - asyncpg#Connection.fetchval
+    - asyncpg#Pool.fetch
+    - asyncpg#Pool.fetchrow
+
+# Calls that decode a body.
+decoders:
+  - json#loads
+  - json#load
+  - orjson#loads
+  - ujson#loads
+  - pickle#loads
+  - yaml#safe_load
+  - yaml#load
+  - msgpack#unpackb
+
+sinks:
+  process:
+    - subprocess#run
+    - subprocess#call
+    - subprocess#check_call
+    - subprocess#check_output
+    - subprocess#Popen
+    - subprocess#getoutput
+    - subprocess#getstatusoutput
+    - os#system
+    - os#popen
+    - os#execv
+    - os#execve
+    - os#execvp
+    - os#spawnl
+    - os#spawnv
+    - asyncio#create_subprocess_exec
+    - asyncio#create_subprocess_shell
+    - builtins#eval
+    - builtins#exec
+    - builtins#compile
+    - builtins#__import__
+    - importlib#import_module
+    - pickle#loads
+    - pickle#load
+    - dill#loads
+    - marshal#loads
+    - yaml#load
+    - yaml#unsafe_load
+    - yaml#full_load
+    - jsonpickle#decode
+  file:
+    - builtins#open
+    - os#remove
+    - os#unlink
+    - os#rename
+    - os#makedirs
+    - os#listdir
+    - os#rmdir
+    - os#open
+    - shutil#rmtree
+    - shutil#copy
+    - shutil#copyfile
+    - shutil#move
+    - aiofiles#open
+    - tarfile#open
+    - zipfile#ZipFile
+    - starlette.responses#FileResponse
+    - fastapi.responses#FileResponse
+  sql:
+    - sqlalchemy#text
+    - sqlalchemy.sql#text
+    - sqlalchemy.sql.expression#text
+    - sqlalchemy#Connection.exec_driver_sql
+    - sqlalchemy.orm#Session.execute
+    - sqlalchemy.ext.asyncio#AsyncSession.execute
+    - sqlmodel#Session.execute
+    - sqlmodel#text
+    - psycopg#Connection.execute
+    - psycopg#Cursor.execute
+    - psycopg#Cursor.executemany
+    - psycopg#AsyncConnection.execute
+    - psycopg#AsyncCursor.execute
+    - psycopg.sql#SQL
+    - psycopg2#cursor.execute
+    - sqlite3#Connection.execute
+    - sqlite3#Cursor.execute
+    - sqlite3#Connection.executescript
+    - asyncpg#Connection.execute
+    - asyncpg#Connection.fetch
+    - asyncpg#Connection.fetchrow
+  fetch:
+    - httpx#get
+    - httpx#post
+    - httpx#put
+    - httpx#patch
+    - httpx#delete
+    - httpx#request
+    - httpx#stream
+    - httpx#Client.get
+    - httpx#Client.post
+    - httpx#Client.put
+    - httpx#Client.patch
+    - httpx#Client.delete
+    - httpx#Client.request
+    - httpx#Client.stream
+    - httpx#AsyncClient.get
+    - httpx#AsyncClient.post
+    - httpx#AsyncClient.put
+    - httpx#AsyncClient.patch
+    - httpx#AsyncClient.delete
+    - httpx#AsyncClient.request
+    - httpx#AsyncClient.stream
+    - requests#get
+    - requests#post
+    - requests#put
+    - requests#patch
+    - requests#delete
+    - requests#head
+    - requests#request
+    - requests#Session.get
+    - requests#Session.post
+    - requests#Session.request
+    - urllib.request#urlopen
+    - urllib.request#Request
+    - aiohttp#ClientSession.get
+    - aiohttp#ClientSession.post
+    - aiohttp#ClientSession.request
+  redirect:
+    - starlette.responses#RedirectResponse
+    - fastapi.responses#RedirectResponse
+  unescaped:
+    - markupsafe#Markup
+    - jinja2#Markup
+    - jinja2#Template
+    - jinja2#Environment.from_string
+    - starlette.responses#HTMLResponse
+    - fastapi.responses#HTMLResponse

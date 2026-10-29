@@ -32,6 +32,10 @@ export interface Library {
   // Members that values of the language's own types have (`map`, `then`): a call of one on a value
   // of unknown type is not guessed to be the target's.
   builtins: Set<string>
+  // Methods that dump a model to a mapping (`model_dump`), and that bind a value into one
+  // (`model_validate`, `sqlmodel_update`), by name: for `mass-assignment`.
+  dumps: Set<string>
+  binds: Set<string>
 }
 
 interface LibraryFile {
@@ -45,6 +49,7 @@ interface LibraryFile {
   decoders?: string[]
   globals?: string[]
   builtins?: string[]
+  models?: { dumps?: string[]; binds?: string[] }
 }
 
 // `symbol@n` names the argument that is interpreted, `symbol@*` any argument; a module's own `@`
@@ -84,6 +89,8 @@ export function loadLibrary(language: string): Promise<Library> {
         decoders: new Set((file.decoders ?? []).map(ext)),
         globals: new Set(file.globals ?? []),
         builtins: new Set(file.builtins ?? []),
+        dumps: new Set(file.models?.dumps ?? []),
+        binds: new Set(file.models?.binds ?? []),
       }
     })
     libraries.set(language, library)

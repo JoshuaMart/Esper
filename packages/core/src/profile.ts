@@ -18,8 +18,26 @@ export type ReadKind =
   | 'method'
   | 'context'
 
-export type MethodRole = 'route' | 'use' | 'with' | 'group' | 'subrouter' | 'mount' | 'prefix'
-export type ArgRole = 'method' | 'path' | 'handler' | 'callback' | 'chain' | 'config' | 'other'
+export type MethodRole =
+  | 'route'
+  | 'use'
+  | 'with'
+  | 'group'
+  | 'subrouter'
+  | 'mount'
+  | 'prefix'
+  | 'routes'
+  | 'include'
+export type ArgRole =
+  | 'method'
+  | 'path'
+  | 'handler'
+  | 'callback'
+  | 'chain'
+  | 'config'
+  | 'routes'
+  | 'middleware'
+  | 'other'
 export type PatternSyntax = 'braces' | 'servemux' | 'colon' | 'brackets'
 
 export interface RouterMethod {
@@ -33,6 +51,41 @@ export interface RouterMethod {
   through?: string[]
   // How this method's paths are written, when not as the router's are.
   pattern?: PatternSyntax
+  // The role of each keyword argument, by its keyword (`prefix: path`), where a language has them.
+  keywords?: Record<string, ArgRole>
+  // What the handler receives first, when its code does not say.
+  receives?: string
+  // The handler's parameters are read by the profile's `parameters` rules, and declare its
+  // dependencies.
+  parameters?: boolean
+}
+
+// A call that builds a route, or a mount, given to a router as a value (`Route('/', endpoint)`).
+export interface Declare {
+  call: string
+  does: 'route' | 'mount'
+  method?: string
+  args?: ArgRole[]
+  keywords?: Record<string, ArgRole>
+  receives?: string
+  parameters?: boolean
+}
+
+// How the parameters of a handler and of its dependencies are read, where a framework declares
+// what a request gives a function by its parameters.
+export interface ParametersSpec {
+  // Calls whose argument is a dependency, run before the function: `Depends(get_user)`.
+  depends: string[]
+  // Calls that say what a parameter reads, by its default or its annotation's metadata.
+  markers: { call: string; read: ReadKind; hyphens?: boolean }[]
+  // The keyword that names what a marker reads, when not the parameter's name.
+  alias?: string
+  // Types a parameter is given rather than read: the request, a response, a background task.
+  given?: string[]
+  // Types read from the body as a whole: models.
+  models?: string[]
+  // Types read from a form: uploaded files.
+  files?: string[]
 }
 
 export interface RouterSpec {
@@ -46,12 +99,25 @@ export interface RouterSpec {
   // Its methods return the router, so that registrations chain.
   chained?: boolean
   methods: RouterMethod[]
+  // The role of each keyword of the call that creates it (`prefix: path`).
+  construct?: Record<string, ArgRole>
+  // Attributes of a router that are the router itself (`app.router`).
+  self?: string[]
   registers?: { import: string; routes: { pattern: string; handler: string }[] }[]
 }
 
 export type ReadRule =
-  | { read: ReadKind; chain: string; on?: string; by?: Partial<Record<string, ReadKind>> }
-  | { read: ReadKind; call: string; request?: number; name?: number }
+  | {
+      read: ReadKind
+      chain: string
+      on?: string
+      by?: Partial<Record<string, ReadKind>>
+      // Names that are not read from the request: what the server sets in an ASGI scope (`type`).
+      except?: string[]
+    }
+  // A call's `request` is the argument that is the request, by its position, or by its keyword
+  // where a language has them: the call reads only when it is given (`Headers(scope=…)`).
+  | { read: ReadKind; call: string; request?: number | string; name?: number }
 
 export type SinkKind = 'sql' | 'process' | 'file' | 'fetch' | 'redirect' | 'unescaped'
 
@@ -65,7 +131,12 @@ export type GuardKind =
 
 // A guard is a call the profile names (`basicAuth`), or a check: a function that refuses the
 // request, by a call `refusals` lists, when a value read from it is missing (`context.user`).
-export type GuardRule = { call: string; kind: GuardKind } | { check: string; kind: GuardKind }
+// A guard is also a dependency that refuses with a status (`raise HTTPException(401)`). A call
+// guard built with an argument `unless` names (`auto_error=False`) lets every request through.
+export type GuardRule =
+  | { call: string; kind: GuardKind; unless?: Record<string, string> }
+  | { check: string; kind: GuardKind }
+  | { status: number; kind: GuardKind }
 
 // An export of a file of the route tree, or of the package, and what it declares.
 export interface FileExport {
@@ -121,6 +192,19 @@ export interface Profile {
   reads?: ReadRule[]
   mutations?: { chain: string; on?: string }[]
   sinks?: Partial<Record<SinkKind, string[]>>
+  declares?: Declare[]
+  middleware?: { wrap?: string[]; classes?: Record<string, string>; forwards?: string[] }
+  // How exceptions say their status: the router methods that register an exception handler
+  // (`exception_handler`), the keywords that hold a status (`status_code`), and a pattern of a
+  // constant that names one, its status the first group (`HTTP_(\d{3})_`).
+  exceptions?: { handlers?: string[]; status?: string[]; named?: string }
+  parameters?: ParametersSpec
+  // Symbols outside the target that are another's, re-exported: `fastapi#Request` is
+  // `starlette.requests#Request`.
+  reexports?: Record<string, string>
+  // The bases of types outside the target, which the index cannot read: rules on a base apply to
+  // its subclasses (`starlette.requests#Request` is an `HTTPConnection`).
+  bases?: Record<string, string[]>
 }
 
 // A profile with what its `extends` bring: the request type, adapters, routers and reads.
@@ -153,6 +237,12 @@ export interface ResolvedProfile {
   reads: ReadRule[]
   mutations: { chain: string; on?: string }[]
   sinks: Partial<Record<SinkKind, string[]>>
+  declares: Declare[]
+  middleware: { wrap: string[]; classes: Record<string, string>; forwards: string[] }
+  exceptions: { handlers: string[]; status: string[]; named?: string }
+  parameters?: ParametersSpec
+  reexports: Record<string, string>
+  bases: Record<string, string[]>
 }
 
 // Adds up the sinks of several profiles.
@@ -253,6 +343,8 @@ export function resolveProfile(profile: Profile, all: Profile[]): ResolvedProfil
   const response = [...chain].reverse().find((p) => p.response)?.response
   const context = [...chain].reverse().find((p) => p.context)?.context
   const files = [...chain].reverse().find((p) => p.files)?.files
+  const parameters = [...chain].reverse().find((p) => p.parameters)?.parameters
+  const named = [...chain].reverse().find((p) => p.exceptions?.named)?.exceptions?.named
   return {
     name: profile.name,
     kind: profile.kind,
@@ -279,5 +371,19 @@ export function resolveProfile(profile: Profile, all: Profile[]): ResolvedProfil
     reads: chain.flatMap((p) => p.reads ?? []),
     mutations: chain.flatMap((p) => p.mutations ?? []),
     sinks: mergeSinks(chain.map((p) => p.sinks ?? {})),
+    declares: chain.flatMap((p) => p.declares ?? []),
+    middleware: {
+      wrap: chain.flatMap((p) => p.middleware?.wrap ?? []),
+      classes: Object.assign({}, ...chain.map((p) => p.middleware?.classes ?? {})),
+      forwards: [...new Set(chain.flatMap((p) => p.middleware?.forwards ?? []))],
+    },
+    exceptions: {
+      handlers: [...new Set(chain.flatMap((p) => p.exceptions?.handlers ?? []))],
+      status: [...new Set(chain.flatMap((p) => p.exceptions?.status ?? []))],
+      ...(named ? { named } : {}),
+    },
+    ...(parameters ? { parameters } : {}),
+    reexports: Object.assign({}, ...chain.map((p) => p.reexports ?? {})),
+    bases: Object.assign({}, ...chain.map((p) => p.bases ?? {})),
   }
 }

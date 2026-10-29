@@ -47,6 +47,9 @@ export interface Language {
   source(path: string): boolean
   // Whether a file is a test, skipped like a folder of tests.
   test(path: string): boolean
+  // Why a folder holding the language's files is skipped, beside the folders every language
+  // skips: a virtual environment, migrations.
+  skip?(dir: string): string | undefined
   // The modules the target declares, from its manifests.
   modules(files: TargetFile[]): Module[]
   // What the target's source files import, for profiles that detect a target by an import.

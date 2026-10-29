@@ -112,24 +112,35 @@ projects/<name>/checkout/      its clone, for a project added by URL
   each known by their folder, so that their imports of each other are internal. TypeScript and
   JavaScript files (`.ts`, `.tsx`, `.mts`, `.cts`, `.js`, `.jsx`, `.mjs`, `.cjs`, not `.d.ts`), every
   `package.json`, whose name makes a package of the target, and every `tsconfig.json` and
-  `jsconfig.json`, whose `paths` imports resolve through. A folder that is a git checkout is listed
-  by git, so that ignored files stay out; any other folder is walked.
-- **What is skipped.** Tests (`*_test.go`, `*.test.ts`, `*.spec.js` and the like, `test/`, `tests/`,
-  `__tests__/`, `e2e/`, and folders named `…-tests`), benchmarks (`benchmarks/`, `bench/`), examples
+  `jsconfig.json`, whose `paths` imports resolve through. Python files (`.py`), every
+  `pyproject.toml` and `requirements*.txt`, which name a project and its dependencies; a file's
+  module is its path from the nearest folder that is not a package, so that a `src` layout's
+  imports are internal. A folder that is a git checkout is listed by git, so that ignored files
+  stay out; any other folder is walked.
+- **What is skipped.** Tests (`*_test.go`, `*.test.ts`, `*.spec.js`, `test_*.py`, `*_test.py`,
+  `conftest.py` and the like, `test/`, `tests/`, `__tests__/`, `e2e/`, and folders named
+  `…-tests`), benchmarks (`benchmarks/`, `bench/`), examples
   (`examples/`, `_examples/`, `example/`), fixtures (`testdata/`, `fixtures/`), mocks (`mocks/`,
-  `__mocks__/`), generated code (`dist/`), vendored code (`vendor/`, `third_party/`,
-  `node_modules/`) and hidden folders. Symbolic links are never followed, so that a link in the
+  `__mocks__/`), generated code (`dist/`, Python's `__pycache__/`), vendored code (`vendor/`,
+  `third_party/`, `node_modules/`, and for Python `site-packages/` and `venv/`), Python's migrations
+  (`migrations/`, `alembic/`) and FastAPI's documentation examples (`docs_src/`), and hidden folders,
+  a `.venv/` among them. Symbolic links are never followed, so that a link in the
   target cannot read a file outside it, and submodules are not read. Each skipped folder, and each
   skipped file, is stored with the snapshot and its reason.
-- **Which profile.** A target whose `go.mod`, or one of whose `package.json`, declares a framework's
-  module is that framework, read with its `framework` profile. Otherwise, the `application`
-  profiles of the frameworks it requires (in Go directly, not `// indirect`; in a `package.json`, as
-  a dependency, peer or optional one) or imports apply, together when there are several: a SvelteKit
+- **Which profile.** A target whose `go.mod`, one of whose `package.json`, or whose
+  `pyproject.toml` declares a framework's module is that framework, read with its `framework`
+  profile. Otherwise, the `application` profiles of the frameworks it requires (in Go directly, not
+  `// indirect`; in a `package.json`, as a dependency, peer or optional one; in a `pyproject.toml`,
+  as a dependency, an optional one or one of a dependency group, or in a `requirements*.txt`) or
+  imports apply, together when there are several: a SvelteKit
   application, which lists SvelteKit as a development dependency, is known by its code importing
   `@sveltejs/kit`. A profile
   that another matching one extends, such as `net-http` under `chi`, is not applied twice. A
   snapshot is read in one language: a target whose matching profiles are of two languages is
-  refused, and the folder of each part is added as its own project.
+  refused, and the folder of each part is added as its own project. A repository with a backend in
+  one language and a web application in another is best added by its backend's folder, even when
+  only one of them matches a profile, so that the snapshot holds the code that serves requests:
+  `esper add ~/code/getspace/backend`.
 - **What is refused.** A target with no file in a language Esper reads, or that no profile matches,
   is refused with the reason, rather than indexed into an empty attack surface.
 - **Which version.** A snapshot records the commit, the ref asked for, and whether the folder had

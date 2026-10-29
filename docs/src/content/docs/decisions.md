@@ -5,7 +5,7 @@ description: The choices that shape Esper, each with its reasons and the alterna
 
 Each decision says what is chosen, why, and what it rules out. A decision is **proposed** until it
 is confirmed, and **settled** once it is; a settled decision changes only through a new entry that
-says why. Versions and behaviours cited here were checked on 2026-10-28, and those of D32 to D35 on
+says why. Versions and behaviours cited here were checked on 2026-10-28, and those of D32 to D40 on
 2026-10-29.
 
 | # | Decision | Status |
@@ -45,6 +45,11 @@ says why. Versions and behaviours cited here were checked on 2026-10-28, and tho
 | [D33](#d33--javascript-typed-by-its-comments-and-types-a-profile-states) | JavaScript typed by its documentation comments; types outside the target as a profile or the library states them | settled |
 | [D34](#d34--a-check-that-refuses-is-a-guard) | A check that refuses is a guard; a function that answers with a refusal can answer on its own | settled |
 | [D35](#d35--sveltekit-the-server-side-in-both-modes) | SvelteKit: the server side, in both modes; its browser code is not its request surface | settled |
+| [D36](#d36--python-as-its-syntax-states-it) | Python as its syntax states it: modules from the files, types from annotations, calls resolved or guessed with a reason | settled |
+| [D37](#d37--fastapi-routes-and-dependencies-as-the-chain) | FastAPI: routes by decorators and route objects, included routers, dependencies as the chain, each after its own | settled |
+| [D38](#d38--what-a-parameter-reads-and-a-dependency-that-refuses) | What a parameter reads, and a dependency that refuses with 401 or 403 as a guard | settled |
+| [D39](#d39--fastapi-and-starlette-as-two-frameworks) | FastAPI and Starlette as two framework targets; the ASGI server's own reads are not theirs | settled |
+| [D40](#d40--scip-python-wheels-only-and-no-python-in-the-analysis) | scip-python, with the dependencies' wheels only, and no Python run in the analysis | settled |
 
 ## D1 — What Esper is and is not
 
@@ -1486,3 +1491,211 @@ the one it builds: counted, it would be half of SvelteKit's surface and none of 
 
 **Rules out.** Reading the components; counting the browser's code as the framework's request
 surface.
+
+## D36 — Python as its syntax states it
+
+How the Python module reads a target, with `tree-sitter-python` 0.25.0
+([D3](#d3--one-parser-tree-sitter-in-webassembly)), as Go's and TypeScript's do
+([D23](#d23--a-language-is-a-module-the-core-names-none)). Built in M8.
+
+**Decision.**
+
+- **Files.** `.py` files, `pyproject.toml` and `requirements*.txt`. Tests (`test_*.py`, `*_test.py`,
+  `conftest.py`, `tests.py`, the folders every language skips) are skipped, and so are a virtual
+  environment's folders (`venv`, `site-packages`), `__pycache__`, FastAPI's documentation examples
+  (`docs_src`), and migrations (`migrations`, `alembic`), which are not request code. A language
+  module now says which folders it skips beside the shared ones (`skip`).
+- **Modules.** A file's module is its path from the nearest folder above it that is not a package
+  (no `__init__.py`): `src/space/api/rest.py` is `space.api.rest` in a `src` layout. Imports resolve
+  through those names, relative ones (`from ..x import y`) from the file's package, through a
+  package's `__init__.py` re-exports and `from m import *` (as `__all__` says); anything else is
+  outside the target, named by the module the code imports and the name: `ext:fastapi#Depends`,
+  `ext:subprocess#run`, a built-in `ext:builtins#open`.
+- **Projects and their dependencies** come from `pyproject.toml`: PEP 621's `[project]` and its
+  optional dependencies, PEP 735's `[dependency-groups]` (uv's), uv's `dev-dependencies` and
+  Poetry's tables; and from `requirements*.txt`. A distribution is named as PEP 503 normalises it.
+  A small TOML reader, written for what manifests hold, reads them; nothing is installed.
+- **References** ([D7](#d7--stable-references-and-fingerprints)): a method is `#Class.method`, a
+  function nested in another `#outer/inner`, a lambda a name holds by that name, any other
+  `#outer/lambda2`. A declaration is exported when neither its name nor any part of its module
+  starts with one underscore (`__call__` is public); a method when its class is.
+- **Types are what the syntax states**: an annotation, `Annotated[T, …]`, `Optional[T]`, `T | None`
+  and a string naming a class as `T`; `x = C()`; a function's return annotation, or the one value it
+  returns, a generator's yield; a class's fields, from its body and from what its methods assign to
+  `self.x`, and a property's result; a type alias of the target (`Scope = MutableMapping[…]`) as a
+  type of its own, named by its module (`starlette.types#Scope`). What the syntax does not state, a
+  profile may: the bases of types outside the target (`bases`) and their members.
+- **Calls** are resolved from those types, a class's call to its `__init__`, `super().m()` to a
+  base's method; guessed, with the reason, through an abstract method (each override in the
+  target's subclasses) and on a value no syntax types when the target has one method of that name,
+  unless values of the language's own types have it (`get`, `append`, Pydantic's `model_dump`),
+  which `library.yaml` lists as `builtins`. A property runs when its attribute is read; a function
+  given to a call runs when what it is given to calls it (`run_in_threadpool(self.debug_response,
+  …)`), and a nested function or a lambda is called by the function that defines it.
+- **Measured** on 2026-10-29: getspace's backend, 130 files, 1444 declarations, 5836 call edges,
+  496 guessed (8.5 %, a third of them `workspace.transaction(…)` on a parameter its code does
+  not type), 2342 calls without an edge; FastAPI 0.162.0, 74 files, 3294 edges, 7 guessed, 882
+  without; Starlette 1.10.0, 36 files, 1420 edges, 14 guessed, 545 without. Indexing takes about
+  6 seconds for getspace, under 2 for the frameworks.
+
+**Why.** The same split as Go and TypeScript keeps the shared core free of Python, and a type
+stated by an annotation is what Python code states more and more. A module named by its import path
+is what lets `from fastapi import Request` and FastAPI's own `fastapi/requests.py` meet on one
+symbol.
+
+**Rules out.** Running Python to read a target, or reading a virtual environment.
+
+## D37 — FastAPI: routes and dependencies as the chain
+
+The FastAPI application profile of [D5](#d5--two-kinds-of-target-applications-and-the-frameworks-themselves),
+with Starlette's under it, and what the profile format had to say for them. Built in M8.
+
+**Decision.**
+
+- **Routes** are declared by decorators (`@router.get(path)`, `api_route(path, methods=[…])`,
+  `websocket`), by calls (`add_api_route`), and by route objects given as a list
+  (`Route(path, endpoint, methods=[…])`, `WebSocketRoute`, `Mount(path, routes=[…])`), to a
+  router's constructor or to `app.router.routes.extend(…)`, a list a function returns and a
+  generator over a tuple of paths included. A method called as a decorator takes the function it
+  decorates as its handler. A profile states a call's arguments by position and by keyword
+  (`keywords: { prefix: path, dependencies: chain }`), the route objects it knows (`declares`), what
+  a router's constructor takes (`construct`), and which of a router's attributes are itself
+  (`app.router`). A websocket's method is `WEBSOCKET`. Starlette's `{rest:path}` is `{rest...}`.
+- **Routers** are followed through names, imports, a function's parameters (what its callers pass)
+  and results, as in Go and TypeScript. `include_router(r, prefix=…, dependencies=[…])` places a
+  router's routes under the prefix, `mount(path, app)` an application under a path, and a mounted
+  application that is no router of the target (FastMCP's) serves its subtree: `ANY /mcp/{rest...}`.
+  A path from a setting is the setting's default (`API_V1_STR: str = "/api/v1"`).
+- **The chain** is, in order: the middleware of the application and of those it is mounted in,
+  outermost first (the last `add_middleware` or `@app.middleware("http")`, then the first, then the
+  constructor's `middleware=[Middleware(…)]` in order, as Starlette builds its stack); then, for a
+  route FastAPI declares, the dependencies of its routers, of the include and of its decorator,
+  then those its parameters declare, each after the dependencies it declares itself. A dependency
+  is a `Depends(x)` or `Security(x)` in a parameter's default or its `Annotated` metadata, through a
+  type alias (`CurrentUser = Annotated[User, Depends(get_current_user)]`), a name that holds one
+  (`session=auth`) or a call that returns one. It runs once per request, at its first place, as
+  FastAPI caches it. A middleware class is its `dispatch` or its `__call__`, a function given the
+  request first, a class outside the target its own name; a Starlette route has no dependencies.
+- **Siblings**, whose guards are compared ([D6](#d6--the-graph-model)), are the routes of one router.
+- **Measured** on 2026-10-29: getspace's backend at `d094115`, 107 routes (90 decorated, 16 OAuth
+  routes as Starlette objects, the MCP mount); FastAPI's full-stack template at `f4bcfab`, 24 routes,
+  through four prefixes, `Annotated` aliases and `dependencies=[…]`. Each matches its hand count and
+  a script written apart from Esper, with Python's own parser.
+
+**Why.** Prefixes and dependencies are where FastAPI's route extractors go wrong (D5): a route's
+real path is the sum of its includes, and whether it is authenticated is decided by a dependency
+two aliases away. FastAPI runs a dependency's own dependencies first, and Starlette wraps the
+application's middleware around the router, so the chain follows that order.
+
+**Rules out.** A route interpreter written for FastAPI; dependencies applied to Starlette's routes,
+which FastAPI does not solve.
+
+## D38 — What a parameter reads, and a dependency that refuses
+
+How FastAPI's parameters become reads, and its dependencies guards
+([D6](#d6--the-graph-model), [D34](#d34--a-check-that-refuses-is-a-guard)). Built in M8.
+
+**Decision.**
+
+- **Parameters** read the request by what they declare, in a handler or a dependency, as a profile's
+  `parameters` says: a marker (`Query`, `Path`, `Header`, `Cookie`, `Body`, `Form`, `File`), in its
+  default or its `Annotated` metadata, reads its kind, named by its `alias` or the parameter's name
+  (a header's underscores as hyphens: `user_agent` reads `header.user-agent`); a Pydantic model or a
+  SQLModel the body; an upload a form field; the request, a response, background tasks nothing.
+  Any other parameter of a handler or a dependency reads a path parameter when the route's path names
+  it, a query parameter otherwise. A marker reads wherever it is written, FastAPI's own
+  `OAuth2PasswordRequestForm` included.
+- **Guards** are FastAPI's security schemes (`OAuth2PasswordBearer`, `HTTPBearer`, `APIKeyHeader`
+  and the rest, `authn`), unless built with `auto_error=False`, which lets every request through
+  (`unless`; an entry's chain member says so with `passes`); and a dependency of a route that raises,
+  in a condition, an exception with a status a profile's rule names: 401 for `authn`, 403 for
+  `authz-role`. The status is the exception's (`HTTPException(status_code=401)`,
+  `status.HTTP_403_FORBIDDEN`, an integer argument), or the one the application's exception handler
+  answers it with (`@app.exception_handler(Unauthenticated)` returning a 401), as the profile's
+  `exceptions` say a status is written and handlers are registered. A dependency that
+  raises in a condition answers on its own (`short-circuit`), as a middleware that returns before
+  `call_next` does.
+- **`mass-assignment`** is set where a function that writes data spreads a model into a call
+  (`Item(**body.model_dump())`) or validates one into another (`Item.model_validate(body)`,
+  `item.sqlmodel_update(data)`); a model is a parameter typed by one, or a name that holds its dump.
+  The methods that dump and bind models are listed in the language's `library.yaml` (`models`).
+
+**Why.** A FastAPI handler reads the request through its signature more often than through
+`request`, so parameters are where most reads are. Who is authenticated is decided by dependencies
+that refuse; a status of 401 or 403 is what the code states about the refusal, and FastAPI applies
+it. A guard only in the handler's body (`if item.owner_id != user.id: raise …`) is the handler's
+own work, not a dependency, and is left to the claims of a model
+([D17](#d17--model-enrichment-claims-beside-the-facts)).
+
+**Rules out.** A guard kind read from a function's name; a security scheme that cannot refuse
+counted as a guard.
+
+## D39 — FastAPI and Starlette as two frameworks
+
+The framework profiles of [D5](#d5--two-kinds-of-target-applications-and-the-frameworks-themselves)
+for FastAPI and Starlette. Built in M8.
+
+**Decision.**
+
+- **Two targets.** FastAPI's request surface is in its repository (security schemes, the request
+  handler, dependencies, routing, the docs); most of what reads the request is Starlette's, in
+  another repository (the connection, forms and multipart, routing, CORS, trusted hosts, sessions,
+  static files, `root_path`). Each is a framework target with its own profile and count; FastAPI's
+  application rules are Starlette's plus its own, so that both read the same `Request`, and its
+  security schemes are named the same in FastAPI's code as in an application's.
+- **The surface** is each exported declaration that reaches a read, and each function that takes
+  the request, a connection, a websocket or an ASGI scope (`handlers.types`). An ASGI scope is read
+  by its keys: `scope["headers"]` is a header read, `scope["path"]` and `root_path` the path,
+  `client` the client address, `query_string` the query; what the server sets (`type`, `asgi`,
+  `http_version`, `extensions`) is not read from the client (`except`). `Headers(scope=…)` reads the
+  headers, `Headers(raw=…)` does not (a call rule's `request` by keyword). Starlette's test client
+  builds requests and is left out.
+- **Not uvicorn's `ProxyHeadersMiddleware`.** It is the ASGI server's, which rewrites the scope's
+  client address and scheme from `X-Forwarded-For` and `X-Forwarded-Proto` before the application
+  sees it; neither FastAPI nor Starlette ship it. A server is a target of its own, for later.
+- **Measured** on 2026-10-29 at the latest releases: FastAPI 0.162.0, 69 entry points; Starlette
+  1.10.0, 68. A script written apart from Esper listed each function that reads the request
+  directly; each is an entry point or reached by one.
+
+**Why.** Counting Starlette inside FastAPI would need FastAPI's dependency installed in the target,
+and a framework's surface is its own code. The keys of an ASGI scope are what the client sends, but
+for those the server fills in.
+
+**Rules out.** A request read counted for a scope's protocol type; the test client as surface.
+
+## D40 — scip-python, wheels only, and no Python in the analysis
+
+The third analyzer on the contract of [D12](#d12--precision-scip-right-after-the-first-index-dataflow-later)
+and [D22](#d22--precision-runs-inside-the-index-when-asked). Built in M8.
+
+**Decision.**
+
+- **The tool.** [scip-python](https://github.com/sourcegraph/scip-python) 0.6.8, its latest release
+  (2026-10-22, maintained by Sourcegraph), which runs Pyright; on Node 24.22.1, with Alpine's Python
+  and uv 0.13.6 to install a target's dependencies, the images pinned by digest.
+- **Fetching** reads the manifest at the root of the snapshot's tree: `uv.lock` (exported with uv,
+  frozen), else a `requirements*.txt`, else a `pyproject.toml` whose dependencies uv resolves; from
+  PyPI whatever the target configures, each requirement installed on its own as a **wheel only**
+  (`--only-binary :all:`, `UV_NO_BUILD`), into a folder that is discarded, so that uv's cache, the
+  analyzer's volume, holds them. A requirement without a wheel is left out and said. No build
+  backend and no `setup.py` runs.
+- **Analyzing** installs the wheels from the cache without the network, lists them for scip-python
+  from their `RECORD` files, and runs it with no Python on its path, so that neither scip-python nor
+  Pyright starts an interpreter, which would run a dependency's `.pth` files. Pyright reads the
+  installed packages and the snapshot's `src` roots as extra paths.
+- **What it states** is what scip-typescript's analysis states (D26): a reference for each name
+  whose symbol is defined in the snapshot or outside it, named by its module
+  (`fastapi.security.oauth2#OAuth2PasswordBearer.__call__`), the import's name kept where the
+  syntax names the same symbol outside the target; and the methods that override another of the
+  snapshot. A class called is its `__init__`, as the syntax reads it.
+- **Measured** on 2026-10-29: getspace's backend, calls without an edge fall from 2342 to 1451 in
+  about 30 seconds the first time; FastAPI 0.162.0 from 882 to 329, Starlette 1.10.0 from 545 to
+  189. The entry points stay the ones counted by hand, but one of Starlette's,
+  `BaseRoute.__call__`, which reached a read only through a guess the analyzer corrects.
+
+**Why.** A wheel is unpacked, never built: it is how Python dependencies can be installed without
+running any of their code, as D12 asks. A `.pth` file runs when an interpreter starts, so the
+analysis starts none.
+
+**Rules out.** Building a dependency from its source distribution; running `pip` or Python over the
+installed packages.

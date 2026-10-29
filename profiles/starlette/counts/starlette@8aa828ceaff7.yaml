@@ -1,0 +1,199 @@
+# Starlette 1.10.0, its request surface (D5), counted by hand (D16): each exported function, class
+# and method that reads the request through what it reaches, and each function that takes the
+# request, a connection, a websocket or an ASGI scope. A script written apart from Esper listed the
+# functions of the package that read the request directly: each is an entry point below or is
+# reached by one, but `Starlette.__call__`, which writes `scope["app"]`; `Headers.__init__`,
+# which reads the headers of whatever mapping it is given, counted where a scope is given to it
+# (`Headers(scope=…)`); the functions nested in `requires` and `SessionMiddleware.__call__`,
+# reached through them; and the test client, which builds requests and is left out.
+# - **The connection**: `HTTPConnection`'s properties (`headers`, `cookies`, `query_params`,
+#   `path_params`, `client`, `url`, `base_url`, `session`, `state`, `user`, `auth`) and
+#   `Request`'s `body`, `json`, `form` (the multipart parser), `method`; a websocket's receives.
+# - **Middleware**: CORS reads `Origin` and the preflight's headers, `TrustedHostMiddleware`
+#   `Host`, `HTTPSRedirectMiddleware` the scheme, sessions the cookie, GZip
+#   `Accept-Encoding`, the body limit `Content-Length`, WSGI builds its environ from the scope.
+# - **Routing**: each route's `matches` reads the path and the method, `Mount` and `Host` the
+#   path and `Host`; `get_route_path` subtracts `root_path`; static files read the path,
+#   `Range` and the conditional headers.
+# - What the server sets in the scope (`type`, `asgi`, `http_version`, `extensions`) is not
+#   read from the client: functions that only check the scope's type are not entry points.
+# - Reached only through a call the index guesses ("the only method named …"):
+#   routing#BaseRoute.__call__.
+target: https://github.com/Kludex/starlette
+ref: 1.10.0
+commit: 8aa828ceaff764a2e57932fb42fdf105a47c4c83
+kind: framework
+entries:
+  - { ref: "entry:starlette/_utils.py#get_route_path", at: "starlette/_utils.py:137" }
+  - {
+      ref: "entry:starlette/authentication.py#has_required_scope",
+      at: "starlette/authentication.py:18",
+    }
+  - { ref: "entry:starlette/authentication.py#requires", at: "starlette/authentication.py:25" }
+  - { ref: "entry:starlette/datastructures.py#URL.__init__", at: "starlette/datastructures.py:28" }
+  - {
+      ref: "entry:starlette/datastructures.py#URLPath.make_absolute_url",
+      at: "starlette/datastructures.py:205",
+    }
+  - { ref: "entry:starlette/endpoints.py#HTTPEndpoint.__await__", at: "starlette/endpoints.py:30" }
+  - { ref: "entry:starlette/endpoints.py#HTTPEndpoint.dispatch", at: "starlette/endpoints.py:33" }
+  - {
+      ref: "entry:starlette/endpoints.py#WebSocketEndpoint.__await__",
+      at: "starlette/endpoints.py:68",
+    }
+  - {
+      ref: "entry:starlette/endpoints.py#WebSocketEndpoint.dispatch",
+      at: "starlette/endpoints.py:71",
+    }
+  - {
+      ref: "entry:starlette/endpoints.py#WebSocketEndpoint.on_connect",
+      at: "starlette/endpoints.py:120",
+    }
+  - {
+      ref: "entry:starlette/middleware/authentication.py#AuthenticationMiddleware.__call__",
+      at: "starlette/middleware/authentication.py:29",
+    }
+  - {
+      ref: "entry:starlette/middleware/body_limit.py#RequestBodyLimitMiddleware.__call__",
+      at: "starlette/middleware/body_limit.py:37",
+    }
+  - {
+      ref: "entry:starlette/middleware/body_limit.py#RequestBodyLimitResponder.__call__",
+      at: "starlette/middleware/body_limit.py:71",
+    }
+  - {
+      ref: "entry:starlette/middleware/body_limit.py#_get_content_length",
+      at: "starlette/middleware/body_limit.py:125",
+    }
+  - {
+      ref: "entry:starlette/middleware/cors.py#CORSMiddleware.__call__",
+      at: "starlette/middleware/cors.py:77",
+    }
+  - {
+      ref: "entry:starlette/middleware/cors.py#CORSMiddleware.send",
+      at: "starlette/middleware/cors.py:151",
+    }
+  - {
+      ref: "entry:starlette/middleware/cors.py#CORSMiddleware.simple_response",
+      at: "starlette/middleware/cors.py:147",
+    }
+  - {
+      ref: "entry:starlette/middleware/errors.py#ServerErrorMiddleware.__call__",
+      at: "starlette/middleware/errors.py:149",
+    }
+  - {
+      ref: "entry:starlette/middleware/errors.py#ServerErrorMiddleware.debug_response",
+      at: "starlette/middleware/errors.py:249",
+    }
+  - {
+      ref: "entry:starlette/middleware/gzip.py#GZipMiddleware.__call__",
+      at: "starlette/middleware/gzip.py:61",
+    }
+  - {
+      ref: "entry:starlette/middleware/httpsredirect.py#HTTPSRedirectMiddleware.__call__",
+      at: "starlette/middleware/httpsredirect.py:10",
+    }
+  - {
+      ref: "entry:starlette/middleware/opentelemetry.py#OpenTelemetryMiddleware.__call__",
+      at: "starlette/middleware/opentelemetry.py:47",
+    }
+  - {
+      ref: "entry:starlette/middleware/sessions.py#SessionMiddleware.__call__",
+      at: "starlette/middleware/sessions.py:42",
+    }
+  - {
+      ref: "entry:starlette/middleware/trustedhost.py#TrustedHostMiddleware.__call__",
+      at: "starlette/middleware/trustedhost.py:32",
+    }
+  - {
+      ref: "entry:starlette/middleware/wsgi.py#WSGIMiddleware.__call__",
+      at: "starlette/middleware/wsgi.py:82",
+    }
+  - {
+      ref: "entry:starlette/middleware/wsgi.py#WSGIResponder.__call__",
+      at: "starlette/middleware/wsgi.py:101",
+    }
+  - {
+      ref: "entry:starlette/middleware/wsgi.py#build_environ",
+      at: "starlette/middleware/wsgi.py:26",
+    }
+  - {
+      ref: "entry:starlette/requests.py#HTTPConnection.__getitem__",
+      at: "starlette/requests.py:91",
+    }
+  - { ref: "entry:starlette/requests.py#HTTPConnection.app", at: "starlette/requests.py:107" }
+  - { ref: "entry:starlette/requests.py#HTTPConnection.auth", at: "starlette/requests.py:180" }
+  - { ref: "entry:starlette/requests.py#HTTPConnection.base_url", at: "starlette/requests.py:117" }
+  - { ref: "entry:starlette/requests.py#HTTPConnection.client", at: "starlette/requests.py:163" }
+  - { ref: "entry:starlette/requests.py#HTTPConnection.cookies", at: "starlette/requests.py:151" }
+  - { ref: "entry:starlette/requests.py#HTTPConnection.headers", at: "starlette/requests.py:134" }
+  - {
+      ref: "entry:starlette/requests.py#HTTPConnection.path_params",
+      at: "starlette/requests.py:146",
+    }
+  - {
+      ref: "entry:starlette/requests.py#HTTPConnection.query_params",
+      at: "starlette/requests.py:140",
+    }
+  - { ref: "entry:starlette/requests.py#HTTPConnection.session", at: "starlette/requests.py:171" }
+  - { ref: "entry:starlette/requests.py#HTTPConnection.state", at: "starlette/requests.py:190" }
+  - { ref: "entry:starlette/requests.py#HTTPConnection.url", at: "starlette/requests.py:111" }
+  - { ref: "entry:starlette/requests.py#HTTPConnection.url_for", at: "starlette/requests.py:199" }
+  - { ref: "entry:starlette/requests.py#HTTPConnection.user", at: "starlette/requests.py:185" }
+  - { ref: "entry:starlette/requests.py#Request.body", at: "starlette/requests.py:255" }
+  - { ref: "entry:starlette/requests.py#Request.form", at: "starlette/requests.py:317" }
+  - { ref: "entry:starlette/requests.py#Request.json", at: "starlette/requests.py:264" }
+  - { ref: "entry:starlette/requests.py#Request.method", at: "starlette/requests.py:228" }
+  - {
+      ref: "entry:starlette/requests.py#Request.send_push_promise",
+      at: "starlette/requests.py:346",
+    }
+  - { ref: "entry:starlette/responses.py#FileResponse.__call__", at: "starlette/responses.py:346" }
+  - { ref: "entry:starlette/routing.py#BaseRoute.__call__", at: "starlette/routing.py:186" }
+  - { ref: "entry:starlette/routing.py#Host.matches", at: "starlette/routing.py:487" }
+  - { ref: "entry:starlette/routing.py#Mount.matches", at: "starlette/routing.py:403" }
+  - { ref: "entry:starlette/routing.py#Route.handle", at: "starlette/routing.py:280" }
+  - { ref: "entry:starlette/routing.py#Route.matches", at: "starlette/routing.py:251" }
+  - { ref: "entry:starlette/routing.py#Router.app", at: "starlette/routing.py:685" }
+  - { ref: "entry:starlette/routing.py#Router.lifespan", at: "starlette/routing.py:652" }
+  - { ref: "entry:starlette/routing.py#WebSocketRoute.matches", at: "starlette/routing.py:336" }
+  - {
+      ref: "entry:starlette/schemas.py#BaseSchemaGenerator.OpenAPIResponse",
+      at: "starlette/schemas.py:122",
+    }
+  - {
+      ref: "entry:starlette/staticfiles.py#StaticFiles.__call__",
+      at: "starlette/staticfiles.py:88",
+    }
+  - {
+      ref: "entry:starlette/staticfiles.py#StaticFiles.file_response",
+      at: "starlette/staticfiles.py:181",
+    }
+  - {
+      ref: "entry:starlette/staticfiles.py#StaticFiles.get_path",
+      at: "starlette/staticfiles.py:107",
+    }
+  - {
+      ref: "entry:starlette/staticfiles.py#StaticFiles.get_response",
+      at: "starlette/staticfiles.py:115",
+    }
+  - {
+      ref: "entry:starlette/templating.py#Jinja2Templates.__init__~3",
+      at: "starlette/templating.py:84",
+    }
+  - { ref: "entry:starlette/websockets.py#WebSocket.accept", at: "starlette/websockets.py:106" }
+  - { ref: "entry:starlette/websockets.py#WebSocket.iter_bytes", at: "starlette/websockets.py:157" }
+  - { ref: "entry:starlette/websockets.py#WebSocket.iter_json", at: "starlette/websockets.py:164" }
+  - { ref: "entry:starlette/websockets.py#WebSocket.iter_text", at: "starlette/websockets.py:150" }
+  - {
+      ref: "entry:starlette/websockets.py#WebSocket.receive_bytes",
+      at: "starlette/websockets.py:129",
+    }
+  - {
+      ref: "entry:starlette/websockets.py#WebSocket.receive_json",
+      at: "starlette/websockets.py:136",
+    }
+  - {
+      ref: "entry:starlette/websockets.py#WebSocket.receive_text",
+      at: "starlette/websockets.py:122",
+    }

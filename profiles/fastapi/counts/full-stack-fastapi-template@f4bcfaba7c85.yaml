@@ -1,0 +1,45 @@
+# FastAPI's full-stack template (`backend/`: SQLModel, JWT, Alembic), counted by hand (D16) and
+# by the same script as getspace: 23 decorated routes and the frontend served at the root.
+# - Five routers, four with a prefix (`/users`, `/items`, `/utils`, `/private`), included
+#   in `api_router`, which the application includes under `settings.API_V1_STR`, a setting
+#   whose default is `/api/v1`. `private.router` is included only in development; it is counted.
+# - Dependencies come through `Annotated` type aliases (`SessionDep`, `CurrentUser`), which
+#   depend on `OAuth2PasswordBearer` (`authn`) and on `get_current_user`, and through
+#   `dependencies=[Depends(get_current_active_superuser)]` on the decorator, which raises 403
+#   (`authz-role`).
+# - `app.frontend("/", directory=…)` serves the built frontend below the root:
+#   `ANY /{rest...}`.
+# - Paths keep FastAPI's trailing slash in the code (`"/"`), and lose it once joined (D7).
+target: https://github.com/fastapi/full-stack-fastapi-template
+ref: master
+commit: f4bcfaba7c85be3c6332cc74a20819f586dcdbc6
+dir: backend
+kind: application
+entries:
+  - { ref: "route:ANY /{rest...}", at: "app/main.py:36" }
+  - { ref: "route:DELETE /api/v1/items/{id}", at: "app/api/routes/items.py:99" }
+  - { ref: "route:DELETE /api/v1/users/me", at: "app/api/routes/users.py:132" }
+  - { ref: "route:DELETE /api/v1/users/{user_id}", at: "app/api/routes/users.py:214" }
+  - { ref: "route:GET /api/v1/items", at: "app/api/routes/items.py:13" }
+  - { ref: "route:GET /api/v1/items/{id}", at: "app/api/routes/items.py:48" }
+  - { ref: "route:GET /api/v1/users", at: "app/api/routes/users.py:32" }
+  - { ref: "route:GET /api/v1/users/me", at: "app/api/routes/users.py:124" }
+  - { ref: "route:GET /api/v1/users/{user_id}", at: "app/api/routes/users.py:162" }
+  - { ref: "route:GET /api/v1/utils/health-check", at: "app/api/routes/utils.py:29" }
+  - { ref: "route:PATCH /api/v1/users/me", at: "app/api/routes/users.py:81" }
+  - { ref: "route:PATCH /api/v1/users/me/password", at: "app/api/routes/users.py:103" }
+  - { ref: "route:PATCH /api/v1/users/{user_id}", at: "app/api/routes/users.py:182" }
+  - { ref: "route:POST /api/v1/items", at: "app/api/routes/items.py:61" }
+  - { ref: "route:POST /api/v1/login/access-token", at: "app/api/routes/login.py:23" }
+  - { ref: "route:POST /api/v1/login/test-token", at: "app/api/routes/login.py:45" }
+  - {
+      ref: "route:POST /api/v1/password-recovery-html-content/{email}",
+      at: "app/api/routes/login.py:100",
+    }
+  - { ref: "route:POST /api/v1/password-recovery/{email}", at: "app/api/routes/login.py:53" }
+  - { ref: "route:POST /api/v1/private/users", at: "app/api/routes/private.py:23" }
+  - { ref: "route:POST /api/v1/reset-password", at: "app/api/routes/login.py:77" }
+  - { ref: "route:POST /api/v1/users", at: "app/api/routes/users.py:54" }
+  - { ref: "route:POST /api/v1/users/signup", at: "app/api/routes/users.py:146" }
+  - { ref: "route:POST /api/v1/utils/test-email", at: "app/api/routes/utils.py:11" }
+  - { ref: "route:PUT /api/v1/items/{id}", at: "app/api/routes/items.py:75" }

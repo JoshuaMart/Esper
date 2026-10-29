@@ -48,6 +48,8 @@ const defaultArgs: Record<RouterMethod['does'], ArgRole[]> = {
   subrouter: ['path', 'callback'],
   mount: ['path', 'handler'],
   prefix: ['path'],
+  routes: [],
+  include: [],
 }
 
 // A path as written: a string literal, a constant of the package, or, when neither, the expression

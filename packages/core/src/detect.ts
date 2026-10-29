@@ -88,6 +88,8 @@ export function detectProfile(
   const response = parts.find((p) => p.response)?.response
   const context = parts.find((p) => p.context)?.context
   const tree = parts.find((p) => p.files)?.files
+  const parameters = parts.find((p) => p.parameters)?.parameters
+  const named = parts.find((p) => p.exceptions.named)?.exceptions.named
   const merged: ResolvedProfile = {
     name: parts.map((p) => p.name).join('+'),
     kind,
@@ -114,6 +116,20 @@ export function detectProfile(
     reads: parts.flatMap((p) => p.reads),
     mutations: parts.flatMap((p) => p.mutations),
     sinks: mergeSinks(parts.map((p) => p.sinks)),
+    declares: parts.flatMap((p) => p.declares),
+    middleware: {
+      wrap: parts.flatMap((p) => p.middleware.wrap),
+      classes: Object.assign({}, ...parts.map((p) => p.middleware.classes)),
+      forwards: [...new Set(parts.flatMap((p) => p.middleware.forwards))],
+    },
+    exceptions: {
+      handlers: [...new Set(parts.flatMap((p) => p.exceptions.handlers))],
+      status: [...new Set(parts.flatMap((p) => p.exceptions.status))],
+      ...(named ? { named } : {}),
+    },
+    ...(parameters ? { parameters } : {}),
+    reexports: Object.assign({}, ...parts.map((p) => p.reexports)),
+    bases: Object.assign({}, ...parts.map((p) => p.bases)),
   }
   return { profile: merged, modules, matched: parts.map((p) => p.name) }
 }

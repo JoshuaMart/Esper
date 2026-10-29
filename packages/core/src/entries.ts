@@ -21,6 +21,9 @@ export interface Callee {
   source?: string
   // For a call through an interface of the target, the interface method: `Routes.Match`.
   interface?: string
+  // Built with an argument its guard rule's `unless` names, so that it refuses nothing
+  // (`HTTPBearer(auto_error=False)`).
+  passes?: boolean
 }
 
 export interface Member {
@@ -265,7 +268,7 @@ export function addEntries(
     const guards = new Map<string, { citation: Citation; text: string }>()
     for (const member of route.chain) {
       for (const target of member.targets) {
-        const kind = guardRules.get(target.ref)
+        const kind = target.passes ? undefined : guardRules.get(target.ref)
         if (kind) {
           graph.facts.push({
             node: ref,

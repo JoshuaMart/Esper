@@ -1,0 +1,15 @@
+# FastAPI itself: its request surface is each exported function, class and method that reads the
+# request, directly or through what it calls, such as `OAuth2PasswordBearer.__call__` reading
+# `Authorization`, or the route handler reading the body; and each function that takes the request
+# or what stands for it (a connection, a websocket, an ASGI scope). The reads are Starlette's and
+# FastAPI's application rules, so that FastAPI's own `Query`, `Header` and `Form` parameters read
+# what they read in an application.
+name: fastapi
+kind: framework
+language: python
+extends: [fastapi]
+detect:
+  module: [fastapi, fastapi-slim]
+surface:
+  exported: true
+  handlers: true

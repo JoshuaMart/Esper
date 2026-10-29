@@ -1,0 +1,178 @@
+# Starlette, for an application built on it, and for what FastAPI builds on it: route objects
+# (`Route`, `WebSocketRoute`, `Mount`, `Host`) given to an application or a router, mounts,
+# middleware outermost first, and what reads the request: `Request`, `WebSocket`, and the ASGI
+# scope a middleware is given.
+name: starlette
+kind: application
+language: python
+detect:
+  dependency: [starlette]
+  import: [starlette]
+request: starlette.requests#Request
+# An endpoint or a middleware function receives the request first: `async def homepage(request)`.
+context: starlette.requests#Request
+handlers:
+  # A function or a method that takes one of these takes the request: an ASGI middleware's scope.
+  types: [starlette.requests#HTTPConnection, starlette.websockets#WebSocket, starlette.types#Scope]
+routers:
+  - types: [starlette.applications#Starlette, starlette.routing#Router]
+    create: [starlette.applications#Starlette, starlette.routing#Router]
+    pattern: braces
+    construct: { routes: routes, middleware: middleware }
+    self: [router]
+    methods:
+      - { name: mount, does: mount, args: [path, handler], keywords: { path: path, app: handler } }
+      - { name: host, does: mount, args: [other, handler], keywords: { app: handler } }
+      - name: add_route
+        does: route
+        method: GET
+        args: [path, handler]
+        keywords: { path: path, route: handler, methods: method }
+      - { name: route, does: route, method: GET, args: [path], keywords: { methods: method } }
+      - name: add_websocket_route
+        does: route
+        method: WEBSOCKET
+        args: [path, handler]
+        keywords: { path: path, route: handler }
+        receives: starlette.websockets#WebSocket
+      - {
+          name: websocket_route,
+          does: route,
+          method: WEBSOCKET,
+          args: [path],
+          receives: starlette.websockets#WebSocket,
+        }
+      - { name: add_middleware, does: use, args: [middleware] }
+      - { name: middleware, does: use, args: [other] }
+      - { name: routes.extend, does: routes, args: [routes] }
+      - { name: routes.append, does: routes, args: [routes] }
+      - { name: router.routes.extend, does: routes, args: [routes] }
+      - { name: router.routes.append, does: routes, args: [routes] }
+# Route objects, given to an application or a router in a list.
+declares:
+  - call: starlette.routing#Route
+    does: route
+    method: GET
+    args: [path, handler]
+    keywords: { path: path, endpoint: handler, methods: method }
+  - call: starlette.routing#WebSocketRoute
+    does: route
+    method: WEBSOCKET
+    args: [path, handler]
+    keywords: { path: path, endpoint: handler }
+    receives: starlette.websockets#WebSocket
+  - call: starlette.routing#Mount
+    does: mount
+    args: [path, handler]
+    keywords: { path: path, app: handler, routes: routes, middleware: middleware }
+  - call: starlette.routing#Host
+    does: mount
+    args: [other, handler]
+    keywords: { app: handler }
+middleware:
+  # `Middleware(CORSMiddleware, …)` names its class.
+  wrap: [starlette.middleware#Middleware]
+  # The method of a middleware class that handles a request, and what it receives after `self`.
+  classes:
+    dispatch: starlette.requests#Request
+    __call__: starlette.types#Scope
+  # The attribute through which a middleware class calls the next application: `self.app(…)`.
+  forwards: [app]
+# How an exception says its status: the methods that register an exception handler, whose answer's
+# status is the exception's; the keywords that hold one; a constant that names one.
+exceptions:
+  handlers: [exception_handler, add_exception_handler]
+  status: [status_code, status]
+  named: "HTTP_(\\d{3})_"
+guards:
+  - { call: starlette.middleware.trustedhost#TrustedHostMiddleware, kind: validation }
+  - { call: starlette.middleware.authentication#AuthenticationMiddleware, kind: authn }
+  - { call: starlette.authentication#requires, kind: authn }
+  - { call: starlette.middleware.httpsredirect#HTTPSRedirectMiddleware, kind: validation }
+# The bases of Starlette's request types, so that what a connection reads, a request and a
+# websocket read too.
+bases:
+  starlette.requests#Request: [starlette.requests#HTTPConnection]
+  starlette.websockets#WebSocket: [starlette.requests#HTTPConnection]
+reads:
+  # A connection: a request or a websocket.
+  - { on: starlette.requests#HTTPConnection, chain: "headers.get(name)", read: header }
+  - { on: starlette.requests#HTTPConnection, chain: "headers.getlist(name)", read: header }
+  - { on: starlette.requests#HTTPConnection, chain: "headers[name]", read: header }
+  - { on: starlette.requests#HTTPConnection, chain: "headers", read: header }
+  - { on: starlette.requests#HTTPConnection, chain: "query_params.get(name)", read: query }
+  - { on: starlette.requests#HTTPConnection, chain: "query_params.getlist(name)", read: query }
+  - { on: starlette.requests#HTTPConnection, chain: "query_params[name]", read: query }
+  - { on: starlette.requests#HTTPConnection, chain: "query_params", read: query }
+  - { on: starlette.requests#HTTPConnection, chain: "path_params.get(name)", read: path }
+  - { on: starlette.requests#HTTPConnection, chain: "path_params[name]", read: path }
+  - { on: starlette.requests#HTTPConnection, chain: "path_params", read: path }
+  - { on: starlette.requests#HTTPConnection, chain: "cookies.get(name)", read: cookie }
+  - { on: starlette.requests#HTTPConnection, chain: "cookies[name]", read: cookie }
+  - { on: starlette.requests#HTTPConnection, chain: "cookies", read: cookie }
+  - { on: starlette.requests#HTTPConnection, chain: "client.host", read: remoteaddr }
+  - { on: starlette.requests#HTTPConnection, chain: "client", read: remoteaddr }
+  - { on: starlette.requests#HTTPConnection, chain: "url.hostname", read: host }
+  - { on: starlette.requests#HTTPConnection, chain: "url.netloc", read: host }
+  - { on: starlette.requests#HTTPConnection, chain: "url.path", read: path }
+  - { on: starlette.requests#HTTPConnection, chain: "url.query", read: query }
+  - { on: starlette.requests#HTTPConnection, chain: "url", read: path }
+  - { on: starlette.requests#HTTPConnection, chain: "base_url", read: host }
+  - { on: starlette.requests#HTTPConnection, chain: "state[name]", read: context }
+  - { on: starlette.requests#HTTPConnection, chain: "state", read: context }
+  - { on: starlette.requests#HTTPConnection, chain: "session.get(name)", read: context }
+  - { on: starlette.requests#HTTPConnection, chain: "session[name]", read: context }
+  - { on: starlette.requests#HTTPConnection, chain: "session", read: context }
+  - { on: starlette.requests#HTTPConnection, chain: "user", read: context }
+  - { on: starlette.requests#HTTPConnection, chain: "auth", read: context }
+  - on: starlette.requests#HTTPConnection
+    chain: "scope[name]"
+    read: context
+    # What the server sets, not the client: the protocol and what the server supports.
+    except: &server [type, asgi, http_version, extensions, spec_version]
+    by: &scope
+      headers: header
+      path: path
+      raw_path: path
+      root_path: path
+      query_string: query
+      client: remoteaddr
+      server: host
+      method: method
+      path_params: path
+  - {
+      on: starlette.requests#HTTPConnection,
+      chain: "scope.get(name)",
+      read: context,
+      except: *server,
+      by: *scope,
+    }
+  # A request's body and method.
+  - { chain: method, read: method }
+  - { chain: json(), read: body }
+  - { chain: body(), read: body }
+  - { chain: stream(), read: body }
+  - { chain: form(), read: form }
+  # What a websocket receives.
+  - { on: starlette.websockets#WebSocket, chain: receive_text(), read: body }
+  - { on: starlette.websockets#WebSocket, chain: receive_json(), read: body }
+  - { on: starlette.websockets#WebSocket, chain: receive_bytes(), read: body }
+  - { on: starlette.websockets#WebSocket, chain: receive(), read: body }
+  - { on: starlette.websockets#WebSocket, chain: iter_text(), read: body }
+  - { on: starlette.websockets#WebSocket, chain: iter_json(), read: body }
+  - { on: starlette.websockets#WebSocket, chain: iter_bytes(), read: body }
+  # Headers and a query string read from the scope: `Headers(scope=scope)`.
+  - { call: starlette.datastructures#Headers, request: scope, read: header }
+  - { call: starlette.datastructures#URL, request: scope, read: path }
+  # The ASGI scope a middleware is given, by its key.
+  - { on: starlette.types#Scope, chain: "[name]", read: context, except: *server, by: *scope }
+  - { on: starlette.types#Scope, chain: "get(name)", read: context, except: *server, by: *scope }
+mutations:
+  - { on: starlette.requests#HTTPConnection, chain: "state[name]" }
+  - { on: starlette.types#Scope, chain: "update()" }
+  - { on: starlette.types#Scope, chain: "setdefault()" }
+sinks:
+  redirect: [starlette.responses#RedirectResponse]
+  file: [starlette.responses#FileResponse, starlette.staticfiles#StaticFiles]
+  unescaped:
+    [starlette.responses#HTMLResponse, starlette.templating#Jinja2Templates.TemplateResponse@1]

@@ -10,6 +10,7 @@ ignoredBuiltDependencies:
   - sharp
   - tree-sitter-go
   - tree-sitter-javascript
+  - tree-sitter-python
   - tree-sitter-typescript
 
 # A version published less than a day ago is not installed: it may still be withdrawn, or not yet

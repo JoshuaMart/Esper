@@ -1,0 +1,14 @@
+# Starlette itself: its request surface is each exported function, class and method that reads the
+# request, directly or through what it calls, such as `TrustedHostMiddleware` reading `Host`, or
+# `Request.form` parsing a multipart body; and each function that takes the request, a websocket or
+# an ASGI scope. The test client builds the requests the server reads and is left out.
+name: starlette
+kind: framework
+language: python
+extends: [starlette]
+detect:
+  module: [starlette]
+surface:
+  exported: true
+  handlers: true
+  except: [starlette/testclient.py]
