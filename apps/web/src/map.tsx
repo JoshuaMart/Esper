@@ -15,8 +15,8 @@ import { href, Link, navigate, shortRef, useData, useLocation, withParams } from
 import { ErrorNotice, Icon, Spinner } from './ui.tsx'
 
 // The map: one group of entry points and the code at least `min` of them call directly, laid out
-// by forces (D41): links pull, nodes push apart, and the shared code each settles among the entry
-// points that call it. Bounded by the group (D29).
+// by forces: links pull, nodes push apart, and the shared code each settles among the entry points
+// that call it. Bounded by the group (D29).
 
 export function MapView({
   project,

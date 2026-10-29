@@ -124,10 +124,9 @@ since whoever wrote it may have read untrusted code ([D8](/decisions/#d8--notes)
 
 The map ([D29](/decisions/#d29--the-map-a-groups-shared-code-drawn-bounded)) draws one group of
 entry points (a chain group, a signal, a read, or all of them, up to 100) with the code at least 2,
-3, 5 or 10 of them call directly, as a graph laid out by forces
-([D41](/decisions/#d41--the-map-laid-out-by-forces)): shared code settles among the entry points
-that call it, each circle sized by how many do. Library symbols are left out, kept only when a sink
-fact names them, or all kept. Nodes can be dragged, the wheel zooms and dragging the ground pans;
+3, 5 or 10 of them call directly, as a graph laid out by forces: shared code settles among the
+entry points that call it, each circle sized by how many do. Library symbols are left out, kept
+only when a sink fact names them, or all kept. Nodes can be dragged, the wheel zooms and dragging the ground pans;
 **Fit** shows it all again. Hovering a node lights its links; selecting one lists what it touches;
 an entry point opens as its subgraph on a double click.
 
