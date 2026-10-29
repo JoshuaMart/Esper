@@ -47,11 +47,12 @@ Each answer is checked before it is stored:
   text has it;
 - it cites at least one line, at most twenty, each as a file, a line and an identifier: the file
   must be one of the snapshot's, the line within it, and the line must hold the identifier, as
-  written.
+  written. A `no` or a `none` rests on what the code lacks, and cites the line that declares the
+  node; the instructions say so, and the schema takes no answer without a citation.
 
 An answer that fails is stored as a **rejected** claim, with what failed:
-`citation mw/auth.go:12: the line does not hold "verifyToken"`. An `insufficient-context` answer
-needs no citation. An answer to a question the call did not carry is not taken.
+`citation mw/auth.go:12: the line does not hold "verifyToken"`. The citations of an
+`insufficient-context` answer are not checked. An answer to a question the call did not carry is not taken.
 
 ## What a claim holds
 

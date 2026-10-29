@@ -230,4 +230,6 @@ test('schemas/claims.schema.json is the schema the providers pass to the model',
   ) as Record<string, unknown>
   const { $schema: _, $id: __, title: ___, description: ____, ...schema } = file
   assert.deepEqual(schema, answerSchema)
+  // A "no" without a citation would be rejected and asked again: the schema takes none.
+  assert.equal(answerSchema.properties.answers.items.properties.citations.minItems, 1)
 })
