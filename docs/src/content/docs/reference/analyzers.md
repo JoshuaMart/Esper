@@ -66,8 +66,8 @@ analyze: [analyze]
 | `version` | the version of the tool the image runs; letters, digits, `.`, `_` and `-` only, since it is part of the image's tag |
 | `description` | optional: what it does, in one line |
 | `languages` | the languages it reads: `go`, `typescript` |
-| `provides` | `edges.resolve`, the callees of call sites; `flows`, dataflow paths, which come with [M8](/roadmap/#m8--dataflow-on-demand) |
-| `answers` | `snapshot`, run while a snapshot is indexed; `question`, run for one dataflow question (M8) |
+| `provides` | `edges.resolve`, the callees of call sites; `flows`, dataflow paths, which come with [M9](/roadmap/#m9--dataflow-on-demand) |
+| `answers` | `snapshot`, run while a snapshot is indexed; `question`, run for one dataflow question (M9) |
 | `image.dockerfile` | the Dockerfile in the folder |
 | `fetch` | the arguments, given to the image's entry point, that fetch the dependencies; absent when there are none to fetch |
 | `analyze` | the arguments that analyze the snapshot |

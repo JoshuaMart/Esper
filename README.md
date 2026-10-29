@@ -17,7 +17,8 @@ in Docker on request, their past advisories from OSV linked to the code their fi
 (`esper enrich`, on the auditor's Claude Code or an API key). All of it is served to agents over MCP
 (`esper mcp <project>`, or HTTP), and followed and annotated in a web interface (`esper serve`),
 where an agent's notes appear as it writes them. Next is
-[M8](docs/src/content/docs/roadmap.md#m8--dataflow-on-demand), dataflow on demand.
+[M8](docs/src/content/docs/roadmap.md#m8--python-and-fastapi), Python and FastAPI, then
+[M9](docs/src/content/docs/roadmap.md#m9--dataflow-on-demand), dataflow on demand.
 
 ## Documentation
 

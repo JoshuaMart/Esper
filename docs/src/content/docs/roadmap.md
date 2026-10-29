@@ -18,8 +18,9 @@ counted by hand, with none missing and none invented.
 | [M5](#m5--the-server-and-the-web-interface) | The server and the web interface | an audit can be followed and annotated in the browser | done |
 | [M6](#m6--enrichment-and-past-advisories) | Enrichment and past advisories | claims and advisory links measured on chi and Hono | done |
 | [M7](#m7--sveltekit) | SvelteKit | SvelteKit and a SvelteKit application pass their hand count | done |
-| [M8](#m8--dataflow-on-demand) | Dataflow, on demand | a `flows` question answered by Joern, every step cited | not started |
-| [Next](#after-that) | More frameworks | Next.js, FastAPI, each a pair of profiles | |
+| [M8](#m8--python-and-fastapi) | Python and FastAPI | FastAPI and a FastAPI application pass their hand count | not started |
+| [M9](#m9--dataflow-on-demand) | Dataflow, on demand | a `flows` question answered by Joern, every step cited | not started |
+| [Next](#after-that) | More frameworks | Next.js, TanStack Start, each a pair of profiles | |
 
 The agent comes before the interface: Esper is used first by hunting agents, and every milestone up
 to M4 can be checked over MCP and the command line.
@@ -298,7 +299,21 @@ It is done, on SvelteKit 3.1.0, the latest release
   60, the 24 routes unchanged.
 - **The Go and Hono counts still hold**: all seven counts run in `packages/core/test/counts.test.ts`.
 
-## M8 — Dataflow, on demand
+## M8 — Python and FastAPI
+
+The third language: Python as a module of its own, as Go and TypeScript are
+([D23](/decisions/#d23--a-language-is-a-module-the-core-names-none)), with what its syntax states
+(imports, classes and methods, decorators, type annotations), and FastAPI's two profiles: routes
+declared by decorators, `APIRouter` prefixes and `include_router`, dependencies (`Depends`,
+`Security`) as the chain and the guards, and reads from the path, query, headers, cookies, body and
+the Pydantic models they are parsed into. A typed indexer for Python joins the analyzers if one fits
+the contract. It comes before dataflow because the auditor's targets have FastAPI backends.
+
+**Done when** FastAPI, in framework mode, and a FastAPI application, in application mode, match
+their hand count, recorded in `profiles/fastapi/counts/`, and the Go, Hono and SvelteKit counts
+still hold.
+
+## M9 — Dataflow, on demand
 
 Joern as a second analyzer behind the same contract: a question (this read, this sink) asked through
 `esper_flow_request` or the interface, answered as `flows` edges with each step cited.
@@ -309,4 +324,4 @@ interface, and a question on chi or Hono comes back with cited steps or an expli
 ## After that
 
 Each new framework is a pair of profiles measured against hand-counted targets, in the order of
-[D5](/decisions/#d5--two-kinds-of-target-applications-and-the-frameworks-themselves): Next.js, then Python with FastAPI, then Express, Nuxt and the others as targets ask for them.
+[D5](/decisions/#d5--two-kinds-of-target-applications-and-the-frameworks-themselves): Next.js, then TanStack Start, then Express, Nuxt and the others as targets ask for them.
