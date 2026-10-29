@@ -82,6 +82,17 @@ const snapshotIn = z
   .optional()
   .describe('the snapshot to read, by id; the latest without it')
 const nodeIn = z.string().min(1).describe('a node, by its reference, a file:line, or its name')
+// Code is numbered by default: an agent that counts lines from startLine cites the wrong one.
+const numberedIn = z
+  .boolean()
+  .default(true)
+  .describe('each line of code prefixed with its number, as "12: ", the number a citation takes')
+
+// Lines start to end (from 1) of a file, numbered as the questions of claims number them.
+function codeLines(all: string[], start: number, end: number, numbered: boolean): string {
+  const slice = all.slice(start - 1, end)
+  return (numbered ? slice.map((l, i) => `${start + i}: ${l}`) : slice).join('\n')
+}
 const limitIn = (bound: { limit: number; max: number }, what: string) =>
   z
     .number()
@@ -693,6 +704,7 @@ export const tools: ToolSpec[] = [
         .max(bounds.node.maxExcerpt)
         .default(bounds.node.excerpt)
         .describe(`how many lines of its code to return, at most ${bounds.node.maxExcerpt}`),
+      numbered: numberedIn,
     }),
     output: z.object({
       snapshot: snapshotOut,
@@ -764,7 +776,7 @@ export const tools: ToolSpec[] = [
             file: node.file,
             startLine: node.startLine,
             endLine: last,
-            text: all.slice(node.startLine - 1, last).join('\n'),
+            text: codeLines(all, node.startLine, last, input.numbered),
           }
         } else if (text === null) {
           cut.push('excerpt: this snapshot was stored without its code')
@@ -1308,6 +1320,7 @@ export const tools: ToolSpec[] = [
         .min(1)
         .optional()
         .describe(`the last line; by default ${bounds.read.lines} lines from startLine`),
+      numbered: numberedIn,
       snapshot: snapshotIn,
     }),
     output: z.object({
@@ -1354,7 +1367,7 @@ export const tools: ToolSpec[] = [
         startLine: input.startLine,
         endLine: end,
         totalLines: all.length,
-        text: all.slice(input.startLine - 1, end).join('\n'),
+        text: codeLines(all, input.startLine, end, input.numbered),
         truncated: cut.length > 0,
         cut,
       }

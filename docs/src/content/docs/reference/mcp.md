@@ -194,6 +194,7 @@ One node: its facts with their citations, its edges counted by kind, its code, t
 | `node` | string | a node, by its reference, a file:line, or its name |
 | `snapshot` (optional) | integer | the snapshot to read, by id; the latest without it |
 | `excerptLines` (optional) | integer | how many lines of its code to return, at most 400; default `80` |
+| `numbered` (optional) | boolean | each line of code prefixed with its number, as "12: ", the number a citation takes; default `true` |
 
 | Output | Type | |
 |---|---|---|
@@ -387,6 +388,7 @@ A range of lines from a file of the snapshot, as it was indexed, and nothing out
 | `file` | string | a file of the snapshot, relative to the target's root |
 | `startLine` (optional) | integer | default `1` |
 | `endLine` (optional) | integer | the last line; by default 200 lines from startLine |
+| `numbered` (optional) | boolean | each line of code prefixed with its number, as "12: ", the number a citation takes; default `true` |
 | `snapshot` (optional) | integer | the snapshot to read, by id; the latest without it |
 
 | Output | Type | |

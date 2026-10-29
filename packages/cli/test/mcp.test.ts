@@ -170,7 +170,7 @@ test('an agent hunts chi over MCP, and its notes survive a reindex', {
         startLine: Number(line) - 2,
         endLine: Number(line),
       })
-      assert.match(code.text, /if !ok \{\n\t+basicAuthFailed\(w, realm\)\n\t+return/)
+      assert.match(code.text, /if !ok \{\n\d+: \t+basicAuthFailed\(w, realm\)\n\d+: \t+return/)
 
       // A line of RealIP outside its literal names it, the first one included.
       for (const line of [28, 36]) {

@@ -152,7 +152,10 @@ test('the tools read a snapshot indexed over MCP, within their bounds', async ()
   const node = await call('esper_node', { node: 'route:GET /api/users/{id}' })
   assert.deepEqual(node.entry.handlers, ['routes/users.go#Users.get'])
   assert.ok(node.facts.some((f: { value: string }) => f.value === 'path.id'))
-  assert.equal(node.excerpt.text, '\tr.Get("/{id}", u.get)')
+  // Code comes numbered, so that an agent cites the line it read, and as it is on request.
+  assert.equal(node.excerpt.text, '17: \tr.Get("/{id}", u.get)')
+  const plain = await call('esper_node', { node: 'route:GET /api/users/{id}', numbered: false })
+  assert.equal(plain.excerpt.text, '\tr.Get("/{id}", u.get)')
   const get = await call('esper_node', { node: 'routes/users.go:28', excerptLines: 1 })
   assert.equal(get.node.ref, 'routes/users.go#Users.get')
   assert.match(get.cut[0], /excerpt: lines 27 to 27 of 30/)
@@ -219,8 +222,17 @@ test('the tools read a snapshot indexed over MCP, within their bounds', async ()
   const read = await call('esper_read', { file: 'mw/mw.go', startLine: 5, endLine: 5 })
   assert.deepEqual(
     [read.text, read.totalLines],
-    ['func Logger(next http.Handler) http.Handler { return next }', 19],
+    ['5: func Logger(next http.Handler) http.Handler { return next }', 19],
   )
+  const two = await call('esper_read', { file: 'mw/mw.go', startLine: 4, endLine: 5 })
+  assert.match(two.text, /^4: .*\n5: func Logger/)
+  const plainRead = await call('esper_read', {
+    file: 'mw/mw.go',
+    startLine: 5,
+    endLine: 5,
+    numbered: false,
+  })
+  assert.equal(plainRead.text, 'func Logger(next http.Handler) http.Handler { return next }')
   const head = await call('esper_read', { file: 'routes/users.go' })
   assert.deepEqual([head.startLine, head.endLine, head.truncated], [1, 39, false])
   for (const file of ['../go.mod', '/etc/hosts', 'go.mod', 'nope.go']) {

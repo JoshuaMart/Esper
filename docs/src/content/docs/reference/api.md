@@ -67,8 +67,8 @@ The source of truth is `packages/server/src`: `app.ts` for the server, `api.ts` 
 | `POST /api/projects/:p/index` | starts indexing `{ ref?, force?, precise? }`, and answers `202` with the job at once | `esper_index` |
 | `GET /api/jobs` | the jobs, running and the last twenty finished, each an index or a fetch of the advisories (`action`), with their messages and results | |
 | `GET /api/projects/:p/entrypoints` | the entry points, filtered; up to 500 by default | `esper_entrypoints` |
-| `GET /api/projects/:p/node?node` | one node, its facts, code and notes | `esper_node` |
-| `GET /api/projects/:p/read?file&startLine&endLine` | lines of a file of the snapshot | `esper_read` |
+| `GET /api/projects/:p/node?node` | one node, its facts, code and notes; the code as it is, numbered with `numbered=true` | `esper_node` |
+| `GET /api/projects/:p/read?file&startLine&endLine` | lines of a file of the snapshot, as they are, numbered with `numbered=true` | `esper_read` |
 | `GET /api/projects/:p/search?query` | nodes by name, reference or `file:line` | `esper_search` |
 | `GET /api/projects/:p/paths?from&to` or `&fact&value` | paths to a node, or to any node carrying a fact | `esper_paths` |
 | `GET /api/projects/:p/subgraph?node&depth&limit&chain` | what a node reaches, to draw: below | |

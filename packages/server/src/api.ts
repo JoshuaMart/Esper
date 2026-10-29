@@ -27,7 +27,15 @@ const numbers = new Set([
   'to',
   'min',
 ])
-const flags = new Set(['includeDeleted', 'chain', 'force', 'precise', 'offline', 'current'])
+const flags = new Set([
+  'includeDeleted',
+  'chain',
+  'force',
+  'precise',
+  'offline',
+  'current',
+  'numbered',
+])
 
 function query(params: Record<string, string>): Json {
   const out: Json = {}
@@ -303,12 +311,23 @@ export function api(projects: Projects) {
     ),
   )
 
+  // The interface numbers the lines itself: the code comes as it is, unless numbered is asked.
   app.get('/projects/:project/node', async (c) =>
-    c.json(await call(await project(c.req.param('project')), 'esper_node', query(c.req.query()))),
+    c.json(
+      await call(await project(c.req.param('project')), 'esper_node', {
+        numbered: false,
+        ...query(c.req.query()),
+      }),
+    ),
   )
 
   app.get('/projects/:project/read', async (c) =>
-    c.json(await call(await project(c.req.param('project')), 'esper_read', query(c.req.query()))),
+    c.json(
+      await call(await project(c.req.param('project')), 'esper_read', {
+        numbered: false,
+        ...query(c.req.query()),
+      }),
+    ),
   )
 
   app.get('/projects/:project/search', async (c) =>
