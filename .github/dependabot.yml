@@ -41,8 +41,9 @@ updates:
     groups:
       analyzers-npm:
         patterns: ["*"]
-    # pnpm 12 ships a native binary that an install script puts in place, and the image
-    # installs without running a script: a major version is moved by hand.
+    # pnpm installs every target, and pnpm 12 refuses those of pnpm 10 that keep their settings
+    # (`overrides`) in package.json, while pnpm 10 reads the lockfiles of pnpm 12: a major version
+    # is moved by hand, once the targets it would break are rare.
     ignore:
       - dependency-name: pnpm
         update-types: ["version-update:semver-major"]
