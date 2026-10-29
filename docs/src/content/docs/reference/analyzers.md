@@ -64,6 +64,7 @@ analyze: [analyze]
 |---|---|
 | `name` | the folder's name; facts it brings have `<name>@<version>` as their source |
 | `version` | the version of the tool the image runs; letters, digits, `.`, `_` and `-` only, since it is part of the image's tag |
+| `description` | optional: what it does, in one line |
 | `languages` | the languages it reads: `go`, `typescript` |
 | `provides` | `edges.resolve`, the callees of call sites; `flows`, dataflow paths, which come with [M7](/roadmap/#m7--dataflow-on-demand) |
 | `answers` | `snapshot`, run while a snapshot is indexed; `question`, run for one dataflow question (M7) |

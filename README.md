@@ -7,7 +7,7 @@ served to hunting agents over MCP and explorable in a web interface.
 > Named after the Esper machine in *Blade Runner*, which Deckard uses to explore a photograph, zoom in
 > and bring out what nobody had seen.
 
-**Status: early development.** The documentation describes the target design.
+**Status: early development.**
 [M6](docs/src/content/docs/roadmap.md#m6--enrichment-and-past-advisories) is done: Go applications
 on chi or `net/http` and chi itself, and TypeScript applications on Hono and Hono itself, can be
 indexed, with their call edges resolved by scip-go or scip-typescript in Docker on request, their
@@ -26,6 +26,17 @@ demand.
 - [Roadmap](docs/src/content/docs/roadmap.md): the order it gets built in, and what makes each
   milestone done.
 - [Sources](docs/src/content/docs/sources.md): the tools and research Esper builds on or departs from.
+
+Reference, under [`docs/src/content/docs/reference/`](docs/src/content/docs/reference/):
+[command line](docs/src/content/docs/reference/command-line.md),
+[graph schema](docs/src/content/docs/reference/graph.md),
+[profiles](docs/src/content/docs/reference/profiles.md),
+[MCP tools](docs/src/content/docs/reference/mcp.md),
+[server and API](docs/src/content/docs/reference/api.md),
+[web interface](docs/src/content/docs/reference/interface.md),
+[notes](docs/src/content/docs/reference/notes.md),
+[claims](docs/src/content/docs/reference/claims.md),
+[analyzers](docs/src/content/docs/reference/analyzers.md).
 
 ## Quick start
 
@@ -57,6 +68,16 @@ cannot see, such as which of the target's own functions are guards, on the signe
 API key, at the cost of that plan or key: its answers are claims, checked against the lines they cite and
 shown apart from the facts ([claims](docs/src/content/docs/reference/claims.md)).
 
+To connect Claude Code to a project, from the repository:
+
+```sh
+claude mcp add esper -- node "$PWD/packages/cli/src/main.ts" mcp chi --read-only
+```
+
+`esper` is not on npm yet: outside the repository, Node runs it by its path
+([running `esper`](docs/src/content/docs/reference/command-line.md#running-esper)). After pulling a
+new version, start `esper serve` again and run `pnpm web` again.
+
 ## Development
 
 Node 24 or later and pnpm 10. No dependency runs an install script, and nothing is built: Node runs
@@ -67,7 +88,7 @@ which are skipped without it.
 pnpm install
 pnpm check            # type-check and lint
 pnpm test             # tests, with Node's own runner
-pnpm esper --help     # the command line, from the sources: add, index, list, mcp
+pnpm esper --help     # the command line, from the sources
 pnpm docs             # documentation on http://localhost:4321
 ```
 

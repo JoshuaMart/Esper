@@ -22,8 +22,9 @@ hero:
 import { Card, CardGrid } from '@astrojs/starlight/components';
 
 <p class="esper-lede">
-	Esper is at the design stage: this page describes what it is meant to be, not what it does
-	today.
+	Esper reads Go applications on chi or <code>net/http</code>, TypeScript applications on Hono, and
+	those frameworks themselves. Dataflow on demand is next: the <a href="/roadmap/">roadmap</a> says
+	what is built.
 </p>
 
 ## The problem
@@ -53,15 +54,27 @@ computed by parsing, without a model:
 | **Past advisories** | the target's published vulnerabilities, medium severity and up, linked to the functions their fix touched |
 | **References** | a stable `file#symbol` identity that findings cite and that survives reindexing |
 
-A route, as an agent would receive it (illustrative; the format is not settled):
+A route of [Wakapi](https://github.com/muety/wakapi), as `esper_entrypoints` gives it to an agent
+(its chain shortened):
 
-```yaml
-e-0042: POST /api/projects/[id]/members        # src/routes/api/projects/[id]/members/+server.ts:12
-  chain:   [handle, requireUser]               # no requireOwner, unlike its 4 sibling routes
-  reads:   [path.id, body]
-  signals: [data-write, request-key, divergent-guard]
-  reaches: db.insert (resolved) · sendInvite (guessed: untyped receiver)
+```json
+{
+  "ref": "route:GET /api/health",
+  "method": "GET",
+  "path": "/api/health",
+  "file": "routes/api/health.go",
+  "line": 27,
+  "handlers": ["routes/api/health.go#HealthApiHandler.Get"],
+  "chain": ["ext:github.com/go-chi/chi/v5/middleware#ClientIPFromXFF", "…", "middlewares/sentry.go#NewSentryMiddleware"],
+  "guards": [],
+  "reads": ["context.shared_data", "header.Content-Type"],
+  "signals": ["divergent-guard"]
+}
 ```
+
+`divergent-guard` says that most of its 28 sibling routes go through the API's authentication
+middleware, and this one does not: a health check is meant to be public, a route that writes would
+not be.
 
 A signal is not a defect. It says where to look, and the code answers.
 

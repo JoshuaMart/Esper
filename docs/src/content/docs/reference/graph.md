@@ -259,8 +259,9 @@ Measured on Wakapi at `aba6a44`, the 71 routes carry:
 - `live-state`: 45, almost all from a template reload on the development path, which writes a
   package variable during a request. Lazily created singletons (`if x == nil { x = … }`, or
   `if x != nil { return x }` before it) do not count.
-
-No route is divergent: Wakapi applies its guards to whole subrouters.
+- `divergent-guard`: 5, the public routes of `/api` (`GET /api/health`, the captcha, the shields
+  badge, …), which lack the authentication middleware most of their 28 siblings have. Wakapi
+  applies its other guards to whole subrouters.
 
 Measured on Kaneo's API at v2.48.0, the 211 routes carry `short-circuit` 209 times, from its
 authentication and access middleware, `retained-mutation` 211 (`c.set` in the middleware every

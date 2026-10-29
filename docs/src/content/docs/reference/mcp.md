@@ -12,14 +12,27 @@ esper mcp chi              # every tool
 esper mcp chi --read-only  # no tool that writes
 ```
 
-For Claude Code, in an MCP configuration file:
+For Claude Code, over stdio, with Node running `esper` from the repository's sources
+([running `esper`](/reference/command-line/#running-esper)):
 
-```json
-{ "mcpServers": { "esper": { "command": "esper", "args": ["mcp", "chi", "--read-only"] } } }
+```sh
+claude mcp add esper -- node ~/code/Esper/packages/cli/src/main.ts mcp chi --read-only
 ```
 
-or over Streamable HTTP, from [`esper serve`](/reference/api/), at `/mcp/<project>` with the
-server's token:
+or over Streamable HTTP, from a running [`esper serve`](/reference/api/), at `/mcp/<project>` with
+the server's token:
+
+```sh
+claude mcp add --transport http esper http://127.0.0.1:7300/mcp/chi \
+  --header "Authorization: Bearer $(cat ~/.esper/token)"
+```
+
+`claude mcp add` writes the server into Claude Code's configuration for the folder it runs in
+(`--scope user` for every folder). In an MCP configuration file, the same two are:
+
+```json
+{ "mcpServers": { "esper": { "command": "node", "args": ["/path/to/Esper/packages/cli/src/main.ts", "mcp", "chi", "--read-only"] } } }
+```
 
 ```json
 {

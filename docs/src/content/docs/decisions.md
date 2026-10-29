@@ -19,7 +19,7 @@ says why. Versions and behaviours cited here were checked on 2026-10-28.
 | [D8](#d8--notes) | Typed notes, with revisions, that never disappear silently | settled |
 | [D9](#d9--storage-one-sqlite-database-per-project-outside-the-target) | One SQLite database per project, outside the target | settled |
 | [D10](#d10--frameworks-as-profiles) | Frameworks as validated YAML profiles, two per framework | settled |
-| [D11](#d11--indexing-rules) | Read only, refuse rather than return nothing, incremental | settled |
+| [D11](#d11--indexing-rules) | Read only, refuse rather than return nothing, deterministic | settled |
 | [D12](#d12--precision-scip-right-after-the-first-index-dataflow-later) | Precision: SCIP right after the first index, dataflow later, one analyzer contract | settled |
 | [D13](#d13--the-mcp-surface) | MCP SDK v2, bounded tools, a read-only mode | settled |
 | [D14](#d14--one-server-for-the-api-mcp-and-the-web-interface) | One local server for the API, MCP and the web interface | settled |
@@ -430,31 +430,18 @@ dependencies with scripts enabled.
 
 **Decision.** The server uses the v2 TypeScript SDK (`@modelcontextprotocol/server` 2.4.0, which
 implements the 2026-07-28 revision of the specification), over stdio for a local agent and
-Streamable HTTP for the rest. Tools:
-
-| Tool | Answers | Writes |
-|---|---|---|
-| `esper_snapshots` | the project's snapshots: ref, commit, date, counts | |
-| `esper_diff` | between two snapshots: entry points added, removed or changed, and notes whose anchor state changed | |
-| `esper_index` | index a git ref of the connection's project, or reindex it; returns counts, skips and refusals | yes |
-| `esper_entrypoints` | entry points, filtered by method, path, chain member, guard, read or signal | |
-| `esper_node` | one node: its facts, its code excerpt, its notes, its past advisories, and how many claims it has | |
-| `esper_advisories` | the target's advisories, filtered by severity, precision or link status, with the nodes each one affects ([D19](#d19--past-vulnerabilities-advisories-linked-to-the-code-they-touched)) | |
-| `esper_callers`, `esper_callees` | one hop or more, up to a depth | |
-| `esper_paths` | the paths from one node to another, up to a depth and a count | |
-| `esper_search` | find a node by name, reference or `file:line` | |
-| `esper_read` | a range of lines from a file of the snapshot, and nothing outside it | |
-| `esper_notes` | list notes by node, kind, status, anchor state or author | |
-| `esper_note_create`, `esper_note_update`, `esper_note_delete` | write notes | yes |
-| `esper_claims` | the model claims on a node, apart from its facts ([D17](#d17--model-enrichment-claims-beside-the-facts)) | |
-| `esper_enrich_next`, `esper_claim_submit` | hand out an enrichment question, and take its answer | `esper_claim_submit` |
-| `esper_flows`, `esper_flow_request` | the `flows` edges of a node, and a dataflow question for an analyzer ([D12](#d12--precision-scip-right-after-the-first-index-dataflow-later)) | `esper_flow_request` |
+Streamable HTTP for the rest. The tools read the project's snapshots and their
+differences, its entry points, a node with its facts, code, notes and past advisories, callers,
+callees and paths, a search, a range of lines, the notes, and the claims of a model; five write:
+`esper_index`, `esper_claim_submit` and the three note tools (`esper_note_create`,
+`esper_note_update`, `esper_note_delete`). Two more come with the dataflow analyzer
+([D12](#d12--precision-scip-right-after-the-first-index-dataflow-later)): `esper_flows`, the `flows`
+edges of a node, and `esper_flow_request`, which writes a dataflow question. Each tool, its inputs,
+outputs and bounds are in the [MCP reference](/reference/mcp/), written from the code.
 
 Every tool that reads the graph takes an optional `snapshot`, and reads the latest one without it.
 Every answer is bounded and says when it was cut. A node is named by its reference, a `file:line`,
-or its name. A server started **read-only** exposes none of the tools marked as writing. Each tool's
-input and output schemas, and its default bounds, are written in M2 ([roadmap](/roadmap/#m2--mcp-and-notes))
-and published from the code.
+or its name. A server started **read-only** exposes none of the tools that write.
 
 **Why.** Bounded answers are what an agent can afford to ask often. Read-only mode lets a
 workflow decide which agents may write notes, for example a hunter that proposes leads and a
@@ -485,6 +472,7 @@ home screen.
 packages/core          # @esper/core: parsing, graph model, references, profiles, storage
 packages/core/queries  # tree-sitter extraction queries, one folder per language (.scm)
 packages/mcp           # @esper/mcp: MCP tools over core
+packages/enrich        # @esper/enrich: the providers of model enrichment
 packages/server        # @esper/server: HTTP API, MCP endpoint, static files
 packages/cli           # esper-cli on npm: the `esper` command
 apps/web               # @esper/web: the web interface
@@ -492,6 +480,7 @@ profiles/<framework>   # the two profiles, their fixtures and their hand counts
 schemas/               # JSON Schemas: profile, analyzer import, claims
 analyzers/<name>       # an analyzer's manifest and container image
 docs/                  # this documentation
+scripts/               # fetching the counted targets, measuring claims, writing the MCP reference
 ```
 
 Every package but `esper-cli` is private to the workspace. `docs/` joins the workspace, so the
@@ -711,18 +700,13 @@ or started from the audited repository; exploring every node by default.
   the HTTP endpoint `/mcp/hono`. A connection sees a single project: its tools take no project
   argument, and an agent working on one target cannot read another's notes.
 
-Every command that acts on a project takes its name first:
-
-| Command | Does |
-|---|---|
-| `esper add <path or git URL>` | adds a project; `--name`, `--kind application\|framework`, `--package` |
-| `esper index <project>` | indexes a snapshot; `--ref`, `--offline` (no advisory fetch) |
-| `esper advisories <project>` | fetches and links the target's advisories again ([D19](#d19--past-vulnerabilities-advisories-linked-to-the-code-they-touched)) |
-| `esper enrich <project>` | answers the enrichment questions ([D17](#d17--model-enrichment-claims-beside-the-facts)); `--provider claude-code\|anthropic-api`, `--tier` |
-| `esper notes export <project>`, `esper notes import <project>` | notes to and from JSON Lines ([D9](#d9--storage-one-sqlite-database-per-project-outside-the-target)) |
-| `esper mcp <project>` | the MCP server over stdio; `--read-only` |
-| `esper serve` | the local server, for every project |
-| `esper list` | the projects and their snapshots |
+Every command that acts on a project takes its name first: `esper add`, `esper index`,
+`esper advisories` ([D19](#d19--past-vulnerabilities-advisories-linked-to-the-code-they-touched)),
+`esper enrich` ([D17](#d17--model-enrichment-claims-beside-the-facts)), `esper mcp`, and
+`esper notes export` and `esper notes import`, notes to and from JSON Lines
+([D9](#d9--storage-one-sqlite-database-per-project-outside-the-target)), which are not built yet;
+`esper serve` and `esper list` take none. Each command and its options are in the
+[command-line reference](/reference/command-line/).
 
 The kind of target, application or framework
 ([D5](#d5--two-kinds-of-target-applications-and-the-frameworks-themselves)), is detected from the

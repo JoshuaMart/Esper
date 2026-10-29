@@ -3,8 +3,9 @@ title: How it works
 description: From a folder of source code to an annotated attack-surface graph, served to agents and to the auditor.
 ---
 
-Esper is at the design stage: this page describes the target design, as settled in the
-[decisions](/decisions/). Each step links to the decision behind it.
+This page describes Esper as built, following the [decisions](/decisions/): each step links to the
+decision behind it. Dataflow (Joern) is the one part not built yet, and says so
+([roadmap](/roadmap/#m7--dataflow-on-demand)).
 
 ## The whole path
 
@@ -120,7 +121,7 @@ sequenceDiagram
   (`esper index --precise`), so that entry points follow the resolved edges
   ([D22](/decisions/#d22--precision-runs-inside-the-index-when-asked),
   [analyzers](/reference/analyzers/)).
-- **Joern** (or CodeQL), on demand, answers a dataflow question (does this read reach this sink) and
+- **Joern** (or CodeQL), on demand, not built yet ([M7](/roadmap/#m7--dataflow-on-demand)), answers a dataflow question (does this read reach this sink) and
   adds `flows` edges with each step cited. A question is asked through MCP (`esper_flow_request`) or
   the interface.
 

@@ -6,6 +6,30 @@ description: The esper commands available today, where Esper keeps its projects,
 The commands planned are in [D18](/decisions/#d18--running-esper-one-home-many-projects). This page
 lists those that exist. From the repository, `pnpm esper <command>` runs them from the sources.
 
+## Running `esper`
+
+`esper-cli` is not published on npm yet, so `esper` is the repository's own entry point, run by
+Node from the sources. Inside the repository, `pnpm esper` runs it; anywhere else, and in an MCP
+client's configuration, Node runs it by its path:
+
+```sh
+node ~/code/Esper/packages/cli/src/main.ts list
+alias esper="node ~/code/Esper/packages/cli/src/main.ts"   # in ~/.zshrc, so that esper works as written here
+```
+
+A running `esper serve` or `esper mcp` keeps the code it started with: after pulling a new version
+of Esper, start them again, and run `pnpm web` again for the interface.
+
+## Environment
+
+| Variable | |
+|---|---|
+| `ESPER_HOME` | where projects live, `~/.esper` by default ([below](#where-projects-live)) |
+| `ESPER_DEBUG` | `1` shows where an error came from, rather than its one line |
+| `ESPER_OSV_URL` | the OSV server advisories are fetched from, `https://api.osv.dev` by default |
+| `ANTHROPIC_API_KEY` | the key of `esper enrich --provider anthropic-api`, read by the SDK |
+| `ESPER_TARGETS` | for the repository's tests and scripts: the folder `pnpm fetch-targets` fetches the counted targets into |
+
 ## Commands
 
 | Command | Does |

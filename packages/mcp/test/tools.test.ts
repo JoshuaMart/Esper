@@ -71,7 +71,7 @@ async function connect(options: { readOnly?: boolean } = {}, on: Home = home) {
 }
 
 // What the read-only tests leave out is what the tools say about themselves; which ones write is
-// checked once against D13's table.
+// checked once against the five D13 names.
 const writes = tools.filter((t) => t.writes).map((t) => t.name)
 
 test('each tool has an input and an output schema, and every output says when it was cut', async () => {
