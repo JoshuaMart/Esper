@@ -5,6 +5,6 @@
   "description": "scip-typescript inside Esper's analyzer contract, with the package managers it installs a target's dependencies with.",
   "dependencies": {
     "@sourcegraph/scip-typescript": "0.5.2",
-    "pnpm": "10.34.9"
+    "pnpm": "12.16.1"
   }
 }
