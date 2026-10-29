@@ -131,7 +131,7 @@ export const typescript: Language = {
     for (const file of files) {
       if (!isTsSource(file.path)) continue
       for (const match of file.source.matchAll(
-        /(?:^|\n)\s*(?:import|export)\b[^'"]*?\bfrom\s*['"]([^'"]+)['"]|(?:^|\n)\s*import\s*['"]([^'"]+)['"]|\brequire\(\s*['"]([^'"]+)['"]\s*\)/g,
+        /^[ \t]*(?:import|export)\b[^'"]*?\bfrom\s*['"]([^'"]+)['"]|^[ \t]*import\s*['"]([^'"]+)['"]|\brequire\(\s*['"]([^'"]+)['"]\s*\)/gm,
       )) {
         const spec = match[1] ?? match[2] ?? match[3]
         if (spec) found.add(spec)

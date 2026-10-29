@@ -235,7 +235,7 @@ export function parseGoMod(text: string): { path?: string; requires: string[] } 
   for (const block of text.matchAll(/^require\s*\(([^)]*)\)/gm)) {
     for (const line of (block[1] ?? '').split('\n')) requirement(line)
   }
-  for (const single of text.matchAll(/^require\s+(\S+\s+v\S+.*)$/gm)) requirement(single[1] ?? '')
+  for (const single of text.matchAll(/^require[ \t]+(\S.*)/gm)) requirement(single[1] ?? '')
   return { ...(path ? { path } : {}), requires }
 }
 
@@ -246,7 +246,7 @@ export function goImports(source: string): string[] {
   const spec = /^\s*(?:[\w.]+\s+)?"([^"]+)"/
   for (const block of source.matchAll(/^import\s*\(([\s\S]*?)\)/gm)) {
     for (const line of (block[1] ?? '').split('\n')) {
-      const path = spec.exec(line.replace(/\/\/.*$/, ''))?.[1]
+      const path = spec.exec(line.split('//', 1)[0] ?? '')?.[1]
       if (path) found.push(path)
     }
   }

@@ -39,6 +39,9 @@ test('patterns are normalised, and paths joined without trailing slashes', () =>
   assert.equal(joinPath('/api', '/'), '/api')
   assert.equal(joinPath('', '/'), '/')
   assert.equal(joinPath('/a/', '/b/'), '/a/b')
+  assert.equal(joinPath('/a//', '//b'), '/a/b')
+  assert.deepEqual(normalisePattern('/codes/{code:[0-9]{3}}', 'braces'), { path: '/codes/{code}' })
+  assert.deepEqual(normalisePattern('/codes/:code{[0-9]{3}}', 'colon'), { path: '/codes/{code}' })
 })
 
 test('routes get the full path of the routers they are mounted under', async () => {

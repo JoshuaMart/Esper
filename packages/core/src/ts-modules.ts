@@ -202,7 +202,7 @@ export class Resolver {
       }
       if (rest === undefined || !config) continue
       for (const target of targets) {
-        const found = this.file(posix.join(config.base, target.replace('*', rest)))
+        const found = this.file(posix.join(config.base, target.split('*').join(rest)))
         if (found) return found
       }
     }

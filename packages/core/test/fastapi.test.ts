@@ -62,6 +62,12 @@ test('a project declares its dependencies in pyproject.toml, its groups included
   ])
 })
 
+test('a manifest cannot reach the prototype every object shares', () => {
+  const toml = parseToml('[__proto__]\npolluted = 1\n[a]\n__proto__.polluted = 1\nb = 2\n')
+  assert.equal(({} as Record<string, unknown>).polluted, undefined)
+  assert.deepEqual(toml, { a: { b: 2 } })
+})
+
 test('routes are the decorated functions of included routers, and the route objects of a list', async () => {
   const graph = await index()
   const routes = graph.nodes

@@ -114,6 +114,8 @@ export function parseToml(text: string): Toml {
   }
   const set = (into: Toml, path: string[], v: unknown) => {
     let t = into
+    // `__proto__` would reach the prototype every object shares, so a manifest cannot name it.
+    if (path.includes('__proto__')) return
     for (const part of path.slice(0, -1)) {
       if (typeof t[part] !== 'object' || t[part] === null || Array.isArray(t[part])) t[part] = {}
       t = t[part] as Toml
@@ -122,6 +124,10 @@ export function parseToml(text: string): Toml {
   }
   const open = (path: string[], array: boolean) => {
     let t = root
+    if (path.includes('__proto__')) {
+      table = {}
+      return
+    }
     for (const [n, part] of path.entries()) {
       const last = n === path.length - 1
       if (last && array) {
@@ -216,7 +222,7 @@ export function modulesOf(files: TargetFile[]): Module[] {
         for (const n of Object.keys(table(group))) if (n !== 'python') requires.add(normalise(n))
     } else {
       for (const raw of file.source.split('\n')) {
-        const text = raw.replace(/#.*$/, '').trim()
+        const text = (raw.split('#', 1)[0] ?? '').trim()
         if (!text || text.startsWith('-')) continue
         const n = requirementName(text)
         if (n) requires.add(n)

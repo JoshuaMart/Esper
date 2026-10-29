@@ -77,10 +77,12 @@ export function normalisePattern(
   }
   let path = text
   if (syntax === 'braces') {
-    path = path.replace(/\{([A-Za-z_][\w-]*)(:[^}]*)?\}/g, '{$1}').replace(/\*$/, '{rest...}')
+    path = path
+      .replace(/\{([A-Za-z_][\w-]*)(:[^{}]*(?:\{[^{}]*\}[^{}]*)*)?\}/g, '{$1}')
+      .replace(/\*$/, '{rest...}')
   } else if (syntax === 'colon') {
     path = path
-      .replace(/:([A-Za-z_][\w-]*)(\{[^}]*\})?\??/g, '{$1}')
+      .replace(/:([A-Za-z_][\w-]*)(\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\})?\??/g, '{$1}')
       .replace(/(^|\/)\*$/, '$1{rest...}')
   } else if (path.endsWith('/{$}')) {
     // `/{$}` matches the path exactly.
@@ -93,8 +95,7 @@ export function normalisePattern(
 }
 
 export function joinPath(prefix: string, path: string): string {
-  const joined = `${prefix.replace(/\/+$/, '')}/${path.replace(/^\/+/, '')}`
-  const clean = joined.replace(/\/{2,}/g, '/')
+  const clean = `${prefix}/${path}`.replace(/\/{2,}/g, '/')
   return clean.length > 1 ? clean.replace(/\/$/, '') : '/'
 }
 

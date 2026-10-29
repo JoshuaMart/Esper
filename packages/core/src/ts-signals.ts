@@ -26,6 +26,9 @@ interface ChainItem {
   property?: true
 }
 
+// A name written into a pattern as itself: an identifier's text may hold `$`, or a `\u` escape.
+const escapeRegExp = (text: string) => text.replace(/[\\^$.*+?()[\]{}|]/g, '\\$&')
+
 // `req.param(name)` is the field `req`, the field `param`, and a call whose argument names what is
 // read; `params[name]` the field `params` and the property read from it.
 function parseChain(chain: string): ChainItem[] {
@@ -313,7 +316,7 @@ function lazilySet(assignment: Node, name: string): boolean {
     /^(\?\?=|\|\|=)$/.test(assignment.childForFieldName('operator')?.text ?? '')
   )
     return true
-  const escaped = name.replace(/[$]/g, '\\$')
+  const escaped = escapeRegExp(name)
   const unset = new RegExp(
     `(^|[^\\w$.])(!\\s*${escaped}\\b|${escaped}\\s*(===?|==)\\s*(null|undefined)\\b)`,
   )
@@ -643,7 +646,7 @@ function refusesWithout(
     // it tests, the read's own last name or a name that holds it.
     const missing = (name: string) =>
       new RegExp(
-        `!\\s*\\(?\\s*[\\w$.?\\]\\['"]*\\b${name.replace(/[$]/g, '\\$')}\\b(?!\\s*[.(\\[])|\\b${name.replace(/[$]/g, '\\$')}\\s*===?\\s*(null|undefined)\\b`,
+        `!\\s*\\(?\\s*[\\w$.?\\]\\['"]*\\b${escapeRegExp(name)}\\b(?!\\s*[.(\\[])|\\b${escapeRegExp(name)}\\s*===?\\s*(null|undefined)\\b`,
       ).test(condition.text)
     const values = readAt(line(condition), condition.endPosition.row + 1).filter((v) =>
       missing(v.split('.').at(-1) ?? v),

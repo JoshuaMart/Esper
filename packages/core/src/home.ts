@@ -123,8 +123,7 @@ export class Home {
     const source = typed === '~' || typed.startsWith('~/') ? join(homedir(), typed.slice(1)) : typed
     const url = /^(https?:\/\/|git@|ssh:\/\/)/.test(source)
     const name = (
-      options.name ??
-      basename(url ? source.replace(/\.git$/, '').replace(/\/+$/, '') : resolve(source))
+      options.name ?? basename(url ? source.replace(/\.git$/, '') : resolve(source))
     ).toLowerCase()
     if (!validName.test(name)) {
       throw new EsperError(
