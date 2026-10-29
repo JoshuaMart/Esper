@@ -41,6 +41,9 @@ pnpm esper index chi --ref v5.3.2 --precise  # the same, with the call edges res
 pnpm esper list                              # the projects and their snapshots
 
 pnpm esper serve                             # the interface, its API and MCP on 127.0.0.1:7300
+
+pnpm esper enrich chi --dry-run              # the questions a model would be asked, and the calls
+pnpm esper enrich chi --kind guard --limit 20 # ask them on your Claude Code: claims, not facts
 ```
 
 A URL is cloned into `~/.esper/projects/<name>/checkout/`; a path is read where it is. Each index
@@ -49,7 +52,10 @@ is a snapshot of its own, and prints what it found
 interface's address with its token: open it to follow the entry points, what each reaches and its
 code, and to write notes ([interface](docs/src/content/docs/reference/interface.md)). Agents
 connect over MCP, to `esper mcp <project>` or to `/mcp/<project>` on the server
-([MCP tools](docs/src/content/docs/reference/mcp.md)).
+([MCP tools](docs/src/content/docs/reference/mcp.md)). `esper enrich` asks a model what parsing
+cannot see, such as which of the target's own functions are guards, on the signed-in `claude` or an
+API key, at the cost of that plan or key: its answers are claims, checked against the lines they cite and
+shown apart from the facts ([claims](docs/src/content/docs/reference/claims.md)).
 
 ## Development
 
