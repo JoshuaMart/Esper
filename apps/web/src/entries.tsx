@@ -3,7 +3,8 @@ import { api, type Entry } from './api.ts'
 import { useProject } from './app.tsx'
 import { href, Link, navigate, shortRef, useData, useLocation, withParams } from './lib.tsx'
 import { MapView } from './map.tsx'
-import { ErrorNotice, Icon, Spinner, TopBar } from './ui.tsx'
+import { ErrorNotice, Icon, Spinner } from './ui.tsx'
+import { Workspace } from './workspace.tsx'
 
 // The entry points of a snapshot, as tables grouped by chain, read or signal (D14), or as a map
 // of the code a group shares.
@@ -130,15 +131,13 @@ export function EntriesPage({ project }: { project: string }) {
     navigate(withParams(changes), { replace: true })
 
   return (
-    <>
-      <TopBar
-        project={project}
-        {...(p.projects ? { projects: p.projects } : {})}
-        {...(p.snapshots ? { snapshots: p.snapshots } : {})}
-        {...(p.snapshot !== undefined ? { snapshot: p.snapshot } : {})}
-        latest={p.latest}
-        current="entries"
-      />
+    <Workspace
+      project={project}
+      snapshots={p.snapshots}
+      snapshot={p.snapshot}
+      latest={p.latest}
+      current="entries"
+    >
       <main className="page">
         <div className="head">
           <div className="stack">
@@ -305,7 +304,7 @@ export function EntriesPage({ project }: { project: string }) {
           </div>
         )}
       </main>
-    </>
+    </Workspace>
   )
 }
 

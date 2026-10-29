@@ -5,7 +5,7 @@ description: The choices that shape Esper, each with its reasons and the alterna
 
 Each decision says what is chosen, why, and what it rules out. A decision is **proposed** until it
 is confirmed, and **settled** once it is; a settled decision changes only through a new entry that
-says why. Versions and behaviours cited here were checked on 2026-10-28, and those of D32 to D40 on
+says why. Versions and behaviours cited here were checked on 2026-10-28, and those of D32 to D41 on
 2026-10-29.
 
 | # | Decision | Status |
@@ -50,6 +50,7 @@ says why. Versions and behaviours cited here were checked on 2026-10-28, and tho
 | [D38](#d38--what-a-parameter-reads-and-a-dependency-that-refuses) | What a parameter reads, and a dependency that refuses with 401 or 403 as a guard | settled |
 | [D39](#d39--fastapi-and-starlette-as-two-frameworks) | FastAPI and Starlette as two framework targets; the ASGI server's own reads are not theirs | settled |
 | [D40](#d40--scip-python-wheels-only-and-no-python-in-the-analysis) | scip-python, with the dependencies' wheels only, and no Python run in the analysis | settled |
+| [D41](#d41--the-map-laid-out-by-forces) | The map laid out by forces, with `d3-force`: nodes that can be dragged, a view that zooms and pans | settled |
 
 ## D1 — What Esper is and is not
 
@@ -1699,3 +1700,38 @@ analysis starts none.
 
 **Rules out.** Building a dependency from its source distribution; running `pip` or Python over the
 installed packages.
+
+## D41 — The map, laid out by forces
+
+This changes how [D29](#d29--the-map-a-groups-shared-code-drawn-bounded)'s map is drawn; what it
+holds, and its bounds, stay.
+
+**Decision.** The map is a graph laid out by forces, as notes graphs draw theirs: each link pulls an
+entry point toward the code it calls, every node pushes the others away, and none overlaps another.
+Shared code then settles among the entry points that call it, and an entry point that calls none
+drifts to the side. The layout is computed by [`d3-force`](https://github.com/d3/d3-force) 3.0.0
+(its latest release, with no dependency outside d3's own timer, dispatch and quadtree) and drawn in
+SVG by the interface:
+
+- **It moves.** A node can be dragged, and the others follow while it is held; the wheel zooms about
+  the pointer and dragging the ground pans. Most of the settling runs before the first frame, so
+  that the view is fitted once and then stays where it is put.
+- **It reads at a glance.** An entry point is a square, shared code a circle sized by how many of
+  the group call it, a library sink a circle drawn as a sink. Hovering or focusing a node lights its
+  links and dims the rest. Names come with the zoom: the most shared code is always named, the rest
+  once the view is close enough to read it, and whatever is linked to the node in focus.
+- **Within reach.** Each node is reached by the keyboard and says what it is; Enter selects it and,
+  on an entry point selected, opens its subgraph, as a double click does. Under reduced motion the
+  layout is computed at once and nothing moves but the node dragged.
+
+**Why.** The auditor asked for a graph that moves, as a notes graph does. Two rings, the entry points
+around and the shared code inside, put every entry point at the same distance from the code
+whatever it calls, so the lines crossed in the middle and said little; forces put the code that
+many entry points share among them, and the entry points that share code near each other. A
+hundred and forty nodes stay smooth in SVG when the positions are written to it on each tick rather
+than rendered again, and SVG keeps each node an element the keyboard reaches. `d3-force` is the
+layout most graph views are built on; a graph library would bring its own rendering and styles to
+replace.
+
+**Rules out.** A canvas or WebGL renderer, which the keyboard cannot reach; a layout that keeps
+moving once settled; a map of more than D29 allows.

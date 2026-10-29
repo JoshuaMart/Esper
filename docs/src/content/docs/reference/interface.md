@@ -14,21 +14,34 @@ and leaves the address.
 
 ## Screens
 
-### Projects and snapshots
+Every screen sits beside the same rail of projects, where the project shown is selected. A bar
+above its screen holds its screens as tabs, which keep the snapshot being read as they lead from
+one to the other, and that snapshot (on every screen but the overview, which reads the latest).
 
-`/` lists the projects with their source, their kind, their latest snapshot, its entry points and
-how its notes stand. Selecting one shows its snapshots: version, commit, profiles and analyzers,
-counts, and the notes by anchor state on each. Below:
+### The workspace: projects and a project's overview
 
-- **what changed** between the last two snapshots: entry points added, removed and changed, and
-  the notes whose anchor state changed;
-- **how to connect an agent** to the project: its `/mcp/<project>` address, or `esper mcp`.
+`/` keeps every project in a rail on the left: its kind, its entry points, and its notes, or what
+needs a look first (notes orphaned or stale, an index running). The project selected
+(`/?project=<name>`, else the first) shows in full, under tabs that lead to its entry points, notes
+and advisories:
+
+- **its latest snapshot** in four figures: entry points, call edges (with the change since the
+  snapshot before), files and notes, each opening where it is detailed;
+- **what needs a look**: an index running, notes whose code changed or went away, advisories that
+  affect this version; or, when there is none, that there is nothing to review;
+- **its history**: the snapshots newest first, with version, commit, profiles and analyzers,
+  counts and notes, and between two of them what their counts and tools say changed. Ticking two
+  compares them: entry points added, removed and changed, and the notes whose anchor state
+  changed (the last two at first);
+- **how to connect an agent**: its `/mcp/<project>` address over HTTP, or `esper mcp` over stdio,
+  each to copy;
+- **its activity**: the notes last written, by you or an agent, as they arrive.
 
 **Add project** asks for a folder or a git URL, a name and, optionally, the kind, then offers to
 index it: a git ref or the folder as it is, a precise index in Docker, or an index of a commit
 already indexed. The index runs on the server; the dialog shows its progress and then its counts,
 skips and notes, as `esper index` prints them. It can be left to run in the background. **Index a
-ref** indexes another version of the selected project.
+ref** indexes another version of the selected project; a project not indexed yet offers to index it.
 
 ### Entry points
 
@@ -110,10 +123,13 @@ since whoever wrote it may have read untrusted code ([D8](/decisions/#d8--notes)
 ### Map
 
 The map ([D29](/decisions/#d29--the-map-a-groups-shared-code-drawn-bounded)) draws one group of
-entry points (a chain group, a signal, a read, or all of them, up to 100) around its edge, and in
-the middle the code at least 2, 3, 5 or 10 of them call directly, each bubble sized by how many
-do. Library symbols are left out, kept only when a sink fact names them, or all kept. Selecting a
-bubble lights its links and lists what it touches; an entry point opens as its subgraph.
+entry points (a chain group, a signal, a read, or all of them, up to 100) with the code at least 2,
+3, 5 or 10 of them call directly, as a graph laid out by forces
+([D41](/decisions/#d41--the-map-laid-out-by-forces)): shared code settles among the entry points
+that call it, each circle sized by how many do. Library symbols are left out, kept only when a sink
+fact names them, or all kept. Nodes can be dragged, the wheel zooms and dragging the ground pans;
+**Fit** shows it all again. Hovering a node lights its links; selecting one lists what it touches;
+an entry point opens as its subgraph on a double click.
 
 ## Live
 
@@ -121,7 +137,7 @@ The interface listens to the server's [events](/reference/api/#events). Advisori
 show at once. A note written by an agent,
 over `/mcp/<project>` or `esper mcp` in another process, or in another tab, appears where it sits
 without a reload, and a notice says who wrote it with a link to it; a new snapshot and an index's
-progress show the same way. The top bar says whether the interface is connected.
+progress show the same way. The foot of the rail says whether the interface is connected.
 
 ## Building and developing
 

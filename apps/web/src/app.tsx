@@ -126,7 +126,6 @@ export function useProject(project: string) {
   const { params } = useLocation()
   const live = useLive()
   const version = live.version(project)
-  const projects = useData('projects', () => api.projects())
   const snapshots = useData(`${project}:snapshots:${version}`, () => api.snapshots(project))
   const asked = params.get('snapshot')
   const latest = snapshots.data?.latest ?? null
@@ -135,7 +134,6 @@ export function useProject(project: string) {
     document.title = `${project} · Esper`
   }, [project])
   return {
-    projects: projects.data?.projects,
     snapshots: snapshots.data?.snapshots,
     latest,
     snapshot,

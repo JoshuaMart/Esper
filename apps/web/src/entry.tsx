@@ -33,8 +33,8 @@ import {
   SeverityBadge,
   Spinner,
   StateBadge,
-  TopBar,
 } from './ui.tsx'
+import { Workspace } from './workspace.tsx'
 
 // An entry point, what it reaches drawn left to right with a layered layout (D14), and the code
 // of the node picked in the drawing beside it, with the notes that sit on that node.
@@ -390,16 +390,14 @@ export function EntryPage({ project }: { project: string }) {
     .map((f) => ({ advisory: String(f.data?.advisory ?? ''), via: String(f.data?.via ?? '') }))
 
   return (
-    <>
-      <TopBar
-        project={project}
-        {...(p.projects ? { projects: p.projects } : {})}
-        {...(p.snapshots ? { snapshots: p.snapshots } : {})}
-        {...(p.snapshot !== undefined ? { snapshot: p.snapshot } : {})}
-        latest={p.latest}
-        current="entries"
-      />
-      <main className="page" style={{ gap: 16, paddingTop: 20 }}>
+    <Workspace
+      project={project}
+      snapshots={p.snapshots}
+      snapshot={p.snapshot}
+      latest={p.latest}
+      current="entries"
+    >
+      <main className="page" style={{ gap: 16 }}>
         <nav aria-label="Breadcrumb" className="row" style={{ gap: 6, fontSize: '0.8125rem' }}>
           <Link
             className="link"
@@ -680,7 +678,7 @@ export function EntryPage({ project }: { project: string }) {
           onSaved={() => setLines([])}
         />
       ) : null}
-    </>
+    </Workspace>
   )
 }
 

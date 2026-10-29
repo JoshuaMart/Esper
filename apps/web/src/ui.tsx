@@ -1,22 +1,38 @@
 import { type ReactNode, useEffect, useState } from 'react'
-import type { AdvisoryState, AnchorState, NoteKind, Project, Severity } from './api.ts'
-import { href, Link, type NoteEvent, navigate, shortRef, snapshotLabel, useLive } from './lib.tsx'
+import type { AdvisoryState, AnchorState, NoteKind, Severity } from './api.ts'
+import { href, Link, type NoteEvent, shortRef, useLive } from './lib.tsx'
 
-// The pieces every screen uses: icons, badges, a note's text, the top bar, the toasts.
+// The pieces every screen uses: icons, badges, a note's text, the toasts.
 
 const paths = {
   logo: (
     <>
-      <circle cx="6" cy="6" r="2.5" />
-      <circle cx="18" cy="12" r="2.5" />
-      <circle cx="6" cy="18" r="2.5" />
-      <path d="M8.5 6.8 15.6 11M8.5 17.2 15.6 13" />
+      <rect x="3.5" y="3.5" width="5" height="5" />
+      <rect x="15.5" y="9.5" width="5" height="5" />
+      <rect x="3.5" y="15.5" width="5" height="5" />
+      <path d="M8.5 7 15.5 11M8.5 17l7-4" />
     </>
   ),
   plus: <path d="M12 5v14M5 12h14" />,
+  minus: <path d="M5 12h14" />,
   refresh: <path d="M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5" />,
   pen: <path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />,
   chevron: <path d="m9 6 6 6-6 6" />,
+  down: <path d="m6 9 6 6 6-6" />,
+  copy: (
+    <>
+      <rect x="8.5" y="8.5" width="12" height="12" />
+      <path d="M15.5 8.5v-5h-12v12h5" />
+    </>
+  ),
+  source: (
+    <>
+      <circle cx="6" cy="6" r="2.5" />
+      <circle cx="6" cy="18" r="2.5" />
+      <circle cx="18" cy="8" r="2.5" />
+      <path d="M6 8.5v7M18 10.5c0 4-6 3-11 6" />
+    </>
+  ),
   close: <path d="M6 6l12 12M18 6 6 18" />,
   check: <path d="m5 12 5 5 9-10" />,
   alert: (
@@ -68,8 +84,8 @@ export function Icon({
       fill="none"
       stroke="currentColor"
       strokeWidth={stroke}
-      strokeLinecap="round"
-      strokeLinejoin="round"
+      strokeLinecap="square"
+      strokeLinejoin="miter"
       aria-hidden="true"
       className={className}
       style={{ flex: 'none' }}
@@ -180,7 +196,12 @@ export function NoteText({ text }: { text: string }) {
 }
 
 // Plain text of a note's Markdown, for a one-line excerpt.
-export const plainText = (text: string) => text.replace(/`/g, '').replace(/\s+/g, ' ').trim()
+export const plainText = (text: string) =>
+  text
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/\*\*|__|`/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
 
 export function Spinner({ size = 16 }: { size?: number }) {
   return (
@@ -207,109 +228,6 @@ export function ErrorNotice({ error, action }: { error: Error; action?: ReactNod
       <span style={{ flex: '1 1 240px' }}>{error.message}</span>
       {action}
     </div>
-  )
-}
-
-interface TopBarProps {
-  project?: string
-  projects?: Project[]
-  snapshots?: { id: number; ref: string | null; commit: string | null }[]
-  snapshot?: number
-  latest?: number | null
-  current?: 'entries' | 'notes' | 'advisories' | 'snapshots'
-}
-
-export function TopBar({ project, projects, snapshots, snapshot, latest, current }: TopBarProps) {
-  const { connected } = useLive()
-  return (
-    <header className="top">
-      <Link to="/" className="brand">
-        <Icon name="logo" size={18} />
-        <span>Esper</span>
-      </Link>
-      {project ? (
-        <>
-          <div className="row" style={{ gap: 8 }}>
-            <label>
-              <span className="sr-only">Project</span>
-              <select
-                className="pick"
-                value={project}
-                style={{ fontWeight: 600 }}
-                onChange={(e) => navigate(href(`/p/${encodeURIComponent(e.target.value)}`))}
-              >
-                {(projects ?? [{ name: project }]).map((p) => (
-                  <option key={p.name} value={p.name}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {snapshots && snapshots.length > 0 ? (
-              <label>
-                <span className="sr-only">Snapshot</span>
-                <select
-                  className="pick mono"
-                  value={snapshot ?? latest ?? ''}
-                  onChange={(e) => {
-                    const id = Number(e.target.value)
-                    const params = new URLSearchParams(location.search)
-                    if (id === latest) params.delete('snapshot')
-                    else params.set('snapshot', String(id))
-                    params.delete('node')
-                    const q = params.toString()
-                    navigate(`${location.pathname.replace(/\/entry$/, '')}${q ? `?${q}` : ''}`)
-                  }}
-                >
-                  {snapshots.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {snapshotLabel(s)}
-                      {s.id === latest ? ' · latest' : ''}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : null}
-          </div>
-          <nav className="nav" aria-label="Project">
-            <Link
-              to={href(`/p/${encodeURIComponent(project)}`, { snapshot })}
-              aria-current={current === 'entries' ? 'page' : undefined}
-            >
-              Entry points
-            </Link>
-            <Link
-              to={href(`/p/${encodeURIComponent(project)}/notes`, { snapshot })}
-              aria-current={current === 'notes' ? 'page' : undefined}
-            >
-              Notes
-            </Link>
-            <Link
-              to={href(`/p/${encodeURIComponent(project)}/advisories`, { snapshot })}
-              aria-current={current === 'advisories' ? 'page' : undefined}
-            >
-              Advisories
-            </Link>
-            <Link
-              to={href('/', { project })}
-              aria-current={current === 'snapshots' ? 'page' : undefined}
-            >
-              Snapshots
-            </Link>
-          </nav>
-        </>
-      ) : (
-        <nav className="nav" aria-label="Main">
-          <Link to="/" aria-current="page">
-            Projects
-          </Link>
-        </nav>
-      )}
-      <div className="live">
-        <span className={connected ? 'dot' : 'dot off'} aria-hidden="true" />
-        <span>{connected ? 'Live' : 'Reconnecting…'}</span>
-      </div>
-    </header>
   )
 }
 

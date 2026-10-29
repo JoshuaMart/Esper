@@ -286,6 +286,8 @@ export const shortRef = (ref: string) => {
   return ref.replace(/^(route|entry|ext|osv):/, '')
 }
 
+// The words are English, so English rules choose them, whatever the browser's language.
+const englishPlural = new Intl.PluralRules('en')
 export function plural(n: number, one: string, many: string) {
-  return new Intl.PluralRules().select(n) === 'one' ? one : many
+  return englishPlural.select(n) === 'one' ? one : many
 }

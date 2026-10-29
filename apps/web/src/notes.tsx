@@ -12,16 +12,8 @@ import {
   useLocation,
   withParams,
 } from './lib.tsx'
-import {
-  ErrorNotice,
-  Icon,
-  KindBadge,
-  NoteText,
-  plainText,
-  Spinner,
-  StateBadge,
-  TopBar,
-} from './ui.tsx'
+import { ErrorNotice, Icon, KindBadge, NoteText, plainText, Spinner, StateBadge } from './ui.tsx'
+import { Workspace } from './workspace.tsx'
 
 // The notes of a project, placed on the snapshot being read: each with its kind, its status, and
 // where its anchors stand (D8). A stale or moved note is reviewed against the code as it is now.
@@ -61,15 +53,13 @@ export function NotesPage({ project }: { project: string }) {
   const total = Object.values(counts).reduce((a, b) => a + b, 0)
 
   return (
-    <>
-      <TopBar
-        project={project}
-        {...(p.projects ? { projects: p.projects } : {})}
-        {...(p.snapshots ? { snapshots: p.snapshots } : {})}
-        {...(p.snapshot !== undefined ? { snapshot: p.snapshot } : {})}
-        latest={p.latest}
-        current="notes"
-      />
+    <Workspace
+      project={project}
+      snapshots={p.snapshots}
+      snapshot={p.snapshot}
+      latest={p.latest}
+      current="notes"
+    >
       <main className="page">
         <div className="head">
           <div className="stack">
@@ -234,7 +224,7 @@ export function NotesPage({ project }: { project: string }) {
           </div>
         ) : null}
       </main>
-    </>
+    </Workspace>
   )
 }
 

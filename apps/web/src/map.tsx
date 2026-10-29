@@ -1,56 +1,22 @@
-import { useMemo, useState } from 'react'
+import {
+  forceCollide,
+  forceLink,
+  forceManyBody,
+  forceSimulation,
+  forceX,
+  forceY,
+  type SimulationLinkDatum,
+  type SimulationNodeDatum,
+} from 'd3-force'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { api, type Entry, type SharedMap } from './api.ts'
 import { commonPrefix, groupsBy } from './entries.tsx'
 import { href, Link, navigate, shortRef, useData, useLocation, withParams } from './lib.tsx'
-import { ErrorNotice, Spinner } from './ui.tsx'
+import { ErrorNotice, Icon, Spinner } from './ui.tsx'
 
-// The map: one group of entry points around the edge, and the code at least `min` of them call
-// directly in the middle, each bubble sized by how many call it. Bounded by the group (D14).
-
-const width = 940
-const height = 680
-const cx = width / 2
-const cy = height / 2
-
-interface Placed {
-  x: number
-  y: number
-  a: number
-}
-
-function layout(map: SharedMap) {
-  const pos = new Map<string, Placed>()
-  map.entries.forEach((e, i) => {
-    const a = -Math.PI / 2 + (i * 2 * Math.PI) / map.entries.length
-    pos.set(e.ref, { x: cx + 330 * Math.cos(a), y: cy + 285 * Math.sin(a), a })
-  })
-  // Each shared bubble leans toward the entry points that call it; the inner ring is then spread
-  // evenly in that order, so that no two overlap.
-  const leaning = map.shared
-    .map((s) => {
-      let vx = 0
-      let vy = 0
-      for (const u of s.users) {
-        const p = pos.get(u)
-        if (p) {
-          vx += Math.cos(p.a)
-          vy += Math.sin(p.a)
-        }
-      }
-      return { ref: s.ref, a: Math.atan2(vy, vx) }
-    })
-    .sort((p, q) => p.a - q.a)
-  const radius = map.shared.length > 12 ? { x: 200, y: 160 } : { x: 150, y: 120 }
-  leaning.forEach((p, i) => {
-    const a = (leaning[0]?.a ?? 0) + (i * 2 * Math.PI) / leaning.length
-    pos.set(p.ref, {
-      x: leaning.length === 1 ? cx : cx + radius.x * Math.cos(a),
-      y: leaning.length === 1 ? cy : cy + radius.y * Math.sin(a),
-      a,
-    })
-  })
-  return pos
-}
+// The map: one group of entry points and the code at least `min` of them call directly, laid out
+// by forces (D41): links pull, nodes push apart, and the shared code each settles among the entry
+// points that call it. Bounded by the group (D29).
 
 export function MapView({
   project,
@@ -104,19 +70,9 @@ export function MapView({
   const [picked, setPicked] = useState<string>()
 
   const data = map.data
-  const pos = useMemo(() => (data ? layout(data) : new Map<string, Placed>()), [data])
   const selected =
     data &&
     (data.shared.find((s) => s.ref === picked) ?? data.entries.find((e) => e.ref === picked))
-  const near = new Set<string>()
-  if (data && picked) {
-    near.add(picked)
-    for (const s of data.shared) {
-      if (s.ref === picked) for (const u of s.users) near.add(u)
-      if (s.users.includes(picked)) near.add(s.ref)
-    }
-  }
-  const dim = (ref: string) => (picked && !near.has(ref) ? 0.4 : 1)
   const entryLink = (ref: string) =>
     href(`/p/${encodeURIComponent(project)}/entry`, { node: ref, snapshot: asked })
 
@@ -186,7 +142,7 @@ export function MapView({
       <div className="split">
         <section
           className="card"
-          style={{ flex: '999 1 760px', display: 'flex', flexDirection: 'column' }}
+          style={{ flex: '999 1 760px', minWidth: 0, display: 'flex', flexDirection: 'column' }}
           aria-labelledby="map-title"
         >
           <div className="bar">
@@ -199,7 +155,7 @@ export function MapView({
                 : ' '}
             </span>
           </div>
-          <div style={{ overflow: 'auto' }}>
+          <div>
             {!data ? (
               <div className="empty">
                 <Spinner />
@@ -212,122 +168,21 @@ export function MapView({
                 </p>
               </div>
             ) : (
-              <div className="map" style={{ width, height }}>
-                <svg
-                  width={width}
-                  height={height}
-                  style={{ position: 'absolute', inset: 0 }}
-                  aria-hidden="true"
-                >
-                  {data.shared.flatMap((s) =>
-                    s.users.map((u) => {
-                      const a = pos.get(u)
-                      const b = pos.get(s.ref)
-                      if (!a || !b) return null
-                      const lit = picked === s.ref || picked === u
-                      return (
-                        <line
-                          key={`${s.ref}>${u}`}
-                          x1={a.x}
-                          y1={a.y}
-                          x2={b.x}
-                          y2={b.y}
-                          stroke={lit ? 'var(--accent)' : 'var(--border-strong)'}
-                          strokeWidth={lit ? 2 : 1}
-                          opacity={picked && !lit ? 0.45 : 1}
-                        />
-                      )
-                    }),
-                  )}
-                </svg>
-                {data.entries.map((e) => {
-                  const p = pos.get(e.ref) as Placed
-                  const right = Math.cos(p.a) >= -0.01
-                  const label = e.method && e.path ? `${e.method} ${e.path}` : e.name
-                  return (
-                    <button
-                      key={e.ref}
-                      type="button"
-                      className="bubble"
-                      aria-pressed={picked === e.ref}
-                      aria-label={`Entry point ${label}`}
-                      onClick={() => setPicked(picked === e.ref ? undefined : e.ref)}
-                      style={{
-                        left: right ? p.x - 7 : p.x + 7 - 300,
-                        top: p.y - 9,
-                        width: 300,
-                        flexDirection: right ? 'row' : 'row-reverse',
-                        opacity: dim(e.ref),
-                      }}
-                    >
-                      <span
-                        className="c"
-                        style={{
-                          width: 14,
-                          height: 14,
-                          background: 'var(--surface)',
-                          border: `2px solid ${picked === e.ref ? 'var(--accent)' : 'var(--text)'}`,
-                        }}
-                      />
-                      <span
-                        className="l"
-                        style={picked === e.ref ? { fontWeight: 600 } : undefined}
-                      >
-                        {label}
-                      </span>
-                    </button>
-                  )
-                })}
-                {data.shared.map((s) => {
-                  const p = pos.get(s.ref) as Placed
-                  const d = Math.min(64, 14 + s.users.length * 4)
-                  const sel = picked === s.ref
-                  return (
-                    <button
-                      key={s.ref}
-                      type="button"
-                      className="bubble"
-                      aria-pressed={sel}
-                      aria-label={`${s.name}, called by ${s.users.length} of these entry points${s.sink ? ', as a sink' : ''}`}
-                      onClick={() => setPicked(sel ? undefined : s.ref)}
-                      style={{
-                        left: p.x - 110,
-                        top: p.y - d / 2,
-                        width: 220,
-                        flexDirection: 'column',
-                        gap: 2,
-                        opacity: dim(s.ref),
-                      }}
-                    >
-                      <span
-                        className="c"
-                        style={{
-                          width: d,
-                          height: d,
-                          ...(s.sink
-                            ? { background: 'var(--sink-bg)', border: '2px solid #b3400e' }
-                            : {
-                                background: sel ? 'var(--accent)' : '#e3eafb',
-                                border: `1px solid ${sel ? 'var(--accent-text)' : 'var(--accent-ring)'}`,
-                              }),
-                        }}
-                      />
-                      <span className="l" style={sel ? { fontWeight: 600 } : undefined}>
-                        {shortRef(s.ref)} · {s.users.length}
-                      </span>
-                    </button>
-                  )
-                })}
-              </div>
+              <ForceGraph
+                data={data}
+                picked={picked}
+                onPick={setPicked}
+                onOpen={(ref) => navigate(entryLink(ref))}
+              />
             )}
           </div>
           <div className="legend foot">
             <span>
               <span
                 style={{
-                  width: 12,
-                  height: 12,
-                  borderRadius: '50%',
+                  width: 10,
+                  height: 10,
+                  background: 'var(--surface)',
                   border: '2px solid var(--text)',
                   display: 'inline-block',
                 }}
@@ -341,8 +196,8 @@ export function MapView({
                   width: 16,
                   height: 16,
                   borderRadius: '50%',
-                  background: '#e3eafb',
-                  border: '1px solid var(--accent-ring)',
+                  background: 'var(--accent-bg)',
+                  border: '1.5px solid var(--accent)',
                   display: 'inline-block',
                 }}
                 aria-hidden="true"
@@ -465,5 +320,386 @@ export function MapView({
         </aside>
       </div>
     </>
+  )
+}
+
+interface Node extends SimulationNodeDatum {
+  id: string
+  kind: 'entry' | 'shared' | 'sink'
+  r: number
+  // How many of the group's entry points call it; none for an entry point.
+  users: number
+  label: string
+}
+
+type Edge = SimulationLinkDatum<Node> & { key: string; entry: string; shared: string }
+
+interface View {
+  x: number
+  y: number
+  k: number
+}
+
+const height = 640
+const clampK = (k: number) => Math.min(3, Math.max(0.25, k))
+const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches
+
+// The group as a graph that moves: nodes can be dragged, the view zoomed and panned. Positions are
+// written to the drawing on each tick, outside React; React draws the nodes once and their state.
+function ForceGraph({
+  data,
+  picked,
+  onPick,
+  onOpen,
+}: {
+  data: SharedMap
+  picked: string | undefined
+  onPick: (ref: string | undefined) => void
+  onOpen: (ref: string) => void
+}) {
+  const wrap = useRef<HTMLDivElement>(null)
+  const svg = useRef<SVGSVGElement>(null)
+  const [width, setWidth] = useState(900)
+  const [view, setView] = useState<View>({ x: 450, y: height / 2, k: 1 })
+  const viewRef = useRef(view)
+  viewRef.current = view
+  const [hover, setHover] = useState<string>()
+  const nodeEls = useRef(new Map<string, SVGGElement>())
+  const edgeEls = useRef(new Map<string, SVGLineElement>())
+  const touched = useRef(false)
+  const drawRef = useRef(() => {})
+
+  const { nodes, edges } = useMemo(() => {
+    const nodes: Node[] = [
+      ...data.entries.map(
+        (e): Node => ({
+          id: e.ref,
+          kind: 'entry',
+          r: 5,
+          users: 0,
+          label: e.method && e.path ? `${e.method} ${e.path}` : e.name,
+        }),
+      ),
+      ...data.shared.map(
+        (s): Node => ({
+          id: s.ref,
+          kind: s.sink ? 'sink' : 'shared',
+          r: Math.min(22, 6 + 1.6 * s.users.length),
+          users: s.users.length,
+          label: `${shortRef(s.ref)} · ${s.users.length}`,
+        }),
+      ),
+    ]
+    const edges: Edge[] = data.shared.flatMap((s) =>
+      s.users.map((u) => ({
+        key: `${s.ref}>${u}`,
+        source: u,
+        target: s.ref,
+        entry: u,
+        shared: s.ref,
+      })),
+    )
+    return { nodes, edges }
+  }, [data])
+
+  const simulation = useMemo(
+    () =>
+      forceSimulation(nodes)
+        .force(
+          'link',
+          forceLink<Node, Edge>(edges)
+            .id((d) => d.id)
+            .distance((l) => 70 + (l.target as Node).r * 2)
+            .strength(0.4),
+        )
+        .force(
+          'charge',
+          forceManyBody<Node>().strength((d) => (d.kind === 'entry' ? -140 : -420)),
+        )
+        .force(
+          'collide',
+          forceCollide<Node>((d) => d.r + 10),
+        )
+        .force('x', forceX(0).strength(0.03))
+        .force('y', forceY(0).strength(0.045))
+        .stop(),
+    [nodes, edges],
+  )
+
+  // The view that holds every node, with a margin for the labels.
+  const fit = () => {
+    if (nodes.length === 0) return
+    const xs = nodes.map((n) => n.x ?? 0)
+    const ys = nodes.map((n) => n.y ?? 0)
+    const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)]
+    const k = clampK(Math.min((width - 240) / (x1 - x0 || 1), (height - 80) / (y1 - y0 || 1), 1.6))
+    setView({ k, x: width / 2 - k * ((x0 + x1) / 2), y: height / 2 - k * ((y0 + y1) / 2) })
+  }
+  const fitRef = useRef(fit)
+  fitRef.current = fit
+
+  useEffect(() => {
+    const draw = () => {
+      for (const n of nodes) {
+        nodeEls.current.get(n.id)?.setAttribute('transform', `translate(${n.x},${n.y})`)
+      }
+      for (const e of edges) {
+        const line = edgeEls.current.get(e.key)
+        const a = e.source as Node
+        const b = e.target as Node
+        if (!line) continue
+        line.setAttribute('x1', String(a.x))
+        line.setAttribute('y1', String(a.y))
+        line.setAttribute('x2', String(b.x))
+        line.setAttribute('y2', String(b.y))
+      }
+    }
+    drawRef.current = draw
+    touched.current = false
+    if (reduced()) {
+      simulation.tick(300)
+      draw()
+      fitRef.current()
+    } else {
+      // Most of the settling happens before the first frame, so that the view fits the layout once
+      // and stays put; what is left plays out, and the graph moves again when a node is dragged.
+      simulation.alpha(1).tick(150)
+      draw()
+      fitRef.current()
+      simulation.on('tick', draw)
+      simulation.alpha(0.3).restart()
+    }
+    return () => {
+      simulation.stop()
+      simulation.on('tick', null)
+    }
+  }, [simulation, nodes, edges])
+
+  useEffect(() => {
+    const el = wrap.current
+    if (!el) return
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry) setWidth(Math.max(320, Math.round(entry.contentRect.width)))
+    })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+
+  // A new width fits the graph again, unless the view was moved by hand.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs on each new width, which is the point
+  useEffect(() => {
+    if (!touched.current) fitRef.current()
+  }, [width])
+
+  // The wheel zooms about the pointer; the page does not scroll under it.
+  useEffect(() => {
+    const el = svg.current
+    if (!el) return
+    const wheel = (event: WheelEvent) => {
+      event.preventDefault()
+      touched.current = true
+      const box = el.getBoundingClientRect()
+      const mx = event.clientX - box.left
+      const my = event.clientY - box.top
+      const v = viewRef.current
+      const k = clampK(v.k * Math.exp(-event.deltaY * 0.0015))
+      setView({ k, x: mx - ((mx - v.x) * k) / v.k, y: my - ((my - v.y) * k) / v.k })
+    }
+    el.addEventListener('wheel', wheel, { passive: false })
+    return () => el.removeEventListener('wheel', wheel)
+  }, [])
+
+  const zoom = (factor: number) => {
+    touched.current = true
+    const v = viewRef.current
+    const k = clampK(v.k * factor)
+    const [mx, my] = [width / 2, height / 2]
+    setView({ k, x: mx - ((mx - v.x) * k) / v.k, y: my - ((my - v.y) * k) / v.k })
+  }
+
+  // Dragging a node moves it, the others following; dragging the ground pans. A press that does
+  // not move is a click.
+  const drag = useRef<{
+    node?: Node
+    x: number
+    y: number
+    view: View
+    moved: boolean
+  }>(undefined)
+  const toGraph = (clientX: number, clientY: number) => {
+    const box = svg.current?.getBoundingClientRect()
+    const v = viewRef.current
+    return {
+      x: (clientX - (box?.left ?? 0) - v.x) / v.k,
+      y: (clientY - (box?.top ?? 0) - v.y) / v.k,
+    }
+  }
+  const down = (event: React.PointerEvent, node?: Node) => {
+    if (event.button !== 0) return
+    event.stopPropagation()
+    ;(event.currentTarget as Element).setPointerCapture(event.pointerId)
+    drag.current = { x: event.clientX, y: event.clientY, view: viewRef.current, moved: false }
+    if (node) drag.current.node = node
+  }
+  const move = (event: React.PointerEvent) => {
+    const d = drag.current
+    if (!d) return
+    const dx = event.clientX - d.x
+    const dy = event.clientY - d.y
+    if (!d.moved && Math.hypot(dx, dy) < 4) return
+    d.moved = true
+    touched.current = true
+    if (d.node) {
+      const p = toGraph(event.clientX, event.clientY)
+      d.node.fx = p.x
+      d.node.fy = p.y
+      if (reduced()) {
+        // Under reduced motion the node follows the pointer and nothing else moves.
+        d.node.x = p.x
+        d.node.y = p.y
+        drawRef.current()
+      } else {
+        simulation.alphaTarget(0.25).restart()
+      }
+    } else {
+      setView({ ...d.view, x: d.view.x + dx, y: d.view.y + dy })
+    }
+  }
+  const up = () => {
+    const d = drag.current
+    drag.current = undefined
+    if (!d) return
+    if (d.node) {
+      d.node.fx = null
+      d.node.fy = null
+      simulation.alphaTarget(0)
+      if (!d.moved) onPick(picked === d.node.id ? undefined : d.node.id)
+    } else if (!d.moved) {
+      onPick(undefined)
+    }
+  }
+
+  const focus = hover ?? picked
+  const near = new Set<string>()
+  if (focus) {
+    near.add(focus)
+    for (const e of edges) {
+      if (e.entry === focus) near.add(e.shared)
+      if (e.shared === focus) near.add(e.entry)
+    }
+  }
+  // As in a notes graph, names come with the zoom: the most shared code is always named, the rest
+  // when the view is close enough to read it, and whatever is near the node in focus.
+  const most = Math.max(1, ...data.shared.map((s) => s.users.length))
+  const named = (n: Node) =>
+    near.has(n.id) || view.k >= (n.kind === 'entry' ? 1.6 : 1.3) || n.users >= most * 0.6
+
+  return (
+    <div ref={wrap} className="fgraph">
+      <svg
+        ref={svg}
+        width={width}
+        height={height}
+        onPointerDown={(event) => down(event)}
+        onPointerMove={move}
+        onPointerUp={up}
+        onPointerCancel={up}
+      >
+        <title>The entry points and the code they share</title>
+        <g transform={`translate(${view.x},${view.y}) scale(${view.k})`}>
+          <g>
+            {edges.map((e) => {
+              const lit = focus !== undefined && (e.entry === focus || e.shared === focus)
+              return (
+                <line
+                  key={e.key}
+                  ref={(el) => {
+                    if (el) edgeEls.current.set(e.key, el)
+                    else edgeEls.current.delete(e.key)
+                  }}
+                  className="fg-edge"
+                  data-lit={lit || undefined}
+                  data-dim={(focus !== undefined && !lit) || undefined}
+                  strokeWidth={(lit ? 2 : 1) / view.k}
+                />
+              )
+            })}
+          </g>
+          {nodes.map((n) => {
+            const sel = picked === n.id
+            return (
+              // biome-ignore lint/a11y/useSemanticElements: SVG has no button; the group acts as one
+              <g
+                key={n.id}
+                ref={(el) => {
+                  if (el) nodeEls.current.set(n.id, el)
+                  else nodeEls.current.delete(n.id)
+                }}
+                className={`fg-node fg-${n.kind}`}
+                data-selected={sel || undefined}
+                data-dim={(focus !== undefined && !near.has(n.id)) || undefined}
+                tabIndex={0}
+                role="button"
+                aria-pressed={sel}
+                aria-label={n.label}
+                onPointerDown={(event) => down(event, n)}
+                onPointerEnter={() => setHover(n.id)}
+                onPointerLeave={() => setHover(undefined)}
+                onFocus={() => setHover(n.id)}
+                onBlur={() => setHover(undefined)}
+                onDoubleClick={() => n.kind === 'entry' && onOpen(n.id)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && n.kind === 'entry' && sel) onOpen(n.id)
+                  else if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    onPick(sel ? undefined : n.id)
+                  }
+                }}
+              >
+                {n.kind === 'entry' ? (
+                  <rect x={-n.r} y={-n.r} width={n.r * 2} height={n.r * 2} />
+                ) : (
+                  <circle r={n.r} />
+                )}
+                {named(n) ? (
+                  <text
+                    y={n.kind === 'entry' ? -n.r - 6 : n.r + 14}
+                    textAnchor="middle"
+                    style={{ fontSize: `${Math.min(12, 11 / Math.min(view.k, 1.4))}px` }}
+                  >
+                    {n.label}
+                  </text>
+                ) : null}
+              </g>
+            )
+          })}
+        </g>
+      </svg>
+      <div className="fg-tools">
+        <button
+          type="button"
+          className="btn icon-btn"
+          aria-label="Zoom in"
+          onClick={() => zoom(1.3)}
+        >
+          <Icon name="plus" />
+        </button>
+        <button
+          type="button"
+          className="btn icon-btn"
+          aria-label="Zoom out"
+          onClick={() => zoom(1 / 1.3)}
+        >
+          <Icon name="minus" />
+        </button>
+        <button type="button" className="btn" onClick={fit}>
+          Fit
+        </button>
+      </div>
+      <p className="fg-hint">
+        Drag a node to move it · scroll to zoom · drag the ground to pan · double-click an entry
+        point to open it
+      </p>
+    </div>
   )
 }

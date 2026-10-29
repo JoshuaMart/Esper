@@ -15,7 +15,8 @@ import {
   useLocation,
   withParams,
 } from './lib.tsx'
-import { AdvisoryStateBadge, ErrorNotice, Icon, SeverityBadge, Spinner, TopBar } from './ui.tsx'
+import { AdvisoryStateBadge, ErrorNotice, Icon, SeverityBadge, Spinner } from './ui.tsx'
+import { Workspace } from './workspace.tsx'
 
 // The target's past advisories (D19), as the snapshot being read stands against them: each with
 // its severity, whether this version is affected or fixed, how it was linked to the code, and the
@@ -51,15 +52,13 @@ export function AdvisoriesPage({ project }: { project: string }) {
   const advisories = (list.data?.advisories ?? []).filter((a) => !id || a.id === id)
 
   return (
-    <>
-      <TopBar
-        project={project}
-        {...(p.projects ? { projects: p.projects } : {})}
-        {...(p.snapshots ? { snapshots: p.snapshots } : {})}
-        {...(p.snapshot !== undefined ? { snapshot: p.snapshot } : {})}
-        latest={p.latest}
-        current="advisories"
-      />
+    <Workspace
+      project={project}
+      snapshots={p.snapshots}
+      snapshot={p.snapshot}
+      latest={p.latest}
+      current="advisories"
+    >
       <main className="page">
         <div className="head">
           <div className="stack">
@@ -170,7 +169,7 @@ export function AdvisoriesPage({ project }: { project: string }) {
           </p>
         ) : null}
       </main>
-    </>
+    </Workspace>
   )
 }
 
