@@ -393,3 +393,21 @@ test('a folder named from the home directory is read there, as the shell would e
     await rm(home.dir, { recursive: true })
   }
 })
+
+test('a project is found whatever case its name is asked in', async () => {
+  const target = await mkdtemp(join(tmpdir(), 'esper-Budget-'))
+  const home = new Home(await mkdtemp(join(tmpdir(), 'esper-home-')), {
+    advisories: recordedSource(),
+  })
+  try {
+    const project = await home.add(target, { name: 'Budget' })
+    assert.equal(project.name, 'budget')
+    assert.equal((await home.project('Budget')).name, 'budget')
+    // The path itself is the lower-case one, which a case-insensitive file system would not show.
+    assert.equal(home.database('Budget'), home.database('budget'))
+    assert.equal(home.database('BUDGET'), join(home.dir, 'projects', 'budget', 'esper.db'))
+  } finally {
+    await rm(target, { recursive: true })
+    await rm(home.dir, { recursive: true })
+  }
+})

@@ -78,8 +78,10 @@ export class Home {
     this.osv = options.advisories ?? osvSource()
   }
 
+  // A project's name is kept in lower case, so it is found whatever case it is asked in, on a file
+  // system that tells cases apart as on one that does not.
   private projectDir(name: string) {
-    return join(this.dir, 'projects', name)
+    return join(this.dir, 'projects', name.toLowerCase())
   }
 
   database(name: string) {
