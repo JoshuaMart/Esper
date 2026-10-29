@@ -64,7 +64,8 @@ test('esper serve prints its address and token, and refuses a bad port', async (
       await new Promise<void>((done, fail) => {
         child.stdout.on('data', (chunk: Buffer) => {
           out += chunk
-          if (out.includes('token')) done()
+          // The token's own line is the last: `<token>` in the MCP line comes before it.
+          if (out.includes('(kept in')) done()
         })
         child.once('exit', () => fail(new Error(`esper serve exited: ${out}`)))
       })

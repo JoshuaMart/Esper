@@ -24,6 +24,10 @@ updates:
     groups:
       workspace:
         patterns: ["*"]
+    # The types follow the oldest Node the engines allow, so that no newer API is used unseen.
+    ignore:
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
 
   # The analyzers' own programs: an update may move the call edges the hand counts check (D16).
   - package-ecosystem: npm
@@ -37,6 +41,11 @@ updates:
     groups:
       analyzers-npm:
         patterns: ["*"]
+    # pnpm 12 ships a native binary that an install script puts in place, and the image
+    # installs without running a script: a major version is moved by hand.
+    ignore:
+      - dependency-name: pnpm
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: gomod
     directory: /analyzers/scip-go/esper
