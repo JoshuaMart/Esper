@@ -1,0 +1,327 @@
+# Kener, a SvelteKit 2 status page (adapter-node), counted by hand (D16): every route its server
+# files declare under src/routes, route groups `(api)`, `(kener)`, `(manage)` and the others taking
+# no part in the path, each `+server.ts` export of an HTTP method, each `+page.server.ts` `load` and
+# each action. A script written apart from Esper listed the same 90, route for route and line for
+# line.
+# - The chain of every route is `reroute` (src/hooks.ts), then `sequence(csrfHandle,
+#   privateCacheHandle, apiAuthHandle)` (src/hooks.server.ts), seen through; the pages' `load` take
+#   the layouts' `load` above them as well, outermost first.
+# - `POST /manage/api` is a `+server.ts` of the `(manage)` group: the layout's `load`, which
+#   redirects a request without a session, is in front of the group's pages and not of it. It checks
+#   the session itself, and the index flags it as `divergent-guard`.
+# - `[MMMM]-[YYYY]` and `latency-[tag]` are parameters inside a segment, `[...slug].md` a rest
+#   parameter followed by text.
+target: https://github.com/rajnandan1/kener
+ref: v4.1.10
+commit: 68a6ea236ced714b081f0cac7f1d86383f3ef427
+kind: application
+entries:
+  - {
+      ref: "route:DELETE /api/v4/incidents/{incident_id}",
+      at: "src/routes/(api)/api/v4/incidents/[incident_id]/+server.ts:181",
+    }
+  - {
+      ref: "route:DELETE /api/v4/incidents/{incident_id}/comments/{comment_id}",
+      at: "src/routes/(api)/api/v4/incidents/[incident_id]/comments/[comment_id]/+server.ts:199",
+    }
+  - {
+      ref: "route:DELETE /api/v4/maintenances/{maintenance_id}",
+      at: "src/routes/(api)/api/v4/maintenances/[maintenance_id]/+server.ts:240",
+    }
+  - {
+      ref: "route:DELETE /api/v4/maintenances/{maintenance_id}/events/{event_id}",
+      at: "src/routes/(api)/api/v4/maintenances/[maintenance_id]/events/[event_id]/+server.ts:240",
+    }
+  - {
+      ref: "route:DELETE /api/v4/monitors/{monitor_tag}",
+      at: "src/routes/(api)/api/v4/monitors/[monitor_tag]/+server.ts:176",
+    }
+  - {
+      ref: "route:DELETE /api/v4/pages/{page_path}",
+      at: "src/routes/(api)/api/v4/pages/[page_path]/+server.ts:273",
+    }
+  - {
+      ref: "route:DELETE /dashboard-apis/{action}",
+      at: "src/routes/(kener)/dashboard-apis/[action]/+server.ts:62",
+    }
+  - { ref: "route:GET /", at: "src/routes/(kener)/+page.server.ts:5" }
+  - {
+      ref: "route:GET /account/forgot",
+      at: "src/routes/(account)/account/forgot/+page.server.ts:3",
+    }
+  - {
+      ref: "route:GET /account/invitation",
+      at: "src/routes/(account)/account/invitation/+page.server.ts:6",
+    }
+  - {
+      ref: "route:GET /account/logout",
+      at: "src/routes/(account)/account/logout/+page.server.ts:5",
+    }
+  - {
+      ref: "route:GET /account/oidc/callback",
+      at: "src/routes/(account)/account/oidc/callback/+server.ts:12",
+    }
+  - {
+      ref: "route:GET /account/oidc/login",
+      at: "src/routes/(account)/account/oidc/login/+server.ts:5",
+    }
+  - {
+      ref: "route:GET /account/signin",
+      at: "src/routes/(account)/account/signin/+page.server.ts:25",
+    }
+  - {
+      ref: "route:GET /account/verify",
+      at: "src/routes/(account)/account/verify/+page.server.ts:7",
+    }
+  - { ref: "route:GET /api/v4/incidents", at: "src/routes/(api)/api/v4/incidents/+server.ts:19" }
+  - {
+      ref: "route:GET /api/v4/incidents/{incident_id}",
+      at: "src/routes/(api)/api/v4/incidents/[incident_id]/+server.ts:53",
+    }
+  - {
+      ref: "route:GET /api/v4/incidents/{incident_id}/comments",
+      at: "src/routes/(api)/api/v4/incidents/[incident_id]/comments/+server.ts:36",
+    }
+  - {
+      ref: "route:GET /api/v4/incidents/{incident_id}/comments/{comment_id}",
+      at: "src/routes/(api)/api/v4/incidents/[incident_id]/comments/[comment_id]/+server.ts:39",
+    }
+  - {
+      ref: "route:GET /api/v4/maintenances",
+      at: "src/routes/(api)/api/v4/maintenances/+server.ts:35",
+    }
+  - {
+      ref: "route:GET /api/v4/maintenances/events",
+      at: "src/routes/(api)/api/v4/maintenances/events/+server.ts:14",
+    }
+  - {
+      ref: "route:GET /api/v4/maintenances/{maintenance_id}",
+      at: "src/routes/(api)/api/v4/maintenances/[maintenance_id]/+server.ts:60",
+    }
+  - {
+      ref: "route:GET /api/v4/maintenances/{maintenance_id}/events",
+      at: "src/routes/(api)/api/v4/maintenances/[maintenance_id]/events/+server.ts:8",
+    }
+  - {
+      ref: "route:GET /api/v4/maintenances/{maintenance_id}/events/{event_id}",
+      at: "src/routes/(api)/api/v4/maintenances/[maintenance_id]/events/[event_id]/+server.ts:44",
+    }
+  - { ref: "route:GET /api/v4/monitors", at: "src/routes/(api)/api/v4/monitors/+server.ts:18" }
+  - {
+      ref: "route:GET /api/v4/monitors/{monitor_tag}",
+      at: "src/routes/(api)/api/v4/monitors/[monitor_tag]/+server.ts:19",
+    }
+  - {
+      ref: "route:GET /api/v4/monitors/{monitor_tag}/data",
+      at: "src/routes/(api)/api/v4/monitors/[monitor_tag]/data/+server.ts:14",
+    }
+  - {
+      ref: "route:GET /api/v4/monitors/{monitor_tag}/data/{timestamp}",
+      at: "src/routes/(api)/api/v4/monitors/[monitor_tag]/data/[timestamp]/+server.ts:14",
+    }
+  - { ref: "route:GET /api/v4/pages", at: "src/routes/(api)/api/v4/pages/+server.ts:36" }
+  - {
+      ref: "route:GET /api/v4/pages/{page_path}",
+      at: "src/routes/(api)/api/v4/pages/[page_path]/+server.ts:44",
+    }
+  - { ref: "route:GET /api/v4/site", at: "src/routes/(api)/api/v4/site/+server.ts:6" }
+  - {
+      ref: "route:GET /api/v4/site/{config_key}",
+      at: "src/routes/(api)/api/v4/site/[config_key]/+server.ts:12",
+    }
+  - {
+      ref: "route:GET /assets/images/{id}",
+      at: "src/routes/(assets)/assets/images/[id]/+server.ts:5",
+    }
+  - { ref: "route:GET /badge/{tag}/dot", at: "src/routes/(kener)/badge/[tag]/dot/+server.ts:9" }
+  - {
+      ref: "route:GET /badge/{tag}/latency",
+      at: "src/routes/(kener)/badge/[tag]/latency/+server.ts:4",
+    }
+  - {
+      ref: "route:GET /badge/{tag}/status",
+      at: "src/routes/(kener)/badge/[tag]/status/+server.ts:4",
+    }
+  - {
+      ref: "route:GET /badge/{tag}/uptime",
+      at: "src/routes/(kener)/badge/[tag]/uptime/+server.ts:4",
+    }
+  - {
+      ref: "route:GET /captcha-config.json",
+      at: "src/routes/(kener)/captcha-config.json/+server.ts:5",
+    }
+  - { ref: "route:GET /capture.js", at: "src/routes/(kener)/capture.js/+server.ts:16" }
+  - {
+      ref: "route:GET /dashboard-apis/{action}",
+      at: "src/routes/(kener)/dashboard-apis/[action]/+server.ts:44",
+    }
+  - { ref: "route:GET /docs/api/search", at: "src/routes/(docs)/docs/api/search/+server.ts:5" }
+  - {
+      ref: "route:GET /docs/raw/{slug...}.md",
+      at: "src/routes/(docs)/docs/raw/[...slug].md/+server.ts:12",
+    }
+  - { ref: "route:GET /docs/spec/v4", at: "src/routes/(docs)/docs/spec/v4/+server.ts:38" }
+  - {
+      ref: "route:GET /docs/spec/v4/spec.json",
+      at: "src/routes/(docs)/docs/spec/v4/spec.json/+server.ts:9",
+    }
+  - {
+      ref: "route:GET /docs/{slug...}",
+      at: "src/routes/(docs)/docs/(with-sidebar)/[...slug]/+page.server.ts:14",
+    }
+  - {
+      ref: "route:GET /docs/{version}/llms.txt",
+      at: "src/routes/(docs)/docs/[version]/llms.txt/+server.ts:6",
+    }
+  - {
+      ref: "route:GET /embed/events/live",
+      at: "src/routes/(embed)/embed/events/live/+page.server.ts:6",
+    }
+  - {
+      ref: "route:GET /embed/latency-{tag}",
+      at: "src/routes/(embed)/embed/latency-[tag]/+page.server.ts:9",
+    }
+  - {
+      ref: "route:GET /embed/monitor-{tag}",
+      at: "src/routes/(embed)/embed/monitor-[tag]/+page.server.ts:7",
+    }
+  - {
+      ref: "route:GET /embed/monitor-{tag}/js",
+      at: "src/routes/(embed)/embed/monitor-[tag]/js/+server.ts:3",
+    }
+  - {
+      ref: "route:GET /events/{MMMM}-{YYYY}",
+      at: "src/routes/(kener)/events/[MMMM]-[YYYY]/+page.server.ts:8",
+    }
+  - {
+      ref: "route:GET /ext/heartbeat/{tag}/{secret}",
+      at: "src/routes/(ext)/ext/heartbeat/[tag]/[secret]/+server.ts:19",
+    }
+  - {
+      ref: "route:GET /incidents/{incident_id}",
+      at: "src/routes/(kener)/incidents/[incident_id]/+page.server.ts:9",
+    }
+  - {
+      ref: "route:GET /maintenances/{maintenance_id}",
+      at: "src/routes/(kener)/maintenances/[maintenance_id]/+page.server.ts:11",
+    }
+  - {
+      ref: "route:GET /manage/app/alerts/logs/{alert_config_id}",
+      at: "src/routes/(manage)/manage/app/alerts/logs/[alert_config_id]/+page.server.ts:1",
+    }
+  - {
+      ref: "route:GET /manage/app/alerts/{alert_config_id}",
+      at: "src/routes/(manage)/manage/app/alerts/[alert_config_id]/+page.server.ts:1",
+    }
+  - {
+      ref: "route:GET /manage/app/monitors/{tag}",
+      at: "src/routes/(manage)/manage/app/monitors/[tag]/+page.server.ts:4",
+    }
+  - {
+      ref: "route:GET /manage/app/triggers/{trigger_id}",
+      at: "src/routes/(manage)/manage/app/triggers/[trigger_id]/+page.server.ts:8",
+    }
+  - {
+      ref: "route:GET /monitors/{monitor_tag}",
+      at: "src/routes/(kener)/monitors/[monitor_tag]/+page.server.ts:18",
+    }
+  - {
+      ref: "route:GET /monitors/{monitor_tag}/rss.xml",
+      at: "src/routes/(kener)/monitors/[monitor_tag]/rss.xml/+server.ts:4",
+    }
+  - { ref: "route:GET /rss.xml", at: "src/routes/(kener)/rss.xml/+server.ts:4" }
+  - { ref: "route:GET /sitemap.xml", at: "src/routes/(kener)/sitemap.xml/+server.ts:8" }
+  - { ref: "route:GET /{page_path}", at: "src/routes/(kener)/[page_path]/+page.server.ts:5" }
+  - {
+      ref: "route:GET /{page_path}/events/{MMMM}-{YYYY}",
+      at: "src/routes/(kener)/[page_path]/events/[MMMM]-[YYYY]/+page.server.ts:8",
+    }
+  - {
+      ref: "route:GET /{page_path}/rss.xml",
+      at: "src/routes/(kener)/[page_path]/rss.xml/+server.ts:4",
+    }
+  - {
+      ref: "route:PATCH /api/v4/incidents/{incident_id}",
+      at: "src/routes/(api)/api/v4/incidents/[incident_id]/+server.ts:70",
+    }
+  - {
+      ref: "route:PATCH /api/v4/incidents/{incident_id}/comments/{comment_id}",
+      at: "src/routes/(api)/api/v4/incidents/[incident_id]/comments/[comment_id]/+server.ts:94",
+    }
+  - {
+      ref: "route:PATCH /api/v4/maintenances/{maintenance_id}",
+      at: "src/routes/(api)/api/v4/maintenances/[maintenance_id]/+server.ts:80",
+    }
+  - {
+      ref: "route:PATCH /api/v4/maintenances/{maintenance_id}/events/{event_id}",
+      at: "src/routes/(api)/api/v4/maintenances/[maintenance_id]/events/[event_id]/+server.ts:77",
+    }
+  - {
+      ref: "route:PATCH /api/v4/monitors/{monitor_tag}",
+      at: "src/routes/(api)/api/v4/monitors/[monitor_tag]/+server.ts:30",
+    }
+  - {
+      ref: "route:PATCH /api/v4/monitors/{monitor_tag}/data",
+      at: "src/routes/(api)/api/v4/monitors/[monitor_tag]/data/+server.ts:73",
+    }
+  - {
+      ref: "route:PATCH /api/v4/monitors/{monitor_tag}/data/{timestamp}",
+      at: "src/routes/(api)/api/v4/monitors/[monitor_tag]/data/[timestamp]/+server.ts:66",
+    }
+  - {
+      ref: "route:PATCH /api/v4/pages/{page_path}",
+      at: "src/routes/(api)/api/v4/pages/[page_path]/+server.ts:64",
+    }
+  - {
+      ref: "route:PATCH /api/v4/site/{config_key}",
+      at: "src/routes/(api)/api/v4/site/[config_key]/+server.ts:58",
+    }
+  - {
+      ref: "route:POST /account/forgot/api/fogot-password",
+      at: "src/routes/(account)/account/forgot/api/fogot-password/+server.ts:9",
+    }
+  - {
+      ref: "route:POST /account/forgot/api/password-reset",
+      at: "src/routes/(account)/account/forgot/api/password-reset/+server.ts:15",
+    }
+  - {
+      ref: "route:POST /account/invitation/api/accept-invitation",
+      at: "src/routes/(account)/account/invitation/api/accept-invitation/+server.ts:7",
+    }
+  - {
+      ref: "route:POST /account/logout",
+      at: "src/routes/(account)/account/logout/+page.server.ts:10",
+    }
+  - {
+      ref: "route:POST /account/signin?/login",
+      at: "src/routes/(account)/account/signin/+page.server.ts:55",
+    }
+  - {
+      ref: "route:POST /account/signin?/signup",
+      at: "src/routes/(account)/account/signin/+page.server.ts:129",
+    }
+  - { ref: "route:POST /api/v4/images", at: "src/routes/(api)/api/v4/images/+server.ts:11" }
+  - { ref: "route:POST /api/v4/incidents", at: "src/routes/(api)/api/v4/incidents/+server.ts:83" }
+  - {
+      ref: "route:POST /api/v4/incidents/{incident_id}/comments",
+      at: "src/routes/(api)/api/v4/incidents/[incident_id]/comments/+server.ts:51",
+    }
+  - {
+      ref: "route:POST /api/v4/maintenances",
+      at: "src/routes/(api)/api/v4/maintenances/+server.ts:92",
+    }
+  - { ref: "route:POST /api/v4/monitors", at: "src/routes/(api)/api/v4/monitors/+server.ts:38" }
+  - { ref: "route:POST /api/v4/pages", at: "src/routes/(api)/api/v4/pages/+server.ts:48" }
+  - {
+      ref: "route:POST /dashboard-apis/{action}",
+      at: "src/routes/(kener)/dashboard-apis/[action]/+server.ts:6",
+    }
+  - {
+      ref: "route:POST /ext/heartbeat/{tag}/{secret}",
+      at: "src/routes/(ext)/ext/heartbeat/[tag]/[secret]/+server.ts:20",
+    }
+  - { ref: "route:POST /manage/api", at: "src/routes/(manage)/manage/api/+server.ts:142" }
+  - {
+      ref: "route:PUT /dashboard-apis/{action}",
+      at: "src/routes/(kener)/dashboard-apis/[action]/+server.ts:25",
+    }

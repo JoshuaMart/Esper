@@ -17,7 +17,7 @@ counted by hand, with none missing and none invented.
 | [M4](#m4--typescript-and-hono) | TypeScript and Hono | Hono and Kaneo pass their hand count | done |
 | [M5](#m5--the-server-and-the-web-interface) | The server and the web interface | an audit can be followed and annotated in the browser | done |
 | [M6](#m6--enrichment-and-past-advisories) | Enrichment and past advisories | claims and advisory links measured on chi and Hono | done |
-| [M7](#m7--sveltekit) | SvelteKit | SvelteKit and a SvelteKit application pass their hand count | not started |
+| [M7](#m7--sveltekit) | SvelteKit | SvelteKit and a SvelteKit application pass their hand count | done |
 | [M8](#m8--dataflow-on-demand) | Dataflow, on demand | a `flows` question answered by Joern, every step cited | not started |
 | [Next](#after-that) | More frameworks | Next.js, FastAPI, each a pair of profiles | |
 
@@ -146,9 +146,11 @@ Each is a test:
   the Go counts still hold.
 - **scip-typescript 0.5.2** runs in Docker on both
   ([D26](/decisions/#d26--scip-typescript-with-the-dependencies-the-lockfile-pins)): on Hono, with
-  its dependencies, guessed edges fall from 109 of 2016 to 12 of 3268; on Kaneo's API, without the
-  dependencies of its repository, calls without an edge fall from 5197 to 3927; both keep the entry
-  points counted by hand (`packages/core/test/scip-typescript.test.ts`).
+  its dependencies, guessed edges fell from 109 of 2016 to 12 of 3268; on Kaneo's API, without the
+  dependencies of its repository, calls without an edge fell from 5197 to 3927; both keep the entry
+  points counted by hand (`packages/core/test/scip-typescript.test.ts`). Since M7, whose types
+  resolve a few more calls, the test measures Hono at 106 of 2035 then 9 of 3277, and Kaneo's API
+  at 5123 then 3861.
 
 The module and the profiles are in [D24](/decisions/#d24--typescript-and-javascript-as-their-syntax-states-them)
 and [D25](/decisions/#d25--hono-middleware-in-the-order-it-is-registered), the
@@ -264,6 +266,37 @@ because the auditor's own targets are SvelteKit applications.
 
 **Done when** SvelteKit, in framework mode, and a SvelteKit application, in application mode, match
 their hand count, recorded in `profiles/sveltekit/counts/`, and the Go and Hono counts still hold.
+
+It is done, on SvelteKit 3.1.0, the latest release
+([D32](/decisions/#d32--routes-declared-by-files) to [D35](/decisions/#d35--sveltekit-the-server-side-in-both-modes)):
+
+- **Routes from the file tree.** The profile format gained `files`: the route tree, what each
+  export of each file declares, the hooks and the function that composes them, the matchers and
+  the layouts, and modules whose exports are routes of their own (remote functions). The
+  TypeScript module reads it (`ts-files.ts`); the shared core learned the syntax of a tree's
+  folders (`[id]`, `[[x]]`, `[...rest]`, `[id=matcher]`, `(group)`) and globs, and names no
+  framework (`packages/core/test/shared.test.ts`).
+- **SvelteKit 3.1.0**, in framework mode: 59 entry points, the same as its hand count, from
+  `internal_respond` checking `Origin` and reading `x-sveltekit-pathname` to each adapter's
+  `getClientAddress` reading `ADDRESS_HEADER` or `X-Forwarded-For`
+  (`profiles/sveltekit/counts/kit@73bf98cabea2.yaml`). Its code is JavaScript typed by its
+  documentation comments, which the index now reads as types
+  ([D33](/decisions/#d33--javascript-typed-by-its-comments-and-types-a-profile-states)); its
+  browser code is left out.
+- **[Budget](https://github.com/JoshuaMart/Budget)** at `cfce07b` (SvelteKit 3.1, Svelte 5,
+  better-auth, drizzle, adapter-bun): 24 routes, behind `handle`, which checks `locals.user`;
+  `pnpm esper index budget` indexes it. **[Kener](https://github.com/rajnandan1/kener)** v4.1.10
+  (SvelteKit 2.53, adapter-node), for the route groups, layouts and a `sequence` of hooks Budget
+  does not have: 90 routes, of which `POST /manage/api`, a `+server.ts` its group's layout does not
+  cover, is flagged `divergent-guard`. Both match their hand count and a script written apart
+  from Esper, route for route and line for line.
+- **Guards as checks**: `if (!locals.user) error(401)` makes its function an `authn` guard, and a
+  hook or a layout's `load` that refuses so answers on its own
+  ([D34](/decisions/#d34--a-check-that-refuses-is-a-guard)); `packages/core/test/sveltekit.test.ts`
+  checks an action without the check its siblings make, and a page reset past its group's layout.
+- **scip-typescript** runs on Budget with its dependencies: calls without an edge fall from 337 to
+  60, the 24 routes unchanged.
+- **The Go and Hono counts still hold**: all seven counts run in `packages/core/test/counts.test.ts`.
 
 ## M8 — Dataflow, on demand
 

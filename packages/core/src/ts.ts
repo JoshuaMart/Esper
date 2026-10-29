@@ -7,6 +7,7 @@ import type { CallStats } from './language.ts'
 import { defineGrammar, loadQuery, parse } from './parser.ts'
 import { declRef, externalRef, fingerprint, hashText, Names } from './refs.ts'
 import type { TargetFile } from './target.ts'
+import { type Docs, readDocs } from './ts-docs.ts'
 import { type Package, type Resolved, Resolver } from './ts-modules.ts'
 
 // The TypeScript and JavaScript call graph: declarations, imports and calls, resolved across the
@@ -112,6 +113,8 @@ export interface TsFile {
   // Each import and re-export, by specifier, with where it is.
   imports: { specifier: string; node: Node }[]
   package?: Package
+  // What its documentation comments state, in JavaScript.
+  docs?: Docs
 }
 
 // A type, as far as the syntax states it.
@@ -176,11 +179,26 @@ export function patternNames(pattern: Node, path: string[] = []): { name: Node; 
   }
 }
 
+// What JavaScript files state in their documentation comments, by the tree of each file: the
+// type each node is stated to have, and the result types of its functions.
+const documented = new WeakMap<Tree, Docs>()
+
+// The type a declarator, a parameter, a field or a cast states, in its syntax or its documentation.
+export const typeField = (node: Node): Node | undefined =>
+  node.childForFieldName('type') ?? documented.get(node.tree)?.types.get(node.id)
+
+// The result type a function states.
+export const returnField = (fn: Node): Node | undefined =>
+  fn.childForFieldName('return_type') ?? documented.get(fn.tree)?.returns.get(fn.id)
+
 // The parameters of a function, by position: the pattern and the type each states.
 export function parametersOf(fn: Node): { pattern: Node; type?: Node }[] {
   const list = fn.childForFieldName('parameters') ?? fn.childForFieldName('parameter')
   if (!list) return []
-  if (list.type === 'identifier') return [{ pattern: list }]
+  if (list.type === 'identifier') {
+    const type = typeField(list)
+    return [type ? { pattern: list, type } : { pattern: list }]
+  }
   return present(list.namedChildren)
     .filter((p) => p.type !== 'comment')
     .map((p) => {
@@ -189,8 +207,9 @@ export function parametersOf(fn: Node): { pattern: Node; type?: Node }[] {
         const type = p.childForFieldName('type')
         return type ? { pattern, type } : { pattern }
       }
-      if (p.type === 'assignment_pattern') return { pattern: p.childForFieldName('left') ?? p }
-      return { pattern: p }
+      const pattern = p.type === 'assignment_pattern' ? (p.childForFieldName('left') ?? p) : p
+      const type = documented.get(pattern.tree)?.types.get(pattern.id)
+      return type ? { pattern, type } : { pattern }
     })
 }
 
@@ -238,6 +257,10 @@ async function parseFile(file: TargetFile, resolver: Resolver): Promise<TsFile> 
     stars: [],
     imports: [],
     ...(pkg ? { package: pkg } : {}),
+  }
+  if (kind.grammar === 'javascript') {
+    parsed.docs = await readDocs(root)
+    documented.set(tree, parsed.docs)
   }
   for (const match of imports.matches(root)) {
     const spec = match.captures.find((c) => c.name === 'source')?.node.text
@@ -578,6 +601,11 @@ async function parseFile(file: TargetFile, resolver: Resolver): Promise<TsFile> 
     }
   }
   for (const statement of present(root.namedChildren)) declare(statement, false)
+  // `@import { A } from 'm'` and `@typedef {T} Name`, as an import and a type alias would.
+  for (const { name, specifier, imported } of parsed.docs?.imports ?? [])
+    bind(name, { kind: 'import', file: parsed, specifier, name: imported })
+  for (const [name, node] of parsed.docs?.typedefs ?? [])
+    if (!parsed.types.has(name)) parsed.types.set(name, node)
   // What an export names is exported: a function, a class and its public methods, the functions an
   // exported object holds.
   for (const [, exp] of parsed.exports) {
@@ -639,7 +667,7 @@ function markExported(file: TsFile, node: Node) {
 function declaratorBindings(declarator: Node, file: TsFile): { name: string; binding: Binding }[] {
   const pattern = declarator.childForFieldName('name')
   const value = declarator.childForFieldName('value')
-  const type = declarator.childForFieldName('type')
+  const type = typeField(declarator)
   if (!pattern) return []
   // `const x = require('m')`, `const { a } = require('m')`.
   const required =
@@ -736,12 +764,17 @@ export class TsProgram {
 
   static async load(
     files: TargetFile[],
-    options: { library?: Partial<TsLibrary>; analysis?: Analysis } = {},
+    options: {
+      library?: Partial<TsLibrary>
+      analysis?: Analysis
+      aliases?: Record<string, string>
+    } = {},
   ): Promise<TsProgram> {
     const sources = files.filter((f) => isTsSource(f.path))
     const resolver = new Resolver(
       files,
       sources.map((f) => f.path),
+      options.aliases ? { aliases: options.aliases } : {},
     )
     const parsed = await Promise.all(sources.map((f) => parseFile(f, resolver)))
     return new TsProgram(
@@ -782,7 +815,10 @@ export class TsProgram {
   }
 
   dispose() {
-    for (const file of this.files) file.tree.delete()
+    for (const file of this.files) {
+      file.docs?.tree?.delete()
+      file.tree.delete()
+    }
   }
 
   file(path: string): TsFile | undefined {
@@ -813,6 +849,7 @@ export class TsProgram {
     // is cleared then, and only then.
     if (this.asked.has(fn.id)) {
       this.types.clear()
+      this.destructured.clear()
       this.assignedFields.clear()
       this.asked.clear()
     }
@@ -825,6 +862,9 @@ export class TsProgram {
   // function typed so receives the context first.
   handlerTypes = new Set<string>()
   contextType: TsType | undefined
+  // The members of types outside the target, by type and property, as a profile states them:
+  // `@sveltejs/kit#RequestEvent` has a `request` that is a `globalThis#Request`.
+  members = new Map<string, Record<string, string>>()
 
   // The string an expression always is: a literal, a template whose parts are, or a constant
   // initialised with one, of the file or one it imports.
@@ -1031,11 +1071,30 @@ export class TsProgram {
         const found = other ? this.exportedType(other, binding.name, depth + 1) : undefined
         if (found) return found
       }
-      return undefined
+      return this.undeclared(file, target, binding.name)
     }
     if (!binding && this.library.globals.has(name))
       return { kind: 'external', module: 'globalThis', name }
     return undefined
+  }
+
+  // A type of the target the index does not read, such as one a declaration file declares, named
+  // by the package it belongs to (`@sveltejs/kit#RequestEvent`), as a type outside it would be.
+  private undeclared(file: TsFile, target: Resolved, name: string): TsType | undefined {
+    if ('external' in target || name === 'default' || name === '*') return undefined
+    const pkg = 'file' in target ? this.byPath.get(target.file)?.package : file.package
+    return pkg?.name ? { kind: 'external', module: pkg.name, name } : undefined
+  }
+
+  // A type a module exports, from a specifier: `import('m').T` in a type.
+  private importedType(file: TsFile, specifier: string, name: string, depth: number) {
+    const target = this.resolve(file, specifier)
+    if ('external' in target) return { kind: 'external' as const, module: target.external, name }
+    const other = 'file' in target ? this.byPath.get(target.file) : undefined
+    return (
+      (other ? this.exportedType(other, name, depth + 1) : undefined) ??
+      this.undeclared(file, target, name)
+    )
   }
 
   // A type a file exports under a name, following re-exports.
@@ -1117,18 +1176,23 @@ export class TsProgram {
             const [target] = this.targets(callee, file) ?? []
             if (target?.decl) {
               const declFile = this.byPath.get(target.decl.file)
-              const result = target.decl.node.childForFieldName('return_type')
+              const result = returnField(target.decl.node)
               return declFile && result
                 ? this.typeOfAnnotation(result, declFile, depth + 1)
                 : undefined
             }
             const known = target ? this.library.returns.get(target.ref.slice(4)) : undefined
-            if (known && !known.startsWith('@')) {
+            if (known && !/^@\d+$/.test(known)) {
               const [module, type] = known.split('#') as [string, string]
               return { kind: 'external', module, name: type }
             }
           }
           return undefined
+        }
+        // `Pick<T, …>`, `Partial<T>` and the like have the members of `T` they keep.
+        if (name && /^(Pick|Omit|Partial|Required|Readonly|NonNullable)$/.test(name.text)) {
+          const [inner] = present(node.childForFieldName('type_arguments')?.namedChildren ?? [])
+          return inner ? this.typeOfAnnotation(inner, file, depth + 1) : undefined
         }
         return name ? this.typeOfAnnotation(name, file, depth + 1) : undefined
       }
@@ -1153,6 +1217,20 @@ export class TsProgram {
         const [only] = parts
         return parts.length === 1 && only ? this.typeOfAnnotation(only, file, depth + 1) : undefined
       }
+      // `import('m').T`, as JavaScript's documentation writes a type of another module.
+      case 'member_expression': {
+        const object = node.childForFieldName('object')
+        const name = keyName(node.childForFieldName('property'))
+        const [spec] = present(object?.childForFieldName('arguments')?.namedChildren ?? [])
+        if (
+          object?.type !== 'call_expression' ||
+          object.childForFieldName('function')?.type !== 'import' ||
+          spec?.type !== 'string' ||
+          !name
+        )
+          return undefined
+        return this.importedType(file, spec.text.slice(1, -1), name, depth)
+      }
       case 'function_type':
         return { kind: 'function', file, node }
       case 'object_type':
@@ -1175,8 +1253,21 @@ export class TsProgram {
     binding: Extract<Binding, { kind: 'param' }>,
     depth: number,
   ): TsType | undefined {
-    if (binding.path) return undefined
-    if (binding.type) return this.typeOfAnnotation(binding.type, binding.file, depth + 1)
+    // A name destructured from a parameter has the type of the property it is taken through:
+    // `({ request }) => …` given an event whose `request` is a `Request`.
+    if (binding.path) {
+      const { path, ...whole } = binding
+      let type = this.parameterType(whole, depth + 1)
+      for (const property of path) {
+        if (!type) return undefined
+        type = /^\d+$/.test(property) ? undefined : this.memberType(type, property, depth + 1)
+      }
+      return type
+    }
+    const stated = binding.type
+      ? this.typeOfAnnotation(binding.type, binding.file, depth + 1)
+      : undefined
+    if (stated) return stated
     const given = this.given.get(binding.fn.id)?.get(binding.index)
     if (!given) this.asked.add(binding.fn.id)
     if (given) return given
@@ -1231,6 +1322,30 @@ export class TsProgram {
       .filter((s): s is string => !!s)
   }
 
+  // For a name destructured from a parameter or a value, the symbols of what it is taken from and
+  // the properties it is taken through: `request` in `({ request }) => …` is `request` of the
+  // parameter's type.
+  destructuredFrom(node: Node, file: TsFile): { symbols: string[]; path: string[] } | undefined {
+    const binding = this.lookup(node.text, node, file)
+    if ((binding?.kind !== 'param' && binding?.kind !== 'value') || !binding.path?.length)
+      return undefined
+    const { path, ...whole } = binding
+    // The symbol of what the names of one pattern are taken from, worked out once.
+    const key = whole.kind === 'param' ? `${whole.fn.id}:${whole.index}` : `${whole.node.id}`
+    if (!this.destructured.has(key)) {
+      const type =
+        whole.kind === 'param'
+          ? this.parameterType(whole, 0)
+          : whole.value
+            ? this.typeOf(whole.value, whole.file)
+            : undefined
+      this.destructured.set(key, typeSymbol(type))
+    }
+    const symbol = this.destructured.get(key)
+    return symbol ? { symbols: [symbol], path } : undefined
+  }
+  private readonly destructured = new Map<string, string | undefined>()
+
   // The type a function literal takes from where it sits.
   private contextualType(fn: Node, file: TsFile, depth: number): TsType | undefined {
     if (this.tooDeep(depth)) return undefined
@@ -1245,7 +1360,7 @@ export class TsProgram {
     const parent = node.parent
     if (!parent) return undefined
     if (parent.type === 'variable_declarator') {
-      const type = parent.childForFieldName('type')
+      const type = typeField(parent)
       return type ? this.typeOfAnnotation(type, file, depth + 1) : undefined
     }
     // Returned: by a `return`, or as the body of an arrow.
@@ -1264,7 +1379,7 @@ export class TsProgram {
       returner = parent
     }
     if (returner) {
-      const result = returner.childForFieldName('return_type')
+      const result = returnField(returner)
       if (result) return this.typeOfAnnotation(result, file, depth + 1)
       // A function that states no result type returns what its own type says it does:
       // `const m: Middleware = (params) => async (c, next) => …`.
@@ -1326,7 +1441,8 @@ export class TsProgram {
   private computeType(node: Node, file: TsFile, depth: number): TsType | undefined {
     switch (node.type) {
       case 'identifier':
-      case 'shorthand_property_identifier': {
+      case 'shorthand_property_identifier':
+      case 'shorthand_property_identifier_pattern': {
         const binding = this.lookup(node.text, node, file)
         if (!binding) return this.library.globals.has(node.text) ? outside : undefined
         return this.typeOfBinding(binding, file, depth + 1)
@@ -1336,6 +1452,10 @@ export class TsProgram {
       case 'parenthesized_expression':
       case 'non_null_expression':
       case 'await_expression': {
+        // A cast its documentation states: `/** @type {T} */ (value)`.
+        const cast = node.type === 'parenthesized_expression' ? typeField(node) : undefined
+        const stated = cast ? this.typeOfAnnotation(cast, file, depth + 1) : undefined
+        if (stated) return stated
         const inner = node.namedChildren[0]
         return inner ? this.typeOf(inner, file, depth + 1) : undefined
       }
@@ -1391,8 +1511,19 @@ export class TsProgram {
       case 'false':
       case 'null':
       case 'undefined':
+      case 'binary_expression': {
+        // `a ?? b` and `a || b` are `a` when it is set: the type of `a`, as far as it is known.
+        const operator = node.childForFieldName('operator')?.text
+        const left = node.childForFieldName('left')
+        if ((operator === '??' || operator === '||') && left) {
+          const type = this.typeOf(left, file, depth + 1)
+          if (type && type.kind !== 'outside') return type
+          const right = node.childForFieldName('right')
+          return right ? this.typeOf(right, file, depth + 1) : outside
+        }
+        return outside
+      }
       case 'regex':
-      case 'binary_expression':
       case 'unary_expression':
       case 'arrow_function':
       case 'function_expression':
@@ -1444,7 +1575,7 @@ export class TsProgram {
       if (!declFile) return undefined
       if (target.decl.kind === 'class')
         return { kind: 'class', file: declFile, node: target.decl.node, name: target.decl.name }
-      const result = target.decl.node.childForFieldName('return_type')
+      const result = returnField(target.decl.node)
       if (result) return this.typeOfAnnotation(result, declFile, depth + 1)
       // A function without a result type that returns one expression: the type of that.
       const body = target.decl.node.childForFieldName('body')
@@ -1469,7 +1600,8 @@ export class TsProgram {
     depth: number,
   ): TsType | undefined {
     const known = this.library.returns.get(symbol)
-    if (known?.startsWith('@')) {
+    // `@n` is the type of the call's n-th argument; `@scope/pkg#Type` is a type.
+    if (known && /^@\d+$/.test(known)) {
       const arg = present(call.childForFieldName('arguments')?.namedChildren ?? [])[
         Number(known.slice(1))
       ]
@@ -1485,6 +1617,14 @@ export class TsProgram {
   // The type of a member of a type: a field, a getter's result, a property of an object literal.
   memberType(owner: TsType, property: string, depth: number): TsType | undefined {
     if (this.tooDeep(depth)) return undefined
+    // A member of a type outside the target, as the profile states it.
+    const stated =
+      owner.kind === 'external' ? this.members.get(`${owner.module}#${owner.name}`) : undefined
+    const symbol = stated?.[property]
+    if (symbol) {
+      const at = symbol.indexOf('#')
+      return { kind: 'external', module: symbol.slice(0, at), name: symbol.slice(at + 1) }
+    }
     if (owner.kind === 'external' || owner.kind === 'outside' || owner.kind === 'function')
       return outside
     if (owner.kind === 'object') {
@@ -1521,7 +1661,7 @@ export class TsProgram {
       if (m.type === 'method_definition' && key === name) {
         const decl = owner.file.declsById.get(m.id)
         const getter = m.children.some((c) => c?.type === 'get')
-        const result = m.childForFieldName('return_type')
+        const result = returnField(m)
         return {
           file: owner.file,
           node: m,
@@ -1539,7 +1679,7 @@ export class TsProgram {
         key === name
       ) {
         const value = m.childForFieldName('value')
-        const type = m.type === 'method_signature' ? undefined : m.childForFieldName('type')
+        const type = m.type === 'method_signature' ? undefined : typeField(m)
         const decl = value ? owner.file.declsById.get(value.id) : undefined
         return {
           file: owner.file,
@@ -2108,10 +2248,14 @@ export class TsProgram {
         graph.nodes.push(node)
         const citation = { file: file.path, line: line(decl.node) }
         edge({ kind: 'contains', from: file.path, to: decl.ref, citation })
-        // A literal is reached through the function that defines it, as Go's are.
-        const parent = literalTypes.has(decl.node.type)
-          ? this.enclosing(file, decl.node)
-          : undefined
+        // A literal is reached through the function that defines it, as Go's are; so is a method
+        // of an object literal it defines: `{ getClientAddress() { … } }` is
+        // `{ getClientAddress: () => … }`.
+        const parent =
+          literalTypes.has(decl.node.type) ||
+          (decl.node.type === 'method_definition' && decl.node.parent?.type === 'object')
+            ? this.enclosing(file, decl.node)
+            : undefined
         if (parent && parent.kind !== 'class') {
           edge({
             kind: 'calls',

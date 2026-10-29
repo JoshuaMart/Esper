@@ -20,7 +20,7 @@ export type ReadKind =
 
 export type MethodRole = 'route' | 'use' | 'with' | 'group' | 'subrouter' | 'mount' | 'prefix'
 export type ArgRole = 'method' | 'path' | 'handler' | 'callback' | 'chain' | 'config' | 'other'
-export type PatternSyntax = 'braces' | 'servemux' | 'colon'
+export type PatternSyntax = 'braces' | 'servemux' | 'colon' | 'brackets'
 
 export interface RouterMethod {
   name: string
@@ -63,9 +63,40 @@ export type GuardKind =
   | 'rate-limit'
   | 'validation'
 
-export interface GuardRule {
-  call: string
-  kind: GuardKind
+// A guard is a call the profile names (`basicAuth`), or a check: a function that refuses the
+// request, by a call `refusals` lists, when a value read from it is missing (`context.user`).
+export type GuardRule = { call: string; kind: GuardKind } | { check: string; kind: GuardKind }
+
+// An export of a file of the route tree, or of the package, and what it declares.
+export interface FileExport {
+  name: string
+  // `route`: a route for the folder; `each`: a route for each property of the object exported,
+  // at the folder's path and `path`, the property named `default` at the folder's own; `layout`:
+  // a chain member of the routes in its folder and below that take `layouts`; `use`, for hooks:
+  // a chain member of every route.
+  does: 'route' | 'each' | 'layout' | 'use'
+  method?: string
+  path?: string
+  default?: string
+  layouts?: boolean
+  // What its function receives first, when not the profile's `context`.
+  receives?: string
+}
+
+export interface FilesSpec {
+  // The folder of the route tree, from the root of the package that uses the framework.
+  routes: string
+  pattern: PatternSyntax
+  modules: { name: string; exports: FileExport[] }[]
+  // Files of the package, without their extension, whose exports apply to every route, in order.
+  hooks?: { file: string; exports: FileExport[] }[]
+  // Functions whose arguments are a chain, in order (`sequence(a, b)`).
+  compose?: string[]
+  // Where a parameter's matcher is: `{matcher}` stands for its name.
+  matchers?: { file: string; name: string; property?: string; through?: string[] }[]
+  // Modules whose exports, built by these calls, are routes of their own at `path`, where
+  // `$file` is the module's path and `$name` the export's.
+  remote?: { suffix: string; path: string; calls: { call: string; method: string }[] }
 }
 
 export interface Profile {
@@ -80,7 +111,12 @@ export interface Profile {
   context?: string
   handlers?: { adapters?: string[]; types?: string[] }
   routers?: RouterSpec[]
-  surface?: { exported?: boolean; handlers?: boolean }
+  files?: FilesSpec
+  aliases?: Record<string, string>
+  members?: Record<string, Record<string, string>>
+  returns?: Record<string, string>
+  refusals?: string[]
+  surface?: { exported?: boolean; handlers?: boolean; except?: string[] }
   guards?: GuardRule[]
   reads?: ReadRule[]
   mutations?: { chain: string; on?: string }[]
@@ -103,7 +139,16 @@ export interface ResolvedProfile {
   // Types of functions that are handlers or middleware: one typed so receives the context.
   handlerTypes: string[]
   routers: RouterSpec[]
-  surface: { exported: boolean; handlers: boolean }
+  // The nearest profile's route tree, if one declares it.
+  files?: FilesSpec
+  // Import specifiers mapped to a folder of the package (`$lib` to `src/lib`).
+  aliases: Record<string, string>
+  // The members of types outside the target, and what functions outside it return.
+  members: Record<string, Record<string, string>>
+  returns: Record<string, string>
+  // Calls that answer the request with a refusal: an error, a redirect, a failure.
+  refusals: string[]
+  surface: { exported: boolean; handlers: boolean; except: string[] }
   guards: GuardRule[]
   reads: ReadRule[]
   mutations: { chain: string; on?: string }[]
@@ -119,6 +164,18 @@ export function mergeSinks(
     for (const [kind, symbols] of Object.entries(sinks) as [SinkKind, string[]][]) {
       merged[kind] = [...new Set([...(merged[kind] ?? []), ...symbols])]
     }
+  }
+  return merged
+}
+
+// Adds up the members several profiles state, type by type.
+export function mergeMembers(
+  all: Record<string, Record<string, string>>[],
+): Record<string, Record<string, string>> {
+  const merged: Record<string, Record<string, string>> = {}
+  for (const members of all) {
+    for (const [type, properties] of Object.entries(members))
+      merged[type] = { ...merged[type], ...properties }
   }
   return merged
 }
@@ -195,6 +252,7 @@ export function resolveProfile(profile: Profile, all: Profile[]): ResolvedProfil
   const request = [...chain].reverse().find((p) => p.request)?.request
   const response = [...chain].reverse().find((p) => p.response)?.response
   const context = [...chain].reverse().find((p) => p.context)?.context
+  const files = [...chain].reverse().find((p) => p.files)?.files
   return {
     name: profile.name,
     kind: profile.kind,
@@ -207,9 +265,15 @@ export function resolveProfile(profile: Profile, all: Profile[]): ResolvedProfil
     adapters: chain.flatMap((p) => p.handlers?.adapters ?? []),
     handlerTypes: chain.flatMap((p) => p.handlers?.types ?? []),
     routers: chain.flatMap((p) => p.routers ?? []),
+    ...(files ? { files } : {}),
+    aliases: Object.assign({}, ...chain.map((p) => p.aliases ?? {})),
+    members: mergeMembers(chain.map((p) => p.members ?? {})),
+    returns: Object.assign({}, ...chain.map((p) => p.returns ?? {})),
+    refusals: [...new Set(chain.flatMap((p) => p.refusals ?? []))],
     surface: {
       exported: profile.surface?.exported ?? false,
       handlers: profile.surface?.handlers ?? false,
+      except: profile.surface?.except ?? [],
     },
     guards: chain.flatMap((p) => p.guards ?? []),
     reads: chain.flatMap((p) => p.reads ?? []),

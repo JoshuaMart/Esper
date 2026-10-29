@@ -6,12 +6,12 @@ import { test } from 'node:test'
 // profiles, detection, home, notes, the analyzer contract, entry points and signals as rules)
 // names a language or a framework. Each language is a module of its own (`go*.ts`, `ts*.ts`),
 // listed in one place (`languages.ts`) and exported with the rest (`index.ts`); frameworks are
-// profiles (D10).
+// profiles (D10), the routes a framework declares by files included (D32).
 
 const src = new URL('../src/', import.meta.url)
 const languageModule = /^(go|ts)([-.].*)?\.ts$|^(languages|index)\.ts$/
 const names =
-  /\b(go|golang|typescript|javascript|tsx|jsx|hono|chi|net-http|gorilla|express|kaneo|wakapi)\b/i
+  /\b(go|golang|typescript|javascript|tsx|jsx|hono|chi|net-http|gorilla|express|kaneo|wakapi|sveltekit|svelte|kener)\b/i
 
 // The code of a file, its comments left out: a comment may cite an example, code may not.
 function code(text: string): string {

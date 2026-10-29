@@ -1,0 +1,269 @@
+# SvelteKit itself, the monorepo at @sveltejs/kit@3.1.0, counted by hand (D16). An entry point is a
+# declaration that is exported (a function, a public method of an exported class, a function an
+# exported object holds, or a function given to the call whose result an exported name holds), or a
+# function that takes the request or the request event, as its code or its documentation comment
+# states, and that reads the request in its own code or in what it calls: a `Request` (its headers,
+# URL, method, body), the event's `params`, `locals`, `url`, `getClientAddress()`, `cookies.get`,
+# or Node's request (adapter-node, `@sveltejs/kit/node`, the Vite dev and preview servers). The
+# code that runs in the browser (src/runtime/client, `$app/forms`' client) is left out: it builds
+# the requests the server reads. Every file that touches the request was read, and every
+# declaration that reads it is one of these or reached from one.
+# What they read, and what is not counted:
+# - The server: `internal_respond` reads `Origin` for CSRF, `x-sveltekit-pathname` and
+#   `x-sveltekit-search` for remote functions, the `__data.json` suffix and the trailing-slash
+#   parameter on the path; its inner `resolve` takes the event; the actions read
+#   `x-sveltekit-action`, `respond_with_error` reads `x-sveltekit-error`.
+# - The adapters: adapter-node's `handler` reaches `ssr`, whose `getClientAddress` reads
+#   `ADDRESS_HEADER` and `XFF_DEPTH` from Node's request, and `get_origin` the `PROTOCOL_HEADER`,
+#   `HOST_HEADER` and `PORT_HEADER`; adapter-bun's `get_client_address` and `get_origin` do the
+#   same on a `Request`; adapter-vercel's `getClientAddress` reads `X-Forwarded-For`. Their names
+#   come from the environment, so the reads are `header` without a name.
+# - `redirect`, `validate_redirect_location` and `is_external_location` read the origin of the
+#   request being served, through `get_origin`; so does `test-redirect-importer`'s `authenticate`,
+#   a package of the repository that calls `redirect`.
+# - Not counted, since what they read comes from a package outside the repository or from a module
+#   loaded at run time: adapter-cloudflare's worker and adapter-netlify's edge function, whose
+#   request is typed by `@cloudflare/workers-types` and `@netlify/edge-functions`; `Server.respond`
+#   and the `respond` that `create_server` returns, which call the instance `configure` imports with
+#   `await import()`. `respond_to`, that instance's handler, is counted.
+target: https://github.com/sveltejs/kit
+ref: "@sveltejs/kit@3.1.0"
+commit: 73bf98cabea2ef18e1bfef40be5229a43e79b05c
+kind: framework
+entries:
+  - {
+      ref: "entry:packages/adapter-bun/src/handler.js#get_client_address",
+      at: "packages/adapter-bun/src/handler.js:101",
+    }
+  - {
+      ref: "entry:packages/adapter-bun/src/handler.js#get_origin",
+      at: "packages/adapter-bun/src/handler.js:66",
+    }
+  - {
+      ref: "entry:packages/adapter-bun/src/handler.js#handler",
+      at: "packages/adapter-bun/src/handler.js:23",
+    }
+  - {
+      ref: "entry:packages/adapter-bun/src/handler.js#normalize_request",
+      at: "packages/adapter-bun/src/handler.js:45",
+    }
+  - {
+      ref: "entry:packages/adapter-bun/src/routes-util.js#client_asset",
+      at: "packages/adapter-bun/src/routes-util.js:171",
+    }
+  - {
+      ref: "entry:packages/adapter-bun/src/routes-util.js#is_fresh",
+      at: "packages/adapter-bun/src/routes-util.js:80",
+    }
+  - {
+      ref: "entry:packages/adapter-bun/src/routes-util.js#prerendered_asset",
+      at: "packages/adapter-bun/src/routes-util.js:205",
+    }
+  - {
+      ref: "entry:packages/adapter-bun/src/routes-util.js#prerendered_page",
+      at: "packages/adapter-bun/src/routes-util.js:216",
+    }
+  - {
+      ref: "entry:packages/adapter-cloudflare/index.js#default",
+      at: "packages/adapter-cloudflare/index.js:22",
+    }
+  - {
+      ref: "entry:packages/adapter-node/src/handler.js#handler",
+      at: "packages/adapter-node/src/handler.js:188",
+    }
+  - {
+      ref: "entry:packages/adapter-node/src/static.js#serve_static",
+      at: "packages/adapter-node/src/static.js:171",
+    }
+  - {
+      ref: "entry:packages/adapter-vercel/files/catch-all.js#default.fetch",
+      at: "packages/adapter-vercel/files/catch-all.js:9",
+    }
+  - {
+      ref: "entry:packages/adapter-vercel/files/serverless.js#default.fetch",
+      at: "packages/adapter-vercel/files/serverless.js:15",
+    }
+  - {
+      ref: "entry:packages/kit/src/exports/index.js#redirect",
+      at: "packages/kit/src/exports/index.js:129",
+    }
+  - {
+      ref: "entry:packages/kit/src/exports/internal/server/index.js#get_origin",
+      at: "packages/kit/src/exports/internal/server/index.js:4",
+    }
+  - {
+      ref: "entry:packages/kit/src/exports/node/index.js#getRequest",
+      at: "packages/kit/src/exports/node/index.js:121",
+    }
+  - {
+      ref: "entry:packages/kit/src/exports/url.js#is_external_location",
+      at: "packages/kit/src/exports/url.js:15",
+    }
+  - {
+      ref: "entry:packages/kit/src/exports/url.js#validate_redirect_location",
+      at: "packages/kit/src/exports/url.js:42",
+    }
+  - {
+      ref: "entry:packages/kit/src/exports/vite/dev/index.js#dev",
+      at: "packages/kit/src/exports/vite/dev/index.js:42",
+    }
+  - {
+      ref: "entry:packages/kit/src/exports/vite/index.js#sveltekit",
+      at: "packages/kit/src/exports/vite/index.js:169",
+    }
+  - {
+      ref: "entry:packages/kit/src/exports/vite/preview/index.js#preview",
+      at: "packages/kit/src/exports/vite/preview/index.js:21",
+    }
+  - {
+      ref: "entry:packages/kit/src/exports/vite/utils.js#not_found",
+      at: "packages/kit/src/exports/vite/utils.js:75",
+    }
+  - {
+      ref: "entry:packages/kit/src/runtime/app/paths/server.js#asset",
+      at: "packages/kit/src/runtime/app/paths/server.js:15",
+    }
+  - {
+      ref: "entry:packages/kit/src/runtime/app/paths/server.js#match",
+      at: "packages/kit/src/runtime/app/paths/server.js:64",
+    }
+  - {
+      ref: "entry:packages/kit/src/runtime/app/paths/server.js#resolve",
+      at: "packages/kit/src/runtime/app/paths/server.js:29",
+    }
+  - {
+      ref: "entry:packages/kit/src/runtime/app/server/remote/command.js#command",
+      at: "packages/kit/src/runtime/app/server/remote/command.js:55",
+    }
+  - {
+      ref: "entry:packages/kit/src/runtime/app/server/remote/form.js#form",
+      at: "packages/kit/src/runtime/app/server/remote/form.js:65",
+    }
+  - {
+      ref: "entry:packages/kit/src/runtime/app/server/remote/prerender.js#prerender",
+      at: "packages/kit/src/runtime/app/server/remote/prerender.js:62",
+    }
+  - {
+      ref: "entry:packages/kit/src/runtime/form-utils.js#deserialize_binary_form",
+      at: "packages/kit/src/runtime/form-utils.js:188",
+    }
+  - {
+      ref: "entry:packages/kit/src/runtime/server/cookie.js#get_cookies",
+      at: "packages/kit/src/runtime/server/cookie.js:42",
+    }
+  - {
+      ref: "entry:packages/kit/src/runtime/server/csrf.js#is_csrf_forbidden",
+      at: "packages/kit/src/runtime/server/csrf.js:37",
+    }
+  - {
+      ref: "entry:packages/kit/src/runtime/server/csrf.js#is_remote_forbidden",
+      at: "packages/kit/src/runtime/server/csrf.js:63",
+    }
+  - {
+      ref: "entry:packages/kit/src/runtime/server/data/index.js#render_data",
+      at: "packages/kit/src/runtime/server/data/index.js:21",
+    }
+  - {
+      ref: "entry:packages/kit/src/runtime/server/endpoint.js#is_endpoint_request",
+      at: "packages/kit/src/runtime/server/endpoint.js:114",
+    }
+  - {
+      ref: "entry:packages/kit/src/runtime/server/endpoint.js#render_endpoint",
+      at: "packages/kit/src/runtime/server/endpoint.js:14",
+    }
+  - {
+      ref: "entry:packages/kit/src/runtime/server/env_module.js#get_public_env",
+      at: "packages/kit/src/runtime/server/env_module.js:17",
+    }
+  - {
+      ref: "entry:packages/kit/src/runtime/server/fetch.js#create_fetch",
+      at: "packages/kit/src/runtime/server/fetch.js:18",
+    }
+  - {
+      ref: "entry:packages/kit/src/runtime/server/instance.js#respond_to",
+      at: "packages/kit/src/runtime/server/instance.js:113",
+    }
+  - {
+      ref: "entry:packages/kit/src/runtime/server/internal.js#format_response",
+      at: "packages/kit/src/runtime/server/internal.js:73",
+    }
+  - {
+      ref: "entry:packages/kit/src/runtime/server/page/actions.js#call_action",
+      at: "packages/kit/src/runtime/server/page/actions.js:225",
+    }
+  - {
+      ref: "entry:packages/kit/src/runtime/server/page/actions.js#handle_action_json_request",
+      at: "packages/kit/src/runtime/server/page/actions.js:30",
+    }
+  - {
+      ref: "entry:packages/kit/src/runtime/server/page/actions.js#handle_action_request",
+      at: "packages/kit/src/runtime/server/page/actions.js:168",
+    }
+  - {
+      ref: "entry:packages/kit/src/runtime/server/page/actions.js#is_action_json_request",
+      at: "packages/kit/src/runtime/server/page/actions.js:16",
+    }
+  - {
+      ref: "entry:packages/kit/src/runtime/server/page/actions.js#is_action_request",
+      at: "packages/kit/src/runtime/server/page/actions.js:158",
+    }
+  - {
+      ref: "entry:packages/kit/src/runtime/server/page/index.js#render_page",
+      at: "packages/kit/src/runtime/server/page/index.js:42",
+    }
+  - {
+      ref: "entry:packages/kit/src/runtime/server/page/load_data.js#create_universal_fetch",
+      at: "packages/kit/src/runtime/server/page/load_data.js:278",
+    }
+  - {
+      ref: "entry:packages/kit/src/runtime/server/page/load_data.js#load_data",
+      at: "packages/kit/src/runtime/server/page/load_data.js:217",
+    }
+  - {
+      ref: "entry:packages/kit/src/runtime/server/page/load_data.js#load_server_data",
+      at: "packages/kit/src/runtime/server/page/load_data.js:22",
+    }
+  - {
+      ref: "entry:packages/kit/src/runtime/server/page/render.js#render_response",
+      at: "packages/kit/src/runtime/server/page/render.js:59",
+    }
+  - {
+      ref: "entry:packages/kit/src/runtime/server/page/respond_with_error.js#handle_fatal_error",
+      at: "packages/kit/src/runtime/server/page/respond_with_error.js:138",
+    }
+  - {
+      ref: "entry:packages/kit/src/runtime/server/page/respond_with_error.js#respond_with_error",
+      at: "packages/kit/src/runtime/server/page/respond_with_error.js:26",
+    }
+  - {
+      ref: "entry:packages/kit/src/runtime/server/remote-functions.js#handle_remote_call",
+      at: "packages/kit/src/runtime/server/remote-functions.js:144",
+    }
+  - {
+      ref: "entry:packages/kit/src/runtime/server/remote-functions.js#handle_remote_call_internal",
+      at: "packages/kit/src/runtime/server/remote-functions.js:165",
+    }
+  - {
+      ref: "entry:packages/kit/src/runtime/server/remote-functions.js#handle_remote_form_post",
+      at: "packages/kit/src/runtime/server/remote-functions.js:516",
+    }
+  - {
+      ref: "entry:packages/kit/src/runtime/server/remote-functions.js#handle_remote_form_post_internal",
+      at: "packages/kit/src/runtime/server/remote-functions.js:537",
+    }
+  - {
+      ref: "entry:packages/kit/src/runtime/server/respond.js#internal_respond",
+      at: "packages/kit/src/runtime/server/respond.js:93",
+    }
+  - {
+      ref: "entry:packages/kit/src/runtime/server/respond.js#internal_respond/resolve",
+      at: "packages/kit/src/runtime/server/respond.js:590",
+    }
+  - {
+      ref: "entry:packages/kit/src/utils/http.js#is_form_content_type",
+      at: "packages/kit/src/utils/http.js:73",
+    }
+  - {
+      ref: "entry:packages/test-redirect-importer/index.js#authenticate",
+      at: "packages/test-redirect-importer/index.js:10",
+    }

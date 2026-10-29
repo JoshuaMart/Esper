@@ -4,9 +4,10 @@ import { addEntries } from './entries.ts'
 import type { Graph } from './graph.ts'
 import type { IndexStats, Language, Module } from './language.ts'
 import { loadLibrary } from './library.ts'
-import type { ResolvedProfile } from './profile.ts'
+import { mergeMembers, type ResolvedProfile } from './profile.ts'
 import type { TargetFile } from './target.ts'
 import { isTsSource, parametersOf, TsProgram, type TsType, typeSymbol } from './ts.ts'
+import { TsFileRoutes } from './ts-files.ts'
 import { isConfig, isManifest, modulesOf } from './ts-modules.ts'
 import { TsRouteInterpreter } from './ts-routes.ts'
 import { declFacts, extractReads } from './ts-signals.ts'
@@ -18,22 +19,35 @@ export async function indexTs(
   files: TargetFile[],
   options: { modules?: Module[]; profile: ResolvedProfile; analysis?: Analysis },
 ): Promise<{ graph: Graph; stats: IndexStats }> {
+  const profile = options.profile
   const library = await loadLibrary('typescript')
+  // What the profile says functions outside the target return, beside the library's.
+  const returns = new Map([...library.returns, ...Object.entries(profile.returns)])
   const program = await TsProgram.load(files, {
-    library,
+    library: { ...library, returns },
+    aliases: profile.aliases,
     ...(options.analysis ? { analysis: options.analysis } : {}),
   })
   try {
-    const profile = options.profile
     // What a handler receives, when its code does not say: a type outside the target for an
     // application (`hono#Context`), or the framework's own for the framework itself.
-    const [module, name] = (profile.context ?? '').split('#') as [string, string]
-    const context = profile.context ? contextType(program, module, name) : undefined
+    const typeFor = (symbol: string) => {
+      const at = symbol.indexOf('#')
+      return contextType(program, symbol.slice(0, at), symbol.slice(at + 1))
+    }
+    const context = profile.context ? typeFor(profile.context) : undefined
     program.handlerTypes = new Set(profile.handlerTypes)
     program.contextType = context
+    program.members = new Map(
+      Object.entries(mergeMembers([Object.fromEntries(library.members), profile.members])),
+    )
     // Routes first: they say which functions are handlers, and so what their first parameter is.
     const interpreter = new TsRouteInterpreter(program, profile, context)
     const routes = profile.kind === 'application' ? interpreter.routes() : []
+    if (profile.kind === 'application' && profile.files) {
+      const tree = profile.files
+      routes.push(...new TsFileRoutes(program, { ...profile, files: tree }, typeFor).routes())
+    }
     const { graph, stats } = program.callGraph()
     const reads = extractReads(program, profile)
     const signals = declFacts(program, profile, library, reads)

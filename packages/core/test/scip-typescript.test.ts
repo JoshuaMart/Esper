@@ -33,7 +33,7 @@ const key = (e: Graph['edges'][number]) =>
 // A target indexed at its counted commit, by tree-sitter alone and then with scip-typescript.
 async function both(target: string, count: string) {
   const { commit, dir, entries } = parse(
-    await readFile(join(profilesDir, 'hono/counts', count), 'utf8'),
+    await readFile(join(profilesDir, count.includes('/') ? count : `hono/counts/${count}`), 'utf8'),
   ) as { commit: string; dir?: string; entries: { ref: string }[] }
   const home = new Home(await mkdtemp(join(tmpdir(), 'esper-scip-home-')), {
     advisories: recordedSource(),
@@ -81,17 +81,17 @@ test("scip-typescript installs Hono's dependencies and resolves its calls, entry
 }, async () => {
   const { before, after, plainStats, stats, counted } = await both('hono', 'hono@bac5c4a8bcd7.yaml')
   assert.ok(plainStats && stats)
-  // Tree-sitter alone: 109 guessed of 2016 call edges, 1716 calls without one.
+  // Tree-sitter alone: 106 guessed of 2035 call edges, 1697 calls without one.
   assert.deepEqual(
     [plainStats.guessed, plainStats.resolved + plainStats.guessed, plainStats.unresolved],
-    [109, 2016, 1716],
+    [106, 2035, 1697],
   )
-  // With scip-typescript: 12 guessed of 3268, 432 calls without an edge.
+  // With scip-typescript: 9 guessed of 3277, 423 calls without an edge.
   assert.deepEqual(
     [stats.guessed, stats.resolved + stats.guessed, stats.unresolved],
-    [12, 3268, 432],
+    [9, 3277, 423],
   )
-  assert.equal(guessed(after).length, 12)
+  assert.equal(guessed(after).length, 9)
   assert.ok(named(before, after).length > 1000)
   const entries = after.nodes.filter((n) => n.kind === 'entry').map((n) => n.ref)
   assert.deepEqual(entries.sort(), counted)
@@ -110,6 +110,25 @@ test("scip-typescript resolves Kaneo's API without the dependencies of its repos
   // Its lockfile is at the root of the repository, outside the folder that is the target.
   assert.ok(stats.unresolved < plainStats.unresolved - 1000, `${stats.unresolved} without an edge`)
   assert.ok(named(before, after).length > 1000)
+  const entries = after.nodes.filter((n) => n.kind === 'entry').map((n) => n.ref)
+  assert.deepEqual(entries.sort(), counted)
+})
+
+test('scip-typescript resolves a SvelteKit application, its components left out, routes unchanged', {
+  skip:
+    noDocker ||
+    ((await present('Budget')) ? false : 'set ESPER_TARGETS and run pnpm fetch-targets'),
+  timeout,
+}, async () => {
+  const { before, after, plainStats, stats, counted } = await both(
+    'Budget',
+    'sveltekit/counts/budget@cfce07bcda21.yaml',
+  )
+  assert.ok(plainStats && stats)
+  // Tree-sitter alone: 554 call edges, 337 calls without one; with scip-typescript, 831 and 60.
+  assert.deepEqual([plainStats.resolved + plainStats.guessed, plainStats.unresolved], [554, 337])
+  assert.deepEqual([stats.resolved + stats.guessed, stats.unresolved], [831, 60])
+  assert.ok(named(before, after).length > 100)
   const entries = after.nodes.filter((n) => n.kind === 'entry').map((n) => n.ref)
   assert.deepEqual(entries.sort(), counted)
 })

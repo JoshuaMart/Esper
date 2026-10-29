@@ -1,0 +1,41 @@
+# Budget, a SvelteKit 3 application (Svelte 5, better-auth, drizzle, adapter-bun), counted by hand
+# (D16): every route its server files declare under src/routes, each `+server.ts` export of an HTTP
+# method, each `+page.server.ts` `load` (a `GET` of the page) and each property of its `actions`
+# (a `POST` to `?/<name>`). A script written apart from Esper listed the same 24, route for route
+# and line for line, from the text of each file.
+# - The pages without a server file (`/login`, `/logout`, only a `+page.svelte`) are not entry
+#   points: what runs on the server for them is the hooks' `handle` and the root layout's `load`,
+#   which are in front of the routes below.
+# - `api/auth/[...all]/+server.ts` exports one handler as `GET` and `POST`: two routes, one handler.
+# - Every route has `handle` of src/hooks.server.ts in its chain, which redirects a request without
+#   a user unless its path is public (`/login`, `/register`, `/api/auth`); the index does not read
+#   that condition on the path, so it gives the check to every route.
+target: https://github.com/JoshuaMart/Budget
+ref: main
+commit: cfce07bcda21d6383a09662c27be1fac04bd18ee
+kind: application
+entries:
+  - { ref: "route:GET /", at: "src/routes/+page.server.ts:26" }
+  - { ref: "route:GET /api/auth/{all...}", at: "src/routes/api/auth/[...all]/+server.ts:7" }
+  - { ref: "route:GET /api/quotes/search", at: "src/routes/api/quotes/search/+server.ts:13" }
+  - { ref: "route:GET /patrimoine", at: "src/routes/patrimoine/+page.server.ts:21" }
+  - { ref: "route:GET /recurring", at: "src/routes/recurring/+page.server.ts:20" }
+  - { ref: "route:GET /register", at: "src/routes/register/+page.server.ts:7" }
+  - { ref: "route:GET /stats", at: "src/routes/stats/+page.server.ts:10" }
+  - { ref: "route:GET /transactions", at: "src/routes/transactions/+page.server.ts:17" }
+  - { ref: "route:POST /?/addCategory", at: "src/routes/+page.server.ts:47" }
+  - { ref: "route:POST /?/removeCategory", at: "src/routes/+page.server.ts:57" }
+  - { ref: "route:POST /?/updateRatios", at: "src/routes/+page.server.ts:70" }
+  - { ref: "route:POST /api/accounts", at: "src/routes/api/accounts/+server.ts:24" }
+  - { ref: "route:POST /api/auth/{all...}", at: "src/routes/api/auth/[...all]/+server.ts:8" }
+  - { ref: "route:POST /patrimoine?/create", at: "src/routes/patrimoine/+page.server.ts:76" }
+  - { ref: "route:POST /patrimoine?/delete", at: "src/routes/patrimoine/+page.server.ts:109" }
+  - { ref: "route:POST /patrimoine?/refresh", at: "src/routes/patrimoine/+page.server.ts:118" }
+  - { ref: "route:POST /patrimoine?/update", at: "src/routes/patrimoine/+page.server.ts:87" }
+  - { ref: "route:POST /recurring?/create", at: "src/routes/recurring/+page.server.ts:87" }
+  - { ref: "route:POST /recurring?/delete", at: "src/routes/recurring/+page.server.ts:124" }
+  - { ref: "route:POST /recurring?/toggle", at: "src/routes/recurring/+page.server.ts:111" }
+  - { ref: "route:POST /recurring?/update", at: "src/routes/recurring/+page.server.ts:99" }
+  - { ref: "route:POST /transactions?/create", at: "src/routes/transactions/+page.server.ts:81" }
+  - { ref: "route:POST /transactions?/delete", at: "src/routes/transactions/+page.server.ts:100" }
+  - { ref: "route:POST /transactions?/update", at: "src/routes/transactions/+page.server.ts:89" }

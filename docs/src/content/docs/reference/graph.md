@@ -164,16 +164,36 @@ What the TypeScript and JavaScript extraction states, from syntax alone
 | `import { find } from '@app/db'` (a package of the target) | `imports` edges to the file its entry point is |
 | `import { cors } from 'hono/cors'` | an `imports` edge to `ext:hono/cors` |
 
+In a JavaScript file, the types its documentation comments state are read as TypeScript's
+annotations ([D33](/decisions/#d33--javascript-typed-by-its-comments-and-types-a-profile-states)):
+
+| Comment | Types |
+|---|---|
+| `/** @param {Request} request */` before a function | its parameter `request`; a destructured one by its position |
+| `/** @type {import('@sveltejs/kit').RequestEvent} */ const event = …` | the variable |
+| `(/** @type {Request} */ r) => …` | the parameter written after it |
+| `/** @type {T} */ (value)` | the expression, a cast |
+| `/** @returns {T} */` | what the function returns |
+| `/** @typedef {T} Name */`, `/** @import { A } from 'm' */` | a type alias, an import |
+
+A type the target declares where the index does not read it, a declaration file (`.d.ts`), is named
+by its package: `@sveltejs/kit#RequestEvent` in SvelteKit's own code, as outside it.
+
 A declaration is `exported` (`data.exported`) when an `export` names it, with the public methods of
 an exported class, the functions of an exported object, and the functions given to the call an
 exported name holds. Imports resolve through relative paths (`./find.js` is `find.ts`), the `paths`
-of the nearest `tsconfig.json` or `jsconfig.json`, and the target's own packages by their name and
-`exports`; Node's built-in modules are `ext:node:<module>`, the runtime's globals `ext:globalThis`.
+of the nearest `tsconfig.json` or `jsconfig.json`, the `imports` of the nearest `package.json`
+(`#lib/*`), the folders a profile maps a specifier to (`$lib`), and the target's own packages by
+their name and `exports`; Node's built-in modules are `ext:node:<module>`, the runtime's globals
+`ext:globalThis`. Only `.ts`, `.tsx`, `.mts`, `.cts`, `.js`, `.jsx`, `.mjs` and `.cjs` files are
+read: not declaration files, and not the components of a framework such as Svelte's `.svelte`.
 
 A call `x.m()` is **resolved** when the syntax states the type of `x`: an annotation, `new C()`, the
 result type a function declares or the one expression it returns, a field, a getter's result, a
-constructor's parameter property, `Promise<T>` once awaited, `ReturnType<typeof f>`, `x as T`. A
-function literal's parameters take their types from a function type that the variable holding it,
+constructor's parameter property, `Promise<T>` once awaited, `ReturnType<typeof f>`, `Pick<T, …>`
+and the like, `x as T`, `a ?? b` as `a`. A name destructured from a parameter or a value has the
+type of the property it is taken by, as a profile states the members of types outside the target
+(`members`). A function literal's parameters take their types from a function type that the variable holding it,
 the function returning it, or the parameter it is passed to declares; a handler's first parameter,
 when nothing states it, is the profile's context ([profiles](/reference/profiles/#hono)). A getter
 of the target's own classes is called when its property is read (`data.getter`). Calls are
@@ -186,18 +206,25 @@ of the target's own classes is called when its property is read (`data.getter`).
 - on a value no syntax types, when the target has one member of that name, unless values of any type
   have it (`map`, `then`, `get`), which `library.yaml` lists as `builtins`.
 
+A literal, and a method of an object literal, are called by the function that defines them:
+`{ getClientAddress() { … } }` passed to the server is reached from where it is written.
+
 `library.yaml` also states the runtime's `globals`, what functions outside the target return
-(`drizzle()` gives a `NodePgDatabase`, a `Proxy` the type of what it wraps), and the sinks and data
-calls of common libraries.
+(`drizzle()` gives a `NodePgDatabase`, `betterAuth()` an `Auth`, a `Proxy` the type of what it
+wraps), the members of those types (`Auth.api`), and the sinks and data calls of common libraries.
 
-Measured on Hono v4.13.14, 238 files, and on Kaneo's API at v2.48.0, 687 files:
+Measured on Hono v4.13.14, 238 files, Kaneo's API at v2.48.0, 687 files, SvelteKit 3.1.0, 274
+files, Kener v4.1.10, 329 files, and Budget at `cfce07b`, 46 files:
 
-| | Hono | Kaneo's API |
-|---|---|---|
-| declarations | 1392 | 3059 |
-| call edges | 2016, of which 109 guessed (5.4 %) | 9980, of which 103 guessed (1.0 %) |
-| calls without an edge | 1716 | 5197 |
-| with scip-typescript | 12 guessed of 3268, 432 without an edge | 103 guessed of 11250, 3927 without an edge |
+| | Hono | Kaneo's API | SvelteKit | Kener | Budget |
+|---|---|---|---|---|---|
+| declarations | 1392 | 3059 | 2608 | 1781 | 207 |
+| call edges | 2035, 106 guessed (5.2 %) | 10055, 85 guessed (0.8 %) | 5749, 62 guessed (1.1 %) | 4015, 4 guessed | 554, none guessed |
+| calls without an edge | 1697 | 5123 | 2967 | 4027 | 337 |
+| with scip-typescript | 9 guessed of 3277, 423 without an edge | 85 guessed of 11317, 3861 without an edge | | | 831 edges, 60 without one |
+
+Hono's and Kaneo's measures are those since M7, whose types (destructured parameters, `??`,
+methods of object literals) resolve a few more calls than M4 did.
 
 Most calls left without an edge are methods of values from outside the target whose type the
 syntax does not state (`res.headers.get`, a query builder's `.where`), as for Go.
@@ -224,7 +251,8 @@ What the facts say, and where they come from:
 
 | Fact | On | From |
 |---|---|---|
-| `guard` | an entry | a chain member that a profile's `guards` names, with its kind |
+| `guard` | an entry | a chain member that a profile's `guards` names, with its kind; or a check its handler, a chain member or what they call makes, with `data.check` and `data.via` |
+| `guard` | a declaration | a check: a condition on a value read from the request, then one of the profile's `refusals` (`if (!locals.user) error(401)`), with the kind of the profile's check rule ([D34](/decisions/#d34--a-check-that-refuses-is-a-guard)) |
 | `sink` | the declaration that makes the call | a call that the language's `library.yaml` lists as a sink, when the argument it interprets is not a literal: `db.Query("… " + id)` is a sink, `db.Query("… = ?", id)` is not |
 | `signal` | a declaration | the rules of [D6](/decisions/#d6--the-graph-model), each at the line that triggers it |
 | `signal` | an entry | the signals of what its handler, or its chain, reaches through calls, with `data.via` and `data.from`; `sink-reachable` for a sink, with `data.sink` |
@@ -240,9 +268,11 @@ What the facts say, and where they come from:
 - **Short-circuit**, in TypeScript: a middleware, a function whose first parameter is the request
   or the context, as stated or as the profile gives it, that passes the request on, calling a
   function it was given after it (`next()`), and that returns or throws, inside a condition, from a
-  block that does not.
+  block that does not; or a function given the request, or something destructured from it, that
+  calls one of the profile's `refusals` inside a condition (a layout's `load` that redirects).
 - **Divergent guards.** Siblings are the routes declared on the same router, seen through `With`
-  and `Group`, when there are at least three. An entry is divergent when it lacks a guard kind, or a
+  and `Group`, or, for a route tree, the routes under the same nearest folder that holds a layout or
+  is a route group, when there are at least three. An entry is divergent when it lacks a guard kind, or a
   short-circuiting chain member, that more than half of its siblings have; `data.missing` names
   them. A short-circuiting member is known by the declarations that refuse, the ones it reaches
   that carry `short-circuit`, so that two factories of the same check are one guard
@@ -269,3 +299,9 @@ route has), `data-read` 117, `data-write` 83, `request-key` 21, `mass-assignment
 `sink-reachable` 18, and `divergent-guard` 10, routes that lack a check their siblings make, such as
 the billing webhook. Kaneo uses none of Hono's own guards: its checks are its own middleware.
 
+Measured on Budget at `cfce07b`, the 24 routes carry `authn` 24 times, from the check of
+`locals.user` in its `handle`, `short-circuit` and `retained-mutation` 24 (the same hook),
+`data-write` 16 and `data-read` 12 through drizzle and better-auth. On Kener v4.1.10, the 90 routes
+carry `short-circuit` 90 times, from its CSRF and API-key hooks, `sink-reachable` 13,
+`live-state` 25, and `divergent-guard` once: `POST /manage/api`, a `+server.ts` of the `(manage)`
+group, which the layout's redirect does not cover.

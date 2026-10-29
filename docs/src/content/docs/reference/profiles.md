@@ -47,8 +47,13 @@ Symbols are written `<import path>#<symbol>`.
 | `handlers.adapters` | conversions whose first argument is the handler (`net/http#HandlerFunc`, `hono/factory#createMiddleware`), seen through |
 | `handlers.types` | types of functions that are handlers (`hono#MiddlewareHandler`): a function typed so receives the `context` first |
 | `routers` | each kind of router: its types, the functions or classes that `create` one, the package functions that register on a `default` one, its `pattern` syntax, whether its middleware is `ordered` and its methods `chained`, and what each of its methods `does` |
-| `surface` | for a framework: `exported` makes each exported declaration that reaches a read of the request an entry point; `handlers` adds each function and method that takes the request (in Go, with a response writer; in TypeScript, or the context), exported or not |
-| `guards` | middleware that can refuse a request, by kind: `{ call: github.com/go-chi/chi/v5/middleware#BasicAuth, kind: authn }` |
+| `files` | routes declared by the files of a route tree rather than by calls ([below](#routes-declared-by-files)) |
+| `aliases` | import specifiers mapped to a folder of the package, configured outside the target: `$lib: src/lib` |
+| `members` | the type of each property of a type outside the target, which the index cannot read: `"@sveltejs/kit#RequestEvent": { request: globalThis#Request }` |
+| `returns` | what a function outside the target returns: `$app/server#getRequestEvent: "@sveltejs/kit#RequestEvent"` |
+| `refusals` | calls that answer the request with a refusal, for the guards that are checks: `@sveltejs/kit#error` |
+| `surface` | for a framework: `exported` makes each exported declaration that reaches a read of the request an entry point; `handlers` adds each function and method that takes the request (in Go, with a response writer; in TypeScript, or the context), exported or not; `except` leaves out files by globs (`**/src/runtime/client/**`), code that runs in the browser |
+| `guards` | middleware that can refuse a request, by kind: `{ call: github.com/go-chi/chi/v5/middleware#BasicAuth, kind: authn }`; or a check, a function that refuses when a value read from the request is missing: `{ check: context.user, kind: authn }` |
 | `reads` | what reads the request: a `chain` of fields and calls on it, or a `call` to a function given it |
 | `mutations` | what changes request state that later code reads again, as `chain`s: `{ on: hono#Context, chain: set() }` |
 | `sinks` | the framework's own sinks, by kind, as in a language's `library.yaml`: `redirect: [hono#Context.redirect]` |
@@ -99,6 +104,7 @@ registers both.
 | `braces` | `/users/{id}`, `/users/{id:[0-9]+}`, `/static/*` | `/users/{id}`, `/static/{rest...}` |
 | `servemux` | `GET /items/{id}`, `/files/`, `/`, `/{path...}`, `/{$}` | method `GET` and `/items/{id}`; `/files/{rest...}`; `/{rest...}`, since `/` serves every path no other pattern matches; `/` for `/{$}` |
 | `colon` | `/users/:id`, `/:id{[0-9]+}`, `/:lang?`, `/files/*` | `/users/{id}`, `/{id}`, `/{lang}`, `/files/{rest...}` |
+| `brackets` | the folders `(app)/items/[id=integer]`, `[[lang]]/files/[...path]`, `events/[MMMM]-[YYYY]`, `[x+2e]well-known` | `/items/{id}`, `/{lang}/files/{path...}`, `/events/{MMMM}-{YYYY}`, `/.well-known` |
 
 Joined paths lose their trailing slash, but the root: `Mount("/api", r)` with `r.Get("/", …)` is
 `/api`.
@@ -111,6 +117,11 @@ a call to `Query`, then a call to `Get`, whose first argument names what is read
 - The longest chain that fits wins, so `URL.Query().Get(name)` is preferred to `URL.Query()`.
 - The name is read when it is a string literal: `r.Header.Get("X-Forwarded-For")` is
   `header.X-Forwarded-For`.
+
+`[name]` is a property whose name is what is read: `{ on: "@sveltejs/kit#RequestEvent", chain:
+"params[name]", read: path }` makes `event.params.id`, `event.params['id']` and
+`const { id } = event.params` read `path.id`. A name destructured from a parameter starts its chain
+at the properties it is taken by: `({ params }) => params.id` reads what `event.params.id` reads.
 
 A `call` names a function and the positions of the request and of the name:
 `chi.URLParam(r, "id")` is `path.id`.
@@ -235,6 +246,113 @@ takes the client's address from the server or the platform, and `ipRestriction` 
 caller gives, neither of which a read rule names; `HonoRequest.json` and the other body readers read
 the body through `raw[key]()`.
 
+## Routes declared by files
+
+A framework that declares routes by files says so in `files`
+([D32](/decisions/#d32--routes-declared-by-files)):
+
+```yaml
+files:
+  routes: src/routes            # from the root of each package that has it
+  pattern: brackets
+  modules:
+    - name: +server             # the file, without its extension
+      exports:
+        - { name: GET, does: route, method: GET }
+        - { name: fallback, does: route, method: ANY }
+    - name: +page.server
+      exports:
+        - { name: load, does: route, method: GET, layouts: true }
+        - { name: actions, does: each, method: POST, path: "?/{name}", default: default }
+    - name: +layout.server
+      exports:
+        - { name: load, does: layout }
+  hooks:                        # files of the package, in front of every route, in order
+    - file: src/hooks.server
+      exports:
+        - { name: handle, does: use, receives: "@sveltejs/kit/hooks#Handle.input" }
+  compose: ["@sveltejs/kit/hooks#sequence"]
+  matchers:
+    - { file: "src/params/{matcher}", name: match }
+  remote:
+    suffix: .remote
+    path: "/_app/remote/${hash($file)}/$name"
+    calls:
+      - { call: "$app/server#query", method: GET }
+```
+
+| `does` | Effect |
+|---|---|
+| `route` | a route of the file's folder, with `method`; `layouts` puts the layouts of the folder and those above in front of it |
+| `each` | a route for each property of the exported object, at the folder's path followed by `path` (`{name}` is the property), the property named `default` at the folder's own path |
+| `layout` | a chain member of the routes in its folder and below that take `layouts`, outermost first |
+| `use` | for a hook: a chain member of every route |
+
+A route's chain is the hooks, then the matchers its parameters name, then its layouts. A call to a
+function `compose` lists is seen through: `handle = sequence(a, b)` puts `a`, then `b`. A module
+named `+page@name.server` resets to the layout of the folder above named `name`, `+page@` to the
+root's; a layout named so keeps its place and drops the layouts between it and the one it names. What each function receives first is the profile's `context`, or the export's `receives`.
+Two exports of a folder that serve the same method and path (a page's server `load` and its
+universal one) are one route with both as its handler; an endpoint beside a page stays a route of
+its own. The routes under the same nearest folder
+that holds a layout or is a route group are siblings, whose guards are compared.
+
+Modules whose name ends with `remote.suffix` are routes of their own, one for each export built by
+one of `remote.calls`, its handler the last function given to the call; `$file` and `$name` in
+`path` are the module's path and the export's name.
+
+## SvelteKit
+
+`profiles/sveltekit/application.yaml` reads an application built on SvelteKit 2 or 3
+([D35](/decisions/#d35--sveltekit-the-server-side-in-both-modes)). It reads the server side, the
+`.ts` and `.js` files, not the `.svelte` components:
+
+- **Detection**: a target whose code imports `@sveltejs/kit`, `@sveltejs/kit/hooks` or
+  `$app/server`, since applications list SvelteKit as a development dependency.
+- **Routes**, from `src/routes`: each method `+server` exports and its `fallback` (`ANY`); the `load`
+  of `+page.server` and `+page` (`GET`), with the layouts' `load` (`+layout.server`, `+layout`) in
+  front; each action of `+page.server`'s `actions` (`POST /path?/name`, `default` at the page's
+  path), with no layout in front, since actions run before any `load`; remote functions
+  (`*.remote.ts`, built by `query`, `query.batch`, `query.live`, `prerender`, `form`, `command`).
+- **The chain** of every route: `reroute` of `src/hooks`, then `handle` of `src/hooks.server`,
+  `sequence(…)` seen through, then the parameter's matcher (`src/params/<name>`, or `src/params`'
+  `defineParams` in SvelteKit 3).
+- **Reads** of the event: `request` is the standard `Request`; `params` (`path`), `locals`
+  (`context`), `url` (`query`, `path`, `host`), `cookies.get` (`cookie`), `getClientAddress()`
+  (`remoteaddr`); `getRequestEvent()` gives the event. `$lib` is `src/lib`; SvelteKit 3's `#lib`
+  is the package's own `imports`.
+- **Guards**: `if (!locals.user)` or `if (!locals.session)` (not `if (locals.user)`) followed by `error`, `redirect` or
+  `fail` is an `authn` check; a hook or a layout's `load` that refuses so answers on its own.
+- **Sinks**: `redirect`'s location, `event.fetch`.
+
+`profiles/sveltekit/framework.yaml` extends it for SvelteKit itself, `@sveltejs/kit` and its
+adapters in one repository: it adds Node's request (`IncomingMessage`'s headers, URL, method and
+socket) and what the server keeps for a request (`types#RequestStore`), and leaves out the code that
+runs in the browser.
+
+Measured on [Budget](https://github.com/JoshuaMart/Budget) at `cfce07b`, 46 files: 24 routes, each
+behind `handle`, which checks `locals.user`. On [Kener](https://github.com/rajnandan1/kener)
+v4.1.10, 329 files: 90 routes in seven route groups, behind `reroute` and a `sequence` of three
+hooks; `POST /manage/api` is the one route of the `(manage)` group without the layout's redirect.
+On SvelteKit 3.1.0, 274 files: 59 entry points:
+
+- **The server**: `internal_respond` and its `resolve`, reading `Origin` for the CSRF check,
+  `x-sveltekit-pathname` and `x-sveltekit-search` for remote functions, the `__data.json` suffix
+  and the trailing-slash parameter; the actions (`x-sveltekit-action`), the error page
+  (`x-sveltekit-error`), cookies, endpoints, the server's `fetch`, remote calls and forms.
+- **Redirects**: `redirect` and `validate_redirect_location`, which compare a location with the
+  origin of the request being served.
+- **Remote functions' server side**: `command` checks the method, `form` and `prerender` read the
+  URL.
+- **Adapters**: adapter-node's `handler`, through `getClientAddress` reading `ADDRESS_HEADER` and
+  `XFF_DEPTH`, and `get_origin` reading `PROTOCOL_HEADER`, `HOST_HEADER` and `PORT_HEADER`;
+  adapter-bun's `get_client_address` and `get_origin`; adapter-vercel's `X-Forwarded-For`;
+  `@sveltejs/kit/node`'s `getRequest`; the Vite dev and preview servers.
+
+What the index cannot read, the count records: the request of adapter-cloudflare's worker and of
+adapter-netlify's edge function is typed by a package outside the repository; `Server.respond`
+calls the instance `configure` imports with `await import()`.
+
 ## Hand counts
 
 Each profile is measured against targets counted by hand ([D16](/decisions/#d16--measured-against-hand-counted-targets)),
@@ -249,6 +367,9 @@ none invented. CI does both.
 | Wakapi `aba6a44` | application | 71, two of them with what the index could not read |
 | Hono v4.13.14 | framework | 108 |
 | Kaneo v2.48.0, `apps/api` | application | 211 |
+| SvelteKit 3.1.0 | framework | 59 |
+| Budget `cfce07b` | application | 24 |
+| Kener v4.1.10 | application | 90 |
 
 A count whose target is a folder of its repository says so (`dir: apps/api`): the target is read
 from git in that folder.

@@ -51,6 +51,7 @@ interface PackageJson {
   types?: string
   typings?: string
   exports?: unknown
+  imports?: unknown
   dependencies?: Record<string, string>
   peerDependencies?: Record<string, string>
   optionalDependencies?: Record<string, string>
@@ -124,6 +125,8 @@ interface Config {
 
 const sourceExtensions = ['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs']
 const conditions = ['types', 'import', 'module', 'node', 'default', 'require']
+// For the code a package's own `imports` name, what runs on the server first, its types last.
+const running = ['node', 'import', 'module', 'default', 'require', 'types']
 
 export class Resolver {
   private readonly sources: Set<string>
@@ -134,8 +137,17 @@ export class Resolver {
   private readonly texts: Map<string, string>
   private readonly cache = new Map<string, Resolved>()
 
+  // Specifiers a profile maps to a folder of each package (`$lib` to `src/lib`), for frameworks
+  // that configure them outside the target's files.
+  private readonly aliases: [string, string][]
+
   // `files` are every file the index read, `sources` those it parses.
-  constructor(files: TargetFile[], sources: Iterable<string>) {
+  constructor(
+    files: TargetFile[],
+    sources: Iterable<string>,
+    options: { aliases?: Record<string, string> } = {},
+  ) {
+    this.aliases = Object.entries(options.aliases ?? {})
     this.sources = new Set(sources)
     this.all = new Set(files.map((f) => f.path))
     this.texts = new Map(files.map((f) => [f.path, f.source]))
@@ -194,13 +206,24 @@ export class Resolver {
         if (found) return found
       }
     }
+    const pkg = this.packageOf(from)
+    // The package's own `imports`: `#lib/*` to `./src/lib/*`.
+    if (specifier.startsWith('#') && pkg) {
+      const found = this.subpath(pkg, pkg.json.imports, specifier)
+      if (found) return found
+    }
+    for (const [alias, dir] of this.aliases) {
+      if (specifier !== alias && !specifier.startsWith(`${alias}/`)) continue
+      const found = this.file(posix.join(pkg?.dir ?? '.', dir, specifier.slice(alias.length)))
+      if (found) return found
+    }
     const name = specifier.startsWith('@')
       ? specifier.split('/').slice(0, 2).join('/')
       : (specifier.split('/')[0] as string)
-    const pkg = this.byName.get(name)
-    if (pkg) {
+    const named = this.byName.get(name)
+    if (named) {
       const sub = specifier.slice(name.length)
-      const found = this.entry(pkg, sub ? `.${sub}` : '.')
+      const found = this.entry(named, sub ? `.${sub}` : '.')
       if (found) return found
     }
     return { external: externalModule(specifier) }
@@ -223,6 +246,39 @@ export class Resolver {
     }
     if (this.all.has(clean) || /\.(json|css|scss|svg|png|html|md|wasm)$/.test(clean)) {
       return { missing: clean }
+    }
+    return undefined
+  }
+
+  // The file a key of a package's `imports` maps a specifier to, through a `*` pattern and
+  // conditions.
+  private subpath(pkg: Package, map: unknown, specifier: string): { file: string } | undefined {
+    if (!map || typeof map !== 'object' || Array.isArray(map)) return undefined
+    const record = map as Record<string, unknown>
+    const targets: string[] = []
+    const pick = (value: unknown, rest: string): void => {
+      if (typeof value === 'string') targets.push(value.replaceAll('*', rest))
+      else if (Array.isArray(value)) for (const v of value) pick(v, rest)
+      else if (value && typeof value === 'object') {
+        const conditional = value as Record<string, unknown>
+        for (const condition of running)
+          if (condition in conditional) pick(conditional[condition], rest)
+      }
+    }
+    if (specifier in record) pick(record[specifier], '')
+    else {
+      for (const key of Object.keys(record)) {
+        const star = key.indexOf('*')
+        if (star < 0) continue
+        const head = key.slice(0, star)
+        const tail = key.slice(star + 1)
+        if (specifier.startsWith(head) && specifier.endsWith(tail))
+          pick(record[key], specifier.slice(head.length, specifier.length - tail.length))
+      }
+    }
+    for (const target of targets) {
+      const found = this.file(posix.join(pkg.dir, target))
+      if (found && 'file' in found) return found
     }
     return undefined
   }

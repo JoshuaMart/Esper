@@ -17,6 +17,9 @@ export interface Sink {
 export interface Library {
   fluent: Set<string>
   returns: Map<string, string>
+  // The members of types outside the target, by type and property: `better-auth#Auth` has an
+  // `api` that is a `better-auth#Auth.api`.
+  members: Map<string, Record<string, string>>
   keeps: Set<string>
   constants: Map<string, string>
   // By external reference: `ext:database/sql#DB.Query`.
@@ -34,6 +37,7 @@ export interface Library {
 interface LibraryFile {
   fluent?: string[]
   returns?: Record<string, string>
+  members?: Record<string, Record<string, string>>
   keeps?: string[]
   constants?: Record<string, string>
   sinks?: Partial<Record<SinkKind, string[]>>
@@ -71,6 +75,7 @@ export function loadLibrary(language: string): Promise<Library> {
       return {
         fluent: new Set(file.fluent ?? []),
         returns: new Map(Object.entries(file.returns ?? {})),
+        members: new Map(Object.entries(file.members ?? {})),
         keeps: new Set(file.keeps ?? []),
         constants: new Map(Object.entries(file.constants ?? {})),
         sinks,

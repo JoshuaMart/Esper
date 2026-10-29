@@ -1,0 +1,35 @@
+# SvelteKit itself (`@sveltejs/kit` and its adapters): its request surface is each exported
+# function, class method and object method that reads the request, directly or through what it
+# calls, such as the server's `respond` checking `Origin` against CSRF; and each of its internal
+# handlers, the functions that take the request or the request event. Its code is JavaScript typed
+# by its documentation comments, which the index reads as TypeScript's types (D24).
+name: sveltekit
+kind: framework
+language: typescript
+extends: [sveltekit]
+detect:
+  module: ["@sveltejs/kit"]
+surface:
+  exported: true
+  handlers: true
+  # The code that runs in the browser: the client router, remote functions' client side and
+  # `$app/forms`, which build the requests the server reads.
+  except:
+    - "**/src/runtime/client/**"
+    - "**/src/runtime/app/*/client.js"
+    - "**/src/runtime/app/*/client.svelte.js"
+members:
+  # What the server keeps for the request it serves, which remote functions and `getRequestEvent`
+  # read back.
+  # `types` is the alias SvelteKit's own `tsconfig` gives its declaration files.
+  types#RequestStore:
+    event: "@sveltejs/kit#RequestEvent"
+reads:
+  # Node's request, which adapter-node and `@sveltejs/kit/node` turn into a `Request`.
+  - { on: "node:http#IncomingMessage", chain: "headers[name]", read: header }
+  - { on: "node:http#IncomingMessage", chain: headers, read: header }
+  - { on: "node:http#IncomingMessage", chain: url, read: path }
+  - { on: "node:http#IncomingMessage", chain: method, read: method }
+  - { on: "node:http#IncomingMessage", chain: socket.remoteAddress, read: remoteaddr }
+  - { on: "node:http#IncomingMessage", chain: connection.remoteAddress, read: remoteaddr }
+  - { on: "node:http#IncomingHttpHeaders", chain: "[name]", read: header }

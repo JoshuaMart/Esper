@@ -1,6 +1,12 @@
 import type { Module } from './language.ts'
 import { languages } from './languages.ts'
-import { mergeSinks, type Profile, type ResolvedProfile, resolveProfile } from './profile.ts'
+import {
+  mergeMembers,
+  mergeSinks,
+  type Profile,
+  type ResolvedProfile,
+  resolveProfile,
+} from './profile.ts'
 import type { TargetFile } from './target.ts'
 
 // Which profile reads a target (D5, D11): the framework itself when one of its modules is the
@@ -81,6 +87,7 @@ export function detectProfile(
   const request = parts.find((p) => p.request)?.request
   const response = parts.find((p) => p.response)?.response
   const context = parts.find((p) => p.context)?.context
+  const tree = parts.find((p) => p.files)?.files
   const merged: ResolvedProfile = {
     name: parts.map((p) => p.name).join('+'),
     kind,
@@ -93,9 +100,15 @@ export function detectProfile(
     adapters: [...new Set(parts.flatMap((p) => p.adapters))],
     handlerTypes: [...new Set(parts.flatMap((p) => p.handlerTypes))],
     routers: parts.flatMap((p) => p.routers),
+    ...(tree ? { files: tree } : {}),
+    aliases: Object.assign({}, ...parts.map((p) => p.aliases)),
+    members: mergeMembers(parts.map((p) => p.members)),
+    returns: Object.assign({}, ...parts.map((p) => p.returns)),
+    refusals: [...new Set(parts.flatMap((p) => p.refusals))],
     surface: {
       exported: parts.some((p) => p.surface.exported),
       handlers: parts.some((p) => p.surface.handlers),
+      except: parts.flatMap((p) => p.surface.except),
     },
     guards: parts.flatMap((p) => p.guards),
     reads: parts.flatMap((p) => p.reads),

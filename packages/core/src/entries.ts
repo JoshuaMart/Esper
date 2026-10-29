@@ -43,11 +43,28 @@ export interface Route {
 
 // A route pattern, normalised (D7): parameters as `{name}`, catch-alls as `{name...}`, no trailing
 // slash but on the root. `servemux` patterns may carry a method and end in `/` for a subtree;
-// `colon` patterns write parameters `:name`, optionally with a pattern (`:id{[0-9]+}`) or a `?`.
+// `colon` patterns write parameters `:name`, optionally with a pattern (`:id{[0-9]+}`) or a `?`;
+// `brackets` patterns are the folders of a route tree, `[id]`, `[[optional]]`, `[...rest]`,
+// `[id=matcher]`, a character escaped `[x+2f]` or `[u+00e9]`, and `(group)`, no part of the path.
 export function normalisePattern(
   pattern: string,
-  syntax: 'braces' | 'servemux' | 'colon',
+  syntax: 'braces' | 'servemux' | 'colon' | 'brackets',
 ): { method?: string; path: string } {
+  if (syntax === 'brackets') {
+    const segments = pattern
+      .split('/')
+      .filter((s) => s !== '' && !/^\(.*\)$/.test(s))
+      .map((s) =>
+        s
+          .replace(/\[([xu])\+([0-9a-fA-F]+)\]/g, (_, __, code: string) =>
+            String.fromCodePoint(Number.parseInt(code, 16)),
+          )
+          .replace(/\[\[([\w$]+)(=[\w$]+)?\]\]/g, '{$1}')
+          .replace(/\[\.\.\.([\w$]+)(=[\w$]+)?\]/g, '{$1...}')
+          .replace(/\[([\w$]+)(=[\w$]+)?\]/g, '{$1}'),
+      )
+    return { path: `/${segments.join('/')}` }
+  }
   let text = pattern.trim()
   let method: string | undefined
   const withMethod = /^([A-Z]+)\s+(\S.*)$/.exec(text)
@@ -76,6 +93,20 @@ export function joinPath(prefix: string, path: string): string {
   const joined = `${prefix.replace(/\/+$/, '')}/${path.replace(/^\/+/, '')}`
   const clean = joined.replace(/\/{2,}/g, '/')
   return clean.length > 1 ? clean.replace(/\/$/, '') : '/'
+}
+
+// A glob of paths: `**` any folders, `*` any characters of a name.
+export function glob(pattern: string): RegExp {
+  let source = ''
+  for (const part of pattern.split('/')) {
+    if (part === '**') source += '(?:[^/]+/)*'
+    else
+      source += `${part
+        .split('*')
+        .map((s) => s.replace(/[.+?^${}()|[\]\\]/g, '\\$&'))
+        .join('[^/]*')}/`
+  }
+  return new RegExp(`^${source.replace(/\/$/, '').replace(/\(\?:\[\^\/\]\+\/\)\*$/, '.*')}$`)
 }
 
 const sha256 = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex')
@@ -147,7 +178,11 @@ export function addEntries(
       })
     }
   }
-  const guardRules = new Map(profile.guards.map((g) => [`ext:${g.call}`, g.kind]))
+  const guardRules = new Map(
+    profile.guards.flatMap((g): [string, string][] =>
+      'call' in g ? [[`ext:${g.call}`, g.kind]] : [],
+    ),
+  )
   // Gives an entry the reads and signals of what some of its members reach.
   const take = (
     ref: string,
@@ -245,6 +280,22 @@ export function addEntries(
       }
     }
 
+    // A check that refuses the request, in the handler, a chain member, or what they call: the
+    // function that makes it guards the route, by the kind its profile gives the check.
+    const checked = new Set<string>()
+    for (const member of [...route.chain, route.handler]) {
+      for (const decl of reachFrom(member.targets.map((t) => t.ref)).keys()) {
+        for (const fact of factsOf.get(decl) ?? []) {
+          const key = `${fact.value}\0${fact.citation.file}:${fact.citation.line}`
+          if (fact.kind !== 'guard' || checked.has(key)) continue
+          checked.add(key)
+          graph.facts.push({ ...fact, node: ref, data: { ...fact.data, via: decl } })
+          if (!guards.has(fact.value))
+            guards.set(fact.value, { citation: fact.citation, text: member.text })
+        }
+      }
+    }
+
     // Reads and signals, from what the handler and the chain reach.
     const seen = new Set<string>()
     take(ref, seen, 'handler', [route.handler], fromTheHandler)
@@ -307,8 +358,11 @@ export function addEntries(
   let surface = 0
   const entries: GraphNode[] = []
   if (profile.kind === 'framework' && options.surfaced) {
+    const excepted = profile.surface.except.map(glob)
     for (const node of graph.nodes) {
       if (node.kind !== 'decl' || node.data?.literal || !node.file) continue
+      const file = node.file
+      if (excepted.some((pattern) => pattern.test(file))) continue
       if (!options.surfaced(node)) continue
       const reached = reachFrom([node.ref])
       const reads = [...reached.keys()].some((decl) =>

@@ -237,18 +237,23 @@ names the same call outside the target too, its own name is kept: it is the modu
 it from, which profiles and `library.yaml` name (`hono/cors#cors`), while SCIP names the package
 that declares it. Columns are converted to UTF-8 bytes from the index's UTF-16 code units.
 
-Measured at the counted commits:
+Measured at the counted commits, with the TypeScript module as it is since M7:
 
-| | Hono v4.13.14 | Kaneo v2.48.0, `apps/api` |
-|---|---|---|
-| dependencies | installed from `pnpm-lock.yaml` | none: the lockfile is at the repository's root |
-| calls named by scip-typescript | 2190 of 3646 | 4584 of 15171 |
-| guessed edges, tree-sitter alone | 109 of 2016 | 103 of 9980 |
-| guessed edges, with scip-typescript | 12 of 3268 | 103 of 11250 |
-| calls without an edge, tree-sitter alone | 1716 | 5197 |
-| calls without an edge, with scip-typescript | 432 | 3927 |
-| entry points, as counted by hand | 108 | 211 |
-| time, image and dependencies there | about 12 s | about 7 s |
+| | Hono v4.13.14 | Kaneo v2.48.0, `apps/api` | Budget `cfce07b` |
+|---|---|---|---|
+| dependencies | installed from `pnpm-lock.yaml` | none: the lockfile is at the repository's root | installed from `pnpm-lock.yaml` |
+| calls named by scip-typescript | 2180 of 3646 | 4576 of 15171 | 414 of 891 |
+| guessed edges, tree-sitter alone | 106 of 2035 | 85 of 10055 | none of 554 |
+| guessed edges, with scip-typescript | 9 of 3277 | 85 of 11317 | none of 831 |
+| calls without an edge, tree-sitter alone | 1697 | 5123 | 337 |
+| calls without an edge, with scip-typescript | 423 | 3861 | 60 |
+| entry points, as counted by hand | 108 | 211 | 24 |
+| time, image and dependencies there | about 12 s | about 7 s | about 5 s |
+
+On a SvelteKit application, scip-typescript type-checks the `.ts` and `.js` files as the index
+reads them; the `.svelte` components, which TypeScript does not read either without Svelte's own
+tooling, take no part, and the types SvelteKit generates (`./$types`) are not there, since nothing
+of the target runs.
 
 Without the dependencies, scip-typescript still names the calls between the target's own modules;
 calls on values from outside it, and the guesses on them, stay as tree-sitter left them.
@@ -258,7 +263,7 @@ calls on values from outside it, and the guesses on them, stay as tree-sitter le
 `packages/core/test/analyzer.test.ts` checks the manifests and the import: a file with one invalid
 line, or one place that does not match the snapshot, is refused whole. `packages/core/test/scip-go.test.ts`
 runs scip-go in Docker on chi 5.3.2 and Wakapi at their counted commits, and on a folder that is not
-a git checkout; `packages/core/test/scip-typescript.test.ts` runs scip-typescript on Hono and
-Kaneo's API at theirs, and on a folder without a lockfile. Without Docker these tests are skipped and say so; without the targets of
+a git checkout; `packages/core/test/scip-typescript.test.ts` runs scip-typescript on Hono,
+Kaneo's API and Budget at theirs, and on a folder without a lockfile. Without Docker these tests are skipped and say so; without the targets of
 `pnpm fetch-targets`, the ones on the counted targets are. GitHub's Ubuntu runners have Docker, so CI
 runs them.

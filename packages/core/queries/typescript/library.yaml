@@ -184,6 +184,7 @@ returns:
   drizzle-orm/d1#drizzle: drizzle-orm/d1#DrizzleD1Database
   drizzle-orm/neon-http#drizzle: drizzle-orm/neon-http#NeonHttpDatabase
   drizzle-orm/bun-sqlite#drizzle: drizzle-orm/bun-sqlite#BunSQLiteDatabase
+  better-auth#betterAuth: better-auth#Auth
   globalThis#Proxy: "@0"
   mysql2/promise#createPool: mysql2/promise#Pool
   mysql2/promise#createConnection: mysql2/promise#Connection
@@ -191,6 +192,11 @@ returns:
   mysql2#createConnection: mysql2#Connection
 
 # Types whose methods return the type itself, so that a chain of calls keeps it.
+# The members of types outside the target that the calls above give, for the calls made on them.
+members:
+  better-auth#Auth:
+    api: better-auth#Auth.api
+
 fluent: []
 
 sinks:
@@ -304,6 +310,18 @@ data:
     - pg#Client.query
     - mysql2/promise#Pool.execute
     - mysql2/promise#Connection.execute
+    # better-auth: its handler and the calls that create, change or end a user or a session.
+    - better-auth#Auth.handler
+    - better-auth#Auth.api.signUpEmail
+    - better-auth#Auth.api.signInEmail
+    - better-auth#Auth.api.signOut
+    - better-auth#Auth.api.updateUser
+    - better-auth#Auth.api.deleteUser
+    - better-auth#Auth.api.changePassword
+    - better-auth#Auth.api.setPassword
+    - better-auth#Auth.api.resetPassword
+    - better-auth#Auth.api.revokeSession
+    - better-auth#Auth.api.revokeSessions
   read:
     - drizzle-orm/node-postgres#NodePgDatabase.select
     - drizzle-orm/node-postgres#NodePgDatabase.selectDistinct
@@ -333,6 +351,9 @@ data:
     - pg#Client.query
     - mysql2/promise#Pool.query
     - mysql2/promise#Connection.query
+    - better-auth#Auth.api.getSession
+    - better-auth#Auth.api.listSessions
+    - better-auth#Auth.api.listUserAccounts
 
 decoders:
   - globalThis#JSON.parse

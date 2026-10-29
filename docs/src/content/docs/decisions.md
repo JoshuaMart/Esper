@@ -5,7 +5,8 @@ description: The choices that shape Esper, each with its reasons and the alterna
 
 Each decision says what is chosen, why, and what it rules out. A decision is **proposed** until it
 is confirmed, and **settled** once it is; a settled decision changes only through a new entry that
-says why. Versions and behaviours cited here were checked on 2026-10-28.
+says why. Versions and behaviours cited here were checked on 2026-10-28, and those of D32 to D35 on
+2026-10-29.
 
 | # | Decision | Status |
 |---|---|---|
@@ -40,6 +41,10 @@ says why. Versions and behaviours cited here were checked on 2026-10-28.
 | [D29](#d29--the-map-a-groups-shared-code-drawn-bounded) | The map: the code a group of entry points shares, drawn and bounded | settled |
 | [D30](#d30--advisories-belong-to-the-project-and-are-placed-on-each-snapshot) | Advisories belong to the project and are placed on each snapshot when it is read; how a fix is read | settled |
 | [D31](#d31--enrichment-as-built-questions-checks-and-two-providers) | Enrichment as built: the questions, the checks, and how each provider runs; `--safe-mode` for bounded runs, `--setting-sources ""` for exploring ones; bounded questions on Sonnet 5.5 at medium effort | settled |
+| [D32](#d32--routes-declared-by-files) | Routes declared by files: a profile's route tree, hooks, matchers and layouts | settled |
+| [D33](#d33--javascript-typed-by-its-comments-and-types-a-profile-states) | JavaScript typed by its documentation comments; types outside the target as a profile or the library states them | settled |
+| [D34](#d34--a-check-that-refuses-is-a-guard) | A check that refuses is a guard; a function that answers with a refusal can answer on its own | settled |
+| [D35](#d35--sveltekit-the-server-side-in-both-modes) | SvelteKit: the server side, in both modes; its browser code is not its request surface | settled |
 
 ## D1 — What Esper is and is not
 
@@ -1322,3 +1327,162 @@ provider runs. Built in M6.
 
 **Rules out.** An answer stored without its checks; a claim that a changed node still counts; a
 run started in the target, or with any MCP server but Esper's read-only one.
+
+## D32 — Routes declared by files
+
+The first framework whose routes are not calls ([D10](#d10--frameworks-as-profiles) foresaw "a
+folder convention"): what the profile format says of a route tree, and how the TypeScript module
+reads one. Built in M7.
+
+**Decision.**
+
+- **A profile's `files`** names the folder of the route tree (`src/routes`, from the root of each
+  package that has one), how a folder's name is written (`brackets`: `[id]`, `[[optional]]`,
+  `[...rest]`, `[id=matcher]`, an escaped character `[x+2e]`, and a `(group)` that takes no part in
+  the path), and what each export of each file declares, by the file's name without its extension:
+  a `route` with its method, `each` property of an exported object a route at the folder's path and
+  a suffix (`?/{name}`, the property named `default` at the folder's own path), a `layout`, or, for
+  the files of `hooks`, a chain member of every route.
+- **A route's chain** is, in order: the hooks (each export, a call to a function `compose` lists
+  seen through, `sequence(a, b)` being `a` then `b`), the matchers its parameters name, and, for a
+  route whose export takes `layouts`, the layouts of its folder and of those above, outermost
+  first. A module named `+page@name` resets to the layout of the folder above named so, `@` alone
+  to the root's; a layout named so (`+layout@.server`) keeps its own place and drops the layouts
+  between it and the one it names. What a function receives first is the profile's `context`, or the export's own
+  (`receives`).
+- **Siblings**, whose guards are compared ([D6](#d6--the-graph-model)), are the routes under the
+  same nearest folder that holds a layout or is a route group.
+- **One route per method and path of a folder**: two exports that serve the same request (a page's
+  server `load` and its universal one) are one route whose handler is both; an endpoint beside a
+  page (`+server` and `+page`) answers apart, its own route without the layouts.
+- **Modules whose exports are built by calls the profile names** (`remote`, by the suffix of their
+  name) are routes of their own, at a path the profile writes with the module's path and the
+  export's name; the part the build derives is written as an expression, as for paths the index
+  cannot read.
+- **The shared core** learns the syntax of a route tree's folders (`normalisePattern`), as it knows
+  the other path syntaxes, and globs of files (`surface.except`, D35); nothing in it names a
+  framework.
+
+**Why.** A route tree is still a profile's data: the names of the files, of their exports and what
+each does differ from one framework to the next (Nuxt and Next.js write theirs otherwise), and a
+module of the language reads them. SvelteKit runs a layout's `load` for the pages under it, never
+for an endpoint, and after a form action rather than before it, so a layout is in front of a
+page's `load` only: an action protected by its layout alone is not protected, and the divergent
+guard rule now sees it. SvelteKit also starts the layouts' `load` and the page's together; a
+layout's refusal decides the response, the page's `load` still runs, which the chain's order does
+not say.
+
+**Rules out.** A route interpreter per framework; layouts applied to every route of their folder;
+a page whose server code is only in its component (`+page.svelte`), which Esper does not read, as
+an entry point: what runs on the server for it is the hooks and its layouts, which are in front of
+the routes that have a server file. A layout reset written only in a component's name
+(`+page@.svelte`) is not seen.
+
+## D33 — JavaScript typed by its comments, and types a profile states
+
+This extends [D24](#d24--typescript-and-javascript-as-their-syntax-states-them) for code that states
+its types where TypeScript reads them in JavaScript: SvelteKit is written so. Built in M7.
+
+**Decision.**
+
+- **Documentation comments are types in JavaScript files**: `@param {T} name` (a destructured
+  parameter by its position), `@type {T}` on a declaration, a field, a parameter written in place
+  or a cast `/** @type {T} */ (value)`, `@returns {T}`, `@typedef {T} Name` and
+  `@import { A } from 'm'`. Each type is parsed by the TypeScript grammar and stands where an
+  annotation would; `import('m').T` is the type a module exports.
+- **A type of the target the index does not read**, such as one a declaration file (`.d.ts`)
+  declares, is named by the package it belongs to (`@sveltejs/kit#RequestEvent`), as D25 names a
+  framework's own types; `Pick<T, …>`, `Omit`, `Partial` and the like have the members of `T`, and
+  `a ?? b` the type of `a` when it is known.
+- **Members of types outside the target**, which the index cannot read, are stated by a profile's
+  `members` (what `RequestEvent.request` is) and the language library's (better-auth's `auth.api`),
+  and what functions outside it return by `returns`. A name destructured from a parameter has the
+  type of the property it is taken by, and its reads start at that property:
+  `({ locals }) => locals.user` reads what `event.locals.user` reads.
+- **Imports** also resolve through the `imports` of the nearest `package.json` (`#lib/*`) and
+  through the folders a profile maps a specifier to (`aliases`, `$lib`), which a framework
+  configures outside the target's files.
+- **Reads**: a chain item `[name]` is a property whose name is what is read (`params.id`,
+  `headers['host']`), and a read is stated once per declaration, value and line. A method of an
+  object literal a function defines is reached through that function, as its literals are.
+- **The measures of D24 and D26 move**: on Hono v4.13.14, 2035 call edges, 106 guessed, 1697 calls
+  without one (2016, 109 and 1716 before), and 9 guessed of 3277 with scip-typescript; on Kaneo's
+  API, 10055 edges, 85 guessed, 5123 without one. The hand counts are unchanged.
+
+**Why.** Without its comments SvelteKit's code states almost no type: no request would be found,
+and none of its request surface. Stating the members of the framework's types once in its profile
+is what lets the standard `Request`'s rules read `event.request`, as Hono's context reads
+`c.req`.
+
+**Rules out.** Reading `node_modules` or the declaration files a build generates (`./$types`).
+
+## D34 — A check that refuses is a guard
+
+This amends how guards are found ([D6](#d6--the-graph-model), [D27](#d27--a-guarding-chain-member-is-known-by-the-code-that-refuses))
+for frameworks whose functions refuse by throwing or returning an error rather than by not calling
+a next one. Built in M7.
+
+**Decision.**
+
+- **A check is a guard**: a function that, in a condition finding a value read from the request
+  missing (`!locals.user`, `user == null` for a name that holds it), calls one of the profile's `refusals` (`error(401)`,
+  `redirect(303, …)`, `fail(401)`) is a guard of the kind the profile's check rule gives:
+  `{ check: context.user, kind: authn }`. A route takes the guards of its handler, its chain
+  members and what they call, each cited where the check is.
+- **A function given the request that calls a refusal in a condition answers on its own**
+  (`short-circuit`), as a middleware that returns before calling the next one does: a layout's
+  `load` that redirects without a session guards the pages under it, known by its code (D27).
+
+**Why.** D6 counted "a call in the handler that returns an error response before the handler's
+work" as a guard; SvelteKit's handlers check `locals.user` themselves, and an action without the
+check its siblings make is what an auditor looks for. The kind comes from the profile, since a
+value named `user` set by the hooks is the authenticated user by the framework's convention, not
+by anything the code states.
+
+**Rules out.** A guard kind guessed from a value's name by the index; a check on any request value
+counted as an authentication; `if (locals.user) redirect(…)`, which sends a user already signed in
+elsewhere, counted as a guard.
+
+## D35 — SvelteKit: the server side, in both modes
+
+The two SvelteKit profiles of [D5](#d5--two-kinds-of-target-applications-and-the-frameworks-themselves),
+for SvelteKit 2 and 3 (3.1.0, the latest release on 2026-10-29). Built in M7.
+
+**Decision.**
+
+- **An application** is known by its server code importing `@sveltejs/kit`, `@sveltejs/kit/hooks`
+  or `$app/server`, since SvelteKit is a development dependency of the applications built on it.
+  Its routes are the files of `src/routes` (D32): each method `+server` exports and its
+  `fallback`; the `load` of `+page.server` and of `+page` (a `GET` of the page, the layouts in
+  front) and each action (a `POST` to `?/<name>`, no layout in front); `+layout.server` and
+  `+layout` loads as layouts. The chain is `reroute` of `src/hooks`, `handle` of
+  `src/hooks.server` with `sequence` seen through, then the matchers of `src/params/<name>`
+  (SvelteKit 2) or of `src/params`' `defineParams` (SvelteKit 3). Remote functions (`*.remote.ts`,
+  built by `query`, `form`, `command`, `prerender`) are routes at
+  `/_app/remote/${hash(<module>)}/<name>`. `$lib` maps to `src/lib`; SvelteKit 3's `#lib` is the
+  package's own import.
+- **What it reads**: the event's `request` is a `Request`; its `params`, `locals`, `url`,
+  `cookies.get` and `getClientAddress()`; `getRequestEvent()` gives the event. `locals.user` and
+  `locals.session` checked against `error`, `redirect` or `fail` are `authn` guards (D34); `event.fetch`
+  is a fetch sink and `redirect`'s location a redirect sink.
+- **The framework itself** is `@sveltejs/kit` and its adapters, read as one target: each exported
+  declaration, and each function that takes the request or the event, that reads the request,
+  Node's request included (adapter-node, `@sveltejs/kit/node`, the Vite dev and preview servers).
+  The code that runs in the browser builds the requests the server reads and is left out, by globs
+  of files (`surface.except`).
+- **Esper reads the server side**: `.ts` and `.js`, not the `.svelte` components, whose markup and
+  scripts tree-sitter does not parse here.
+- **Measured** on 2026-10-29: Budget at `cfce07b` (SvelteKit 3.1, better-auth, drizzle,
+  adapter-bun), 24 routes; Kener v4.1.10 (SvelteKit 2.53, route groups, layouts, hooks in a
+  `sequence`, adapter-node), 90 routes, one of them, `POST /manage/api`, without the layout's
+  redirect its group's pages have; SvelteKit 3.1.0, 59 entry points, from `internal_respond`
+  checking `Origin` and reading `x-sveltekit-pathname` to each adapter's `getClientAddress`
+  reading `ADDRESS_HEADER` or `X-Forwarded-For`. Each matches its hand count, the applications
+  also a script written apart from Esper.
+
+**Why.** Budget, the auditor's own application, is SvelteKit 3; Kener exercises what Budget does
+not (groups, layouts, a sequence of hooks). Code that runs in the browser reads a `Request` too,
+the one it builds: counted, it would be half of SvelteKit's surface and none of the server's.
+
+**Rules out.** Reading the components; counting the browser's code as the framework's request
+surface.

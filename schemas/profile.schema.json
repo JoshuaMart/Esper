@@ -83,8 +83,42 @@
         "$ref": "#/$defs/router"
       }
     },
+    "files": {
+      "$ref": "#/$defs/files"
+    },
+    "aliases": {
+      "description": "Import specifiers a framework maps to a folder of the package that uses it, outside the target's own configuration: `$lib` to `src/lib`, for `$lib` and `$lib/…`.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "members": {
+      "description": "The members of types outside the target, which the index cannot read: for each type, the type of each property, so that `({ request }) => …` given a `@sveltejs/kit#RequestEvent` reads a `globalThis#Request`.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": {
+          "$ref": "#/$defs/symbol"
+        }
+      }
+    },
+    "returns": {
+      "description": "What functions outside the target return, by symbol: `$app/server#getRequestEvent` returns a `@sveltejs/kit#RequestEvent`.",
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/symbol"
+      }
+    },
+    "refusals": {
+      "description": "Calls that answer the request with a refusal (an error, a redirect, a failure), for the guards that are checks.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/symbol"
+      }
+    },
     "surface": {
-      "description": "For a framework: what its request surface is. `exported` makes each exported function, and each exported method of an exported type, an entry point when what it reaches reads the request. `handlers` makes each function and method that takes a response writer and the request an entry point, exported or not: the framework's internal handlers.",
+      "description": "For a framework: what its request surface is. `exported` makes each exported function, and each exported method of an exported type, an entry point when what it reaches reads the request. `handlers` makes each function and method that takes a response writer and the request an entry point, exported or not: the framework's internal handlers. `except` leaves out the files of code that does not serve requests.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
@@ -93,6 +127,13 @@
         },
         "handlers": {
           "type": "boolean"
+        },
+        "except": {
+          "description": "Files whose code is not part of the request surface, as globs from the target's root (`**` any folders, `*` any name): a framework's code that runs in the browser.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },
@@ -215,8 +256,8 @@
           }
         },
         "pattern": {
-          "description": "How a route's path is written: `braces` for `/items/{id}`, `{id:[0-9]+}` and `*`; `servemux` for `GET /items/{id}`, `{path...}` and a trailing `/` for a subtree; `colon` for `/items/:id`, `:id{[0-9]+}`, `:id?` and `*`.",
-          "enum": ["braces", "servemux", "colon"]
+          "description": "How a route's path is written: `braces` for `/items/{id}`, `{id:[0-9]+}` and `*`; `servemux` for `GET /items/{id}`, `{path...}` and a trailing `/` for a subtree; `colon` for `/items/:id`, `:id{[0-9]+}`, `:id?` and `*`. `brackets` for a folder of a route tree: `[id]`, `[[optional]]`, `[...rest]`, `[id=matcher]`, and `(group)`, which takes no part in the path.",
+          "enum": ["braces", "servemux", "colon", "brackets"]
         },
         "ordered": {
           "description": "Middleware applies only to the routes registered after it, and only to those its own path matches (`use('/admin/*', auth)`), as Hono's does; otherwise to every route of the router.",
@@ -305,7 +346,7 @@
         },
         "pattern": {
           "description": "How this method's paths are written, when not as the router's.",
-          "enum": ["braces", "servemux", "colon"]
+          "enum": ["braces", "servemux", "colon", "brackets"]
         }
       }
     },
@@ -338,9 +379,9 @@
           ]
         },
         "chain": {
-          "description": "Fields and calls on the request, in order. `(name)` marks the argument that names what is read; `()` a call whose arguments do not matter.",
+          "description": "Fields and calls on the request, in order. `(name)` marks the argument that names what is read; `()` a call whose arguments do not matter; `[name]` a property whose name says what is read, written `.id` or `['id']` (`params[name]`).",
           "type": "string",
-          "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*(\\((name)?\\))?(\\.[A-Za-z_$][A-Za-z0-9_$]*(\\((name)?\\))?)*$"
+          "pattern": "^([A-Za-z_$][A-Za-z0-9_$]*(\\((name)?\\))?|\\[name\\])(\\.[A-Za-z_$][A-Za-z0-9_$]*(\\((name)?\\))?|\\[name\\])*$"
         },
         "call": {
           "$ref": "#/$defs/symbol"
@@ -380,15 +421,184 @@
       }
     },
     "guard": {
+      "description": "A call that can refuse a request (`basicAuth`), or a check: a function that refuses the request, by one of the profile's `refusals`, when a value read from it is missing (`context.user`, for `if (!locals.user) error(401)`).",
       "type": "object",
       "additionalProperties": false,
-      "required": ["call", "kind"],
+      "required": ["kind"],
+      "oneOf": [
+        {
+          "required": ["call"]
+        },
+        {
+          "required": ["check"]
+        }
+      ],
       "properties": {
         "call": {
           "$ref": "#/$defs/symbol"
         },
+        "check": {
+          "type": "string",
+          "pattern": "^(header|query|path|body|cookie|form|host|remoteaddr|method|context)(\\.[^\\s]+)?$"
+        },
         "kind": {
           "enum": ["authn", "authz-role", "authz-owner", "csrf", "rate-limit", "validation"]
+        }
+      }
+    },
+    "export": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "does"],
+      "properties": {
+        "name": {
+          "description": "The export's name.",
+          "type": "string"
+        },
+        "does": {
+          "description": "`route`: a route of the file's folder; `each`: a route for each property of the object it exports, at the folder's path followed by `path`, and the property named `default` at the folder's own path; `layout`: a chain member of the routes in its folder and below whose export takes `layouts`, outermost first; `use`: a chain member of every route.",
+          "enum": ["route", "each", "layout", "use"]
+        },
+        "method": {
+          "description": "The route's HTTP method, or `ANY`.",
+          "type": "string",
+          "pattern": "^[A-Z]+$"
+        },
+        "path": {
+          "description": "For `each`: what follows the folder's path, where `{name}` is the property's name (`?/{name}`).",
+          "type": "string"
+        },
+        "default": {
+          "description": "For `each`: the property that is the route at the folder's own path.",
+          "type": "string"
+        },
+        "layouts": {
+          "description": "For `route`: the `layout` exports of its folder and those above apply.",
+          "type": "boolean"
+        },
+        "receives": {
+          "description": "What the function receives first, when it is not the profile's `context` (`@sveltejs/kit#HandleInput` for `handle`).",
+          "$ref": "#/$defs/symbol"
+        }
+      }
+    },
+    "files": {
+      "description": "Routes declared by files rather than calls: the folders of a route tree are its path, and the exports of each file what is served there (D32).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["routes", "pattern", "modules"],
+      "properties": {
+        "routes": {
+          "description": "The folder of the route tree, from the root of the package that uses the framework.",
+          "type": "string"
+        },
+        "pattern": {
+          "description": "How a folder's name is written.",
+          "enum": ["brackets"]
+        },
+        "modules": {
+          "description": "The files of the route tree, by their name without the extension, and what each export declares.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "exports"],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "exports": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/export"
+                }
+              }
+            }
+          }
+        },
+        "hooks": {
+          "description": "Files of the package, by their path without the extension, whose exports apply to every route, in the order listed.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["file", "exports"],
+            "properties": {
+              "file": {
+                "type": "string"
+              },
+              "exports": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/export"
+                }
+              }
+            }
+          }
+        },
+        "compose": {
+          "description": "Functions whose arguments are a chain, in order: `@sveltejs/kit/hooks#sequence`.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/symbol"
+          }
+        },
+        "matchers": {
+          "description": "Where the matcher a parameter names (`[id=integer]`) is: a file, by its path without the extension where `{matcher}` is the matcher's name, and the export; or a property of an export, built by a function `through` lists.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["file", "name"],
+            "properties": {
+              "file": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "property": {
+                "type": "string"
+              },
+              "through": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/symbol"
+                }
+              }
+            }
+          }
+        },
+        "remote": {
+          "description": "Modules, by the suffix of their name, whose exports built by these calls are routes of their own, at `path`: `$file` is the module's path, `$name` the export's.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["suffix", "path", "calls"],
+          "properties": {
+            "suffix": {
+              "type": "string"
+            },
+            "path": {
+              "type": "string"
+            },
+            "calls": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["call", "method"],
+                "properties": {
+                  "call": {
+                    "$ref": "#/$defs/symbol"
+                  },
+                  "method": {
+                    "type": "string",
+                    "pattern": "^[A-Z]+$"
+                  }
+                }
+              }
+            }
+          }
         }
       }
     }

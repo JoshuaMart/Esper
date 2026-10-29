@@ -1,0 +1,138 @@
+# SvelteKit, for an application built on it: routes declared by the files of `src/routes`, the
+# hooks of `src/hooks.server` and `src/hooks` in front of every route, the layouts' `load` in front
+# of the pages under them, and what each reads from the request event. The server side only: the
+# `.svelte` components are not read. SvelteKit 2 and 3 alike (D32).
+name: sveltekit
+kind: application
+language: typescript
+detect:
+  # SvelteKit is a development dependency of the applications built on it: an application is known
+  # by its server code importing it.
+  dependency: ["@sveltejs/kit"]
+  import: ["@sveltejs/kit", "@sveltejs/kit/hooks", "$app/server"]
+request: globalThis#Request
+# A route's function, a layout's `load` and a remote function receive the request event first.
+context: "@sveltejs/kit#RequestEvent"
+# SvelteKit 2's alias for `src/lib`; SvelteKit 3 replaces it with the package's own `#lib` import.
+aliases:
+  $lib: src/lib
+files:
+  routes: src/routes
+  pattern: brackets
+  modules:
+    - name: +server
+      exports:
+        - { name: GET, does: route, method: GET }
+        - { name: HEAD, does: route, method: HEAD }
+        - { name: POST, does: route, method: POST }
+        - { name: PUT, does: route, method: PUT }
+        - { name: PATCH, does: route, method: PATCH }
+        - { name: DELETE, does: route, method: DELETE }
+        - { name: OPTIONS, does: route, method: OPTIONS }
+        # Every method the file does not export.
+        - { name: fallback, does: route, method: ANY }
+    # A page's server `load` serves its `GET` and its `__data.json`; each action is a `POST` to
+    # `?/<name>`, the default one to the page itself. Actions run before any `load`: the layouts
+    # are not in front of them.
+    - name: +page.server
+      exports:
+        - { name: load, does: route, method: GET, layouts: true }
+        - { name: actions, does: each, method: POST, path: "?/{name}", default: default }
+    # A page's universal `load` runs on the server too, when the page is rendered there.
+    - name: +page
+      exports:
+        - { name: load, does: route, method: GET, layouts: true }
+    - name: +layout.server
+      exports:
+        - { name: load, does: layout }
+    - name: +layout
+      exports:
+        - { name: load, does: layout }
+  hooks:
+    # `reroute` rewrites the path before a route is chosen, for every request.
+    - file: src/hooks
+      exports:
+        - { name: reroute, does: use }
+    - file: src/hooks.server
+      exports:
+        - { name: handle, does: use, receives: "@sveltejs/kit/hooks#Handle.input" }
+  compose: ["@sveltejs/kit/hooks#sequence"]
+  matchers:
+    # SvelteKit 2: `src/params/<name>.ts` exports `match`.
+    - { file: "src/params/{matcher}", name: match }
+    # SvelteKit 3: `src/params.ts` exports `params = defineParams({ <name>: … })`.
+    - file: src/params
+      name: params
+      property: "{matcher}"
+      through: ["@sveltejs/kit/params#defineParams"]
+  # Remote functions (`*.remote.ts`), each served at a path the build derives from its module.
+  remote:
+    suffix: .remote
+    path: "/_app/remote/${hash($file)}/$name"
+    calls:
+      - { call: "$app/server#query", method: GET }
+      - { call: "$app/server#query.live", method: GET }
+      - { call: "$app/server#query.batch", method: POST }
+      - { call: "$app/server#prerender", method: GET }
+      - { call: "$app/server#form", method: POST }
+      - { call: "$app/server#command", method: POST }
+members:
+  "@sveltejs/kit#RequestEvent":
+    request: globalThis#Request
+    cookies: "@sveltejs/kit#Cookies"
+  # What `handle` receives: `{ event, resolve }`.
+  "@sveltejs/kit/hooks#Handle.input":
+    event: "@sveltejs/kit#RequestEvent"
+  "@sveltejs/kit#Handle.input":
+    event: "@sveltejs/kit#RequestEvent"
+returns:
+  # The event of the request being served, from anywhere on the server.
+  "$app/server#getRequestEvent": "@sveltejs/kit#RequestEvent"
+# A check that answers with one of these refuses the request: `error(401)` and `redirect(303, …)`
+# throw, `fail(400)` is returned from an action.
+refusals: ["@sveltejs/kit#error", "@sveltejs/kit#redirect", "@sveltejs/kit#fail"]
+guards:
+  # `if (!locals.user) error(401)`: the user, or the session, that the hooks put on `locals`.
+  - { check: context.user, kind: authn }
+  - { check: context.session, kind: authn }
+reads:
+  # The request event's own.
+  - { on: "@sveltejs/kit#RequestEvent", chain: "params[name]", read: path }
+  - { on: "@sveltejs/kit#RequestEvent", chain: params, read: path }
+  - { on: "@sveltejs/kit#RequestEvent", chain: "locals[name]", read: context }
+  - { on: "@sveltejs/kit#RequestEvent", chain: locals, read: context }
+  - { on: "@sveltejs/kit#RequestEvent", chain: url, read: path }
+  - { on: "@sveltejs/kit#RequestEvent", chain: getClientAddress(), read: remoteaddr }
+  - { on: "@sveltejs/kit#Cookies", chain: get(name), read: cookie }
+  - { on: "@sveltejs/kit#Cookies", chain: getAll(), read: cookie }
+  # Its URL: the request's, with the route's path and its query; the URL given whole reads the path.
+  - { on: "@sveltejs/kit#RequestEvent", chain: url.searchParams.get(name), read: query }
+  - { on: "@sveltejs/kit#RequestEvent", chain: url.searchParams.getAll(name), read: query }
+  - { on: "@sveltejs/kit#RequestEvent", chain: url.searchParams.has(name), read: query }
+  - { on: "@sveltejs/kit#RequestEvent", chain: url.searchParams, read: query }
+  - { on: "@sveltejs/kit#RequestEvent", chain: url.search, read: query }
+  - { on: "@sveltejs/kit#RequestEvent", chain: url.pathname, read: path }
+  - { on: "@sveltejs/kit#RequestEvent", chain: url.href, read: path }
+  - { on: "@sveltejs/kit#RequestEvent", chain: url.host, read: host }
+  - { on: "@sveltejs/kit#RequestEvent", chain: url.hostname, read: host }
+  - { on: "@sveltejs/kit#RequestEvent", chain: url.origin, read: host }
+  # The standard request.
+  - { chain: headers.get(name), read: header }
+  - { chain: headers.has(name), read: header }
+  - { chain: headers, read: header }
+  - { chain: url, read: path }
+  - { chain: method, read: method }
+  - { chain: body, read: body }
+  - { chain: json(), read: body }
+  - { chain: text(), read: body }
+  - { chain: arrayBuffer(), read: body }
+  - { chain: blob(), read: body }
+  - { chain: bytes(), read: body }
+  - { chain: formData(), read: form }
+mutations:
+  - { chain: headers.set() }
+  - { chain: headers.append() }
+  - { chain: headers.delete() }
+sinks:
+  redirect: ["@sveltejs/kit#redirect@1"]
+  fetch: ["@sveltejs/kit#RequestEvent.fetch"]

@@ -124,7 +124,9 @@ projects/<name>/checkout/      its clone, for a project added by URL
 - **Which profile.** A target whose `go.mod`, or one of whose `package.json`, declares a framework's
   module is that framework, read with its `framework` profile. Otherwise, the `application`
   profiles of the frameworks it requires (in Go directly, not `// indirect`; in a `package.json`, as
-  a dependency, peer or optional one) or imports apply, together when there are several. A profile
+  a dependency, peer or optional one) or imports apply, together when there are several: a SvelteKit
+  application, which lists SvelteKit as a development dependency, is known by its code importing
+  `@sveltejs/kit`. A profile
   that another matching one extends, such as `net-http` under `chi`, is not applied twice. A
   snapshot is read in one language: a target whose matching profiles are of two languages is
   refused, and the folder of each part is added as its own project.
