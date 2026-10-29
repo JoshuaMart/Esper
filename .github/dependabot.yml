@@ -1,0 +1,62 @@
+# Everything is pinned (actions by commit, images by digest, packages by lockfile), so nothing moves
+# unless this proposes it. Updates come once a month, one pull request per ecosystem, and wait a day
+# after a release, as pnpm's minimumReleaseAge does. The scip-go binary, installed by version in its
+# Dockerfile, is not covered and is updated by hand.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 1
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # The workspace's one lockfile, docs included.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 1
+    groups:
+      workspace:
+        patterns: ["*"]
+
+  # The analyzers' own programs: an update may move the call edges the hand counts check (D16).
+  - package-ecosystem: npm
+    directories:
+      - /analyzers/scip-typescript/esper
+      - /analyzers/scip-python/esper
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 1
+    groups:
+      analyzers-npm:
+        patterns: ["*"]
+
+  - package-ecosystem: gomod
+    directory: /analyzers/scip-go/esper
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 1
+    groups:
+      analyzers-go:
+        patterns: ["*"]
+
+  - package-ecosystem: docker
+    directories:
+      - /analyzers/scip-go
+      - /analyzers/scip-typescript
+      - /analyzers/scip-python
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 1
+    groups:
+      analyzer-images:
+        patterns: ["*"]

@@ -508,6 +508,8 @@ repository has one lockfile. One command-line entry point, `esper`
 - **Tests** with Node's own runner (`node --test`), which runs the TypeScript sources as they are.
 - **Lint and format** with Biome 2.
 - **CI** on GitHub Actions: type-check, lint, tests, on Node 24 and 26.
+- **Updates** proposed by Dependabot once a month, one pull request per ecosystem (actions,
+  packages, the analyzers' programs and images), each a day after its release.
 
 **Why.** The core is used by three surfaces and must not depend on any of them. Apache-2.0 is
 permissive like MIT, and adds an explicit patent grant; it is also the licence of the MCP SDK.
