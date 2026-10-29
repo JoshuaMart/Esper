@@ -79,7 +79,7 @@ schemas by `pnpm reference`, and a test fails when they differ from the code
   writing: a client neither sees nor calls them.
 
 The tools of D13 that need a dataflow analyzer (`esper_flows`, `esper_flow_request`) come with
-M7 ([roadmap](/roadmap/)). `esper_advisories` lists the target's past advisories
+M8 ([roadmap](/roadmap/#m8--dataflow-on-demand)). `esper_advisories` lists the target's past advisories
 ([D19](/decisions/#d19--past-vulnerabilities-advisories-linked-to-the-code-they-touched)); an
 entry point that reaches one carries `fix-downstream`, which `esper_entrypoints` filters on, and
 `esper_node` says which advisories affect a node and how. `esper_claims`, `esper_enrich_next` and

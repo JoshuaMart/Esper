@@ -15,8 +15,8 @@ past advisories from OSV linked to the code their fixes touched (`esper advisori
 claims about what parsing cannot see kept apart from the facts (`esper enrich`, on the auditor's
 Claude Code or an API key). All of it is served to agents over MCP (`esper mcp <project>`, or HTTP),
 and followed and annotated in a web interface (`esper serve`), where an agent's notes appear as it
-writes them. Next is [M7](docs/src/content/docs/roadmap.md#m7--dataflow-on-demand), dataflow on
-demand.
+writes them. Next is [M7](docs/src/content/docs/roadmap.md#m7--sveltekit), SvelteKit, then
+[M8](docs/src/content/docs/roadmap.md#m8--dataflow-on-demand), dataflow on demand.
 
 ## Documentation
 

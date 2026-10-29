@@ -17,8 +17,9 @@ counted by hand, with none missing and none invented.
 | [M4](#m4--typescript-and-hono) | TypeScript and Hono | Hono and Kaneo pass their hand count | done |
 | [M5](#m5--the-server-and-the-web-interface) | The server and the web interface | an audit can be followed and annotated in the browser | done |
 | [M6](#m6--enrichment-and-past-advisories) | Enrichment and past advisories | claims and advisory links measured on chi and Hono | done |
-| [M7](#m7--dataflow-on-demand) | Dataflow, on demand | a `flows` question answered by Joern, every step cited | not started |
-| [Next](#after-that) | More frameworks | SvelteKit, Next.js, FastAPI, each a pair of profiles | |
+| [M7](#m7--sveltekit) | SvelteKit | SvelteKit and a SvelteKit application pass their hand count | not started |
+| [M8](#m8--dataflow-on-demand) | Dataflow, on demand | a `flows` question answered by Joern, every step cited | not started |
+| [Next](#after-that) | More frameworks | Next.js, FastAPI, each a pair of profiles | |
 
 The agent comes before the interface: Esper is used first by hunting agents, and every milestone up
 to M4 can be checked over MCP and the command line.
@@ -251,7 +252,20 @@ each criterion a test, from OSV's answers recorded on 2026-10-28
 Both run in `packages/core/test/advisory-counts.test.ts`; the rules on a repository built for the
 test, across three versions, in `packages/core/test/advisories.test.ts`.
 
-## M7 — Dataflow, on demand
+## M7 — SvelteKit
+
+The third framework, and the first whose routes are not calls: a SvelteKit application declares
+them by its files (`src/routes/**/+server.ts`, the `load` functions and `actions` of
+`+page.server.ts` and `+layout.server.ts`), and its middleware in `src/hooks.server.ts` (`handle`,
+composed with `sequence`). Its two profiles, and what the profile format and the TypeScript module
+need to read routes from the file tree, with no framework named in the shared core
+([D23](/decisions/#d23--a-language-is-a-module-the-core-names-none)). It comes before dataflow
+because the auditor's own targets are SvelteKit applications.
+
+**Done when** SvelteKit, in framework mode, and a SvelteKit application, in application mode, match
+their hand count, recorded in `profiles/sveltekit/counts/`, and the Go and Hono counts still hold.
+
+## M8 — Dataflow, on demand
 
 Joern as a second analyzer behind the same contract: a question (this read, this sink) asked through
 `esper_flow_request` or the interface, answered as `flows` edges with each step cited.
@@ -262,5 +276,4 @@ interface, and a question on chi or Hono comes back with cited steps or an expli
 ## After that
 
 Each new framework is a pair of profiles measured against hand-counted targets, in the order of
-[D5](/decisions/#d5--two-kinds-of-target-applications-and-the-frameworks-themselves): SvelteKit, then
-Next.js, then Python with FastAPI, then Express, Nuxt and the others as targets ask for them.
+[D5](/decisions/#d5--two-kinds-of-target-applications-and-the-frameworks-themselves): Next.js, then Python with FastAPI, then Express, Nuxt and the others as targets ask for them.
