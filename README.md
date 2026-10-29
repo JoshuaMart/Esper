@@ -27,6 +27,30 @@ demand.
   milestone done.
 - [Sources](docs/src/content/docs/sources.md): the tools and research Esper builds on or departs from.
 
+## Quick start
+
+From the repository, with Node 24 or later and pnpm 10, and Docker for `--precise`:
+
+```sh
+pnpm install
+pnpm web                                     # builds the web interface esper serve serves
+
+pnpm esper add https://github.com/go-chi/chi # or a folder, read in place and never written
+pnpm esper index chi --ref v5.3.2            # entry points, call edges, reads, signals, advisories
+pnpm esper index chi --ref v5.3.2 --precise  # the same, with the call edges resolved in Docker
+pnpm esper list                              # the projects and their snapshots
+
+pnpm esper serve                             # the interface, its API and MCP on 127.0.0.1:7300
+```
+
+A URL is cloned into `~/.esper/projects/<name>/checkout/`; a path is read where it is. Each index
+is a snapshot of its own, and prints what it found
+([command line](docs/src/content/docs/reference/command-line.md)). `esper serve` prints the
+interface's address with its token: open it to follow the entry points, what each reaches and its
+code, and to write notes ([interface](docs/src/content/docs/reference/interface.md)). Agents
+connect over MCP, to `esper mcp <project>` or to `/mcp/<project>` on the server
+([MCP tools](docs/src/content/docs/reference/mcp.md)).
+
 ## Development
 
 Node 24 or later and pnpm 10. No dependency runs an install script, and nothing is built: Node runs
